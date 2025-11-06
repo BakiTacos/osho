@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import React from 'react';
 import { db } from "../../lib/firebase"; // Tetap impor db
 import { useAuth } from "../../context/AuthContext"; // <-- Impor hook auth
 import AuthComponent from "../../components/AuthComponent"; // <-- Impor komponen login
@@ -17,9 +18,18 @@ import {
   orderBy,
 } from "firebase/firestore";
 
+interface CounterData {
+  name: string;
+  count: number;
+}
+
+interface Counter extends CounterData {
+  id: string;
+}
+
 export default function CounterPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [counters, setCounters] = useState([]);
+  const [counters, setCounters] = useState<Counter[]>([]);
   
   // Dapatkan status auth dari Context
   const { currentUser, loading: authLoading } = useAuth();
@@ -38,9 +48,17 @@ export default function CounterPage() {
     const q = query(collection(db, collectionPath), orderBy("name"));
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      let countersArray = [];
+      let countersArray: Counter[] = [];
       querySnapshot.forEach((doc) => {
-        countersArray.push({ ...doc.data(), id: doc.id });
+        
+        // 2. Tentukan tipe data dari doc.data()
+        const data = doc.data() as CounterData; 
+        
+        countersArray.push({
+          id: doc.id,
+          name: data.name, // Pastikan 'name' ada di interface Anda
+          count: data.count, // Pastikan 'count' ada di interface Anda
+        });
       });
       setCounters(countersArray);
     });
@@ -50,44 +68,43 @@ export default function CounterPage() {
   }, [currentUser]); // <-- Jalankan ulang useEffect ini jika 'currentUser' berubah
 
   // 2. MEMBUAT KATEGORI BARU
-  const handleCreateCounter = async (e) => {
+  const handleCreateCounter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newCategoryName.trim() === "" || !currentUser) return;
 
     // PATH BARU untuk 'addDoc'
     const collectionPath = `users/${currentUser.uid}/counters`;
-    await addDoc(collection(db, collectionPath), {
+
+    const newCounter: CounterData = {
       name: newCategoryName,
       count: 0,
-      // Kita tidak perlu menyimpan UID di sini karena datanya
-      // sudah "tersimpan" di bawah folder UID pengguna
-    });
+    };
+    
+   await addDoc(collection(db, collectionPath), newCounter);
     setNewCategoryName("");
   };
 
   // 3. UPDATE COUNTER
-  const updateCount = async (counterId, amount) => {
-    if (!currentUser) return;
-    
-    // PATH BARU untuk 'doc'
-    const docPath = `users/${currentUser.uid}/counters/${counterId}`;
-    const counterRef = doc(db, docPath);
-    
-    await updateDoc(counterRef, {
-      count: increment(amount),
-    });
-  };
+  const updateCount = async (counterId: string, amount: number) => {
+  if (!currentUser) return;
+  
+  const docPath = `users/${currentUser.uid}/counters/${counterId}`;
+  const counterRef = doc(db, docPath);
+  
+  await updateDoc(counterRef, {
+    count: increment(amount),
+  });
+};
 
   // 4. MENGHAPUS COUNTER
-  const handleDelete = async (counterId) => {
-    if (!currentUser) return;
-    if (window.confirm("Yakin ingin menghapus kategori ini?")) {
-      // PATH BARU untuk 'doc'
-      const docPath = `users/${currentUser.uid}/counters/${counterId}`;
-      const counterRef = doc(db, docPath);
-      await deleteDoc(counterRef);
-    }
-  };
+  const handleDelete = async (counterId: string) => {
+  if (!currentUser) return;
+  if (window.confirm("Yakin ingin menghapus kategori ini?")) {
+    const docPath = `users/${currentUser.uid}/counters/${counterId}`;
+    const counterRef = doc(db, docPath);
+    await deleteDoc(counterRef);
+  }
+};
 
   // --- RENDER ---
 
