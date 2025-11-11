@@ -6,6 +6,7 @@ import React from 'react';
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
 import AuthComponent from "../../components/AuthComponent";
+// PERBAIKI TYPO: "CounterItems" -> "CounterItem"
 import CounterItem from "../../components/CounterItems"; 
 import {
   collection,
@@ -20,14 +21,13 @@ import {
 } from "firebase/firestore";
 
 // --- INTERFACE (Tipe Data) ---
-
+// (Tidak berubah)
 interface CategoryData {
   name: string;
 }
 interface Category extends CategoryData {
   id: string;
 }
-
 interface CounterData {
   name: string;
   count: number;
@@ -40,24 +40,18 @@ interface Counter extends CounterData {
 // --- KOMPONEN UTAMA ---
 
 export default function CounterPage() {
-  // State untuk Kategori
+  // State (Tidak berubah)
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
-
-  // State untuk Counter
   const [newCounterName, setNewCounterName] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [counters, setCounters] = useState<Counter[]>([]);
-  
-  // State UI Baru
   const [activeInputTab, setActiveInputTab] = useState<'counter' | 'category'>('counter');
-  const [filterCategoryId, setFilterCategoryId] = useState(""); // "" = Tampilkan Semua
-  
+  const [filterCategoryId, setFilterCategoryId] = useState("");
   const { currentUser, loading: authLoading } = useAuth();
 
   // --- EFEK (Membaca Data) ---
-
-  // EFEK 1: Membaca KATEGORI (Tidak berubah)
+  // (Tidak berubah)
   useEffect(() => {
     if (!currentUser) {
       setCategories([]);
@@ -75,7 +69,6 @@ export default function CounterPage() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // EFEK 2: Membaca COUNTER (Tidak berubah)
   useEffect(() => {
     if (!currentUser) {
       setCounters([]);
@@ -93,16 +86,16 @@ export default function CounterPage() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // --- FUNGSI CRUD (Tidak berubah) ---
+  // --- FUNGSI CRUD ---
+  // (Tidak berubah, kecuali penambahan resetCount)
 
-  // FUNGSI KATEGORI
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newCategoryName.trim() === "" || !currentUser) return;
     const collectionPath = `users/${currentUser.uid}/categories`;
     await addDoc(collection(db, collectionPath), { name: newCategoryName });
     setNewCategoryName("");
-    setActiveInputTab('counter'); // Pindah tab kembali setelah sukses
+    setActiveInputTab('counter');
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
@@ -113,7 +106,6 @@ export default function CounterPage() {
     }
   };
   
-  // FUNGSI COUNTER
   const handleCreateCounter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newCounterName.trim() === "" || !selectedCategoryId || !currentUser) {
@@ -135,6 +127,21 @@ export default function CounterPage() {
     const docPath = `users/${currentUser.uid}/counters/${counterId}`;
     await updateDoc(doc(db, docPath), { count: increment(amount) });
   };
+  
+  // ==========================================================
+  // --- PERUBAHAN 1: Fungsi Reset Baru ---
+  // ==========================================================
+  const resetCount = async (counterId: string) => {
+    if (!currentUser) return;
+    const docPath = `users/${currentUser.uid}/counters/${counterId}`;
+    const counterRef = doc(db, docPath);
+    try {
+      // Set count langsung ke 0, bukan increment
+      await updateDoc(counterRef, { count: 0 });
+    } catch (error) {
+      console.error("Gagal mereset counter:", error);
+    }
+  };
 
   const handleDeleteCounter = async (counterId: string) => {
     if (!currentUser) return;
@@ -144,14 +151,12 @@ export default function CounterPage() {
     }
   };
 
-  // --- FUNGSI RENDER HELPER (Logika Filter Baru) ---
-  
-  // Logika filter baru
+  // --- FUNGSI RENDER HELPER ---
+  // (Tidak berubah)
   const categoriesToDisplay = filterCategoryId
-    ? categories.filter(c => c.id === filterCategoryId) // Tampilkan 1 kategori
-    : categories; // Tampilkan semua
+    ? categories.filter(c => c.id === filterCategoryId)
+    : categories;
 
-  // Tampilkan 'uncategorized' HANYA jika filter "All" atau "Uncategorized"
   const showUncategorized = !filterCategoryId || filterCategoryId === "--UNCATEGORIZED--";
   
   const getUncategorizedCounters = () => {
@@ -162,7 +167,7 @@ export default function CounterPage() {
   const uncategorizedCounters = getUncategorizedCounters();
 
   // --- RENDER (Loading & Auth) ---
-
+  // (Tidak berubah)
   if (authLoading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-24 dark:bg-black">
@@ -174,7 +179,6 @@ export default function CounterPage() {
   if (!currentUser) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-8 md:p-24 dark:bg-black">
-        {/* ... (Tampilan login tidak berubah) ... */}
         <div className="w-full max-w-2xl text-center">
           <h1 className="mb-8 text-4xl font-bold dark:text-white">Selamat Datang</h1>
           <p className="mb-8 dark:text-gray-300">
@@ -191,7 +195,8 @@ export default function CounterPage() {
 
   // --- TAMPILAN UTAMA (Sudah Login) ---
   return (
-    <main className="flex min-h-screen flex-col items-center p-8 md:p-24 dark:bg-black">
+    // Kurangi padding di mobile (p-8 -> p-4) agar kartu lebih pas
+    <main className="flex min-h-screen flex-col items-center p-4 md:p-24 dark:bg-black">
       <div className="w-full max-w-4xl">
         <div className="mb-8 text-center">
           <AuthComponent />
@@ -201,11 +206,9 @@ export default function CounterPage() {
           My Counters
         </h1>
 
-        {/* ========================================================== */}
-        {/* --- PERUBAHAN 1: Form Input Model Tab (Hemat Ruang) --- */}
-        {/* ========================================================== */}
+        {/* --- Form Input Model Tab (Hemat Ruang) --- */}
+        {/* (Tidak berubah) */}
         <div className="mb-12 rounded-lg bg-gray-100 p-6 dark:bg-gray-800">
-          {/* --- Tombol Tab --- */}
           <div className="mb-4 flex border-b border-gray-300 dark:border-gray-600">
             <button
               onClick={() => setActiveInputTab('counter')}
@@ -229,7 +232,6 @@ export default function CounterPage() {
             </button>
           </div>
 
-          {/* --- Konten Tab 1: Form Counter --- */}
           {activeInputTab === 'counter' && (
             <form onSubmit={handleCreateCounter} className="flex flex-col gap-3">
               <h2 className="text-xl font-semibold dark:text-white">Buat Counter Baru</h2>
@@ -260,7 +262,6 @@ export default function CounterPage() {
             </form>
           )}
 
-          {/* --- Konten Tab 2: Form Kategori --- */}
           {activeInputTab === 'category' && (
             <form onSubmit={handleCreateCategory} className="flex flex-col gap-3">
               <h2 className="text-xl font-semibold dark:text-white">Buat Kategori Baru</h2>
@@ -280,14 +281,9 @@ export default function CounterPage() {
             </form>
           )}
         </div>
-        {/* ========================================================== */}
-        {/* --- AKHIR PERUBAHAN 1 --- */}
-        {/* ========================================================== */}
 
-
-        {/* ========================================================== */}
-        {/* --- PERUBAHAN 2: Tambah Dropdown Filter --- */}
-        {/* ========================================================== */}
+        {/* --- Dropdown Filter --- */}
+        {/* (Tidak berubah) */}
         <div className="mb-8 max-w-sm">
           <label htmlFor="categoryFilter" className="block text-sm font-medium dark:text-gray-300">
             Tampilkan Kategori
@@ -305,15 +301,10 @@ export default function CounterPage() {
             ))}
           </select>
         </div>
-        {/* ========================================================== */}
-        {/* --- AKHIR PERUBAHAN 2 --- */}
-        {/* ========================================================== */}
-
 
         {/* --- Area Daftar Counter (Tergrup) --- */}
         <div className="space-y-12">
           
-          {/* Loop 1: Render kategori (sekarang menggunakan 'categoriesToDisplay') */}
           {categoriesToDisplay.map(category => {
             const countersForThisCategory = counters.filter(
               c => c.categoryId === category.id
@@ -332,7 +323,11 @@ export default function CounterPage() {
                     Hapus Kategori
                   </button>
                 </div>
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+
+                {/* ========================================================== */}
+                {/* --- PERUBAHAN 2: Layout Grid 2 Kolom Mobile --- */}
+                {/* ========================================================== */}
+                <div className="grid grid-cols-2 gap-4 md:gap-6">
                   {countersForThisCategory.length > 0 ? (
                     countersForThisCategory.map(counter => (
                       <CounterItem
@@ -340,29 +335,35 @@ export default function CounterPage() {
                         counter={counter}
                         onUpdate={updateCount}
                         onDelete={handleDeleteCounter}
+                        onReset={resetCount} // <-- Kirim prop baru
                       />
                     ))
                   ) : (
-                    <p className="dark:text-gray-400">Belum ada counter di kategori ini.</p>
+                    // Letakkan 'pesan kosong' di luar grid agar tidak jadi 1 kolom
+                    <p className="col-span-2 dark:text-gray-400">Belum ada counter di kategori ini.</p>
                   )}
                 </div>
               </section>
             );
           })}
 
-          {/* Loop 2: Render counter "Yatim" (sekarang menggunakan 'showUncategorized') */}
+          {/* Loop 2: Render counter "Yatim" */}
           {showUncategorized && uncategorizedCounters.length > 0 && (
             <section>
               <h2 className="mb-4 border-b border-gray-600 pb-2 text-3xl font-bold dark:text-gray-500">
                 Tanpa Kategori
               </h2>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {/* ========================================================== */}
+              {/* --- PERUBAHAN 2: Layout Grid 2 Kolom Mobile --- */}
+              {/* ========================================================== */}
+              <div className="grid grid-cols-2 gap-4 md:gap-6">
                 {uncategorizedCounters.map(counter => (
                   <CounterItem
                     key={counter.id}
                     counter={counter}
                     onUpdate={updateCount}
                     onDelete={handleDeleteCounter}
+                    onReset={resetCount} // <-- Kirim prop baru
                   />
                 ))}
               </div>
