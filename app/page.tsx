@@ -20,6 +20,11 @@ const myPages = [
     description: "A simple to do lists",
   },
   {
+    href: "/links",
+    title: "Links",
+    description: "A list of links",
+  },
+  {
     href: "/#", // You can update this when you have a new page
     title: "Coming Soon",
     description: "Add your next page link here in the myPages array.",

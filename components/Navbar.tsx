@@ -11,6 +11,7 @@ const navLinks = [
   { href: '/counter', label: 'Counters' },
   { href: '/prompts', label: 'Prompts' },
   { href: '/lists', label: 'Lists' },
+  { href: '/links', label: 'Links' },
 ];
 
 export default function Navbar() {
