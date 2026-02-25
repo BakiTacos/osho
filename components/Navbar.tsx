@@ -12,6 +12,7 @@ const navLinks = [
   { href: '/prompts', label: 'Prompts' },
   { href: '/lists', label: 'Lists' },
   { href: '/links', label: 'Links' },
+  { href: '/invoices', label: 'Invoices' },
 ];
 
 export default function Navbar() {

@@ -25,6 +25,11 @@ const myPages = [
     description: "A list of links",
   },
   {
+    href: "/invoices",
+    title: "Invoices",
+    description: "Invoice Maker",
+  },
+  {
     href: "/#", // You can update this when you have a new page
     title: "Coming Soon",
     description: "Add your next page link here in the myPages array.",
