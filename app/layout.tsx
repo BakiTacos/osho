@@ -1,5 +1,5 @@
 import { AuthProvider } from "../context/AuthContext"; // <-- Impor
-import Navbar from "../components/Navbar";
+import Sidebar from "@/components/Sidebar";
 import "./globals.css";
 
 export const metadata = {
@@ -16,7 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AuthProvider> {/* <-- Bungkus di sini */}
-          <Navbar />
+          <Sidebar />
           {children}
         </AuthProvider>
       </body>
