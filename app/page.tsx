@@ -34,29 +34,40 @@ export default function Home() {
     */
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300">
       
-      {/* --- KONTROL ATAS --- */}
-      <div className="px-4 sm:px-10 pt-6 sm:pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Search Bar */}
-        <div className="relative w-full sm:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={20} />
+      {/* --- KONTROL ATAS (HEADER) --- */}
+      <div className="px-4 sm:px-10 pt-6 sm:pt-8 flex items-center justify-between gap-4">
+        
+        {/* Kontainer Search: ml-16 di mobile untuk memberi ruang pada Hamburger Menu */}
+        <div className="relative flex-1 lg:flex-none lg:w-96 ml-16 lg:ml-0">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94A3B8]" size={18} />
           <input 
             type="text" 
             placeholder="Cari analisis..." 
-            className="w-full bg-[#EDF2F7] border-none rounded-xl py-3 pl-12 pr-4 text-sm focus:ring-2 focus:ring-[#0047AB] transition-all"
+            className="w-full bg-[#EDF2F7] border-none rounded-xl py-2.5 pl-11 pr-4 text-sm focus:ring-2 focus:ring-[#0047AB] transition-all placeholder:text-[#94A3B8]/60"
           />
         </div>
         
-        {/* Icons & Profile */}
-        <div className="flex items-center justify-between w-full sm:w-auto sm:space-x-5 text-[#64748B]">
-          <div className="flex items-center space-x-5">
-            <button className="hover:text-[#0F172A]"><Bell size={22} /></button>
-            <button className="hover:text-[#0F172A]"><HelpCircle size={22} /></button>
+        {/* Grup Ikon & Profil: Sejajar di sisi kanan */}
+        <div className="flex items-center space-x-3 sm:space-x-6 text-[#64748B]">
+          {/* Tombol Notifikasi & Bantuan (Disembunyikan di layar sangat kecil agar tidak sesak) */}
+          <div className="hidden sm:flex items-center space-x-4">
+            <button className="hover:text-[#0F172A] transition-colors p-1">
+              <Bell size={20} />
+            </button>
+            <button className="hover:text-[#0F172A] transition-colors p-1">
+              <HelpCircle size={20} />
+            </button>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="hidden sm:block h-8 w-[1px] bg-[#E2E8F0]"></div>
-            <span className="text-sm font-bold text-[#0F172A] uppercase tracking-wide">Kia</span>
-            {/* Avatar hanya muncul di mobile sebagai indikator profil */}
-            <div className="sm:hidden w-8 h-8 rounded-full bg-[#0047AB] text-white flex items-center justify-center text-[10px] font-bold">K</div>
+          
+          {/* Separator & Profil */}
+          <div className="flex items-center space-x-3 border-l border-[#E2E8F0] pl-3 sm:pl-6">
+            <span className="hidden md:block text-sm font-bold text-[#0F172A] uppercase tracking-wide">
+              Kia
+            </span>
+            {/* Avatar Indikator */}
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0047AB] text-white flex items-center justify-center text-xs font-black shadow-lg shadow-blue-100">
+              K
+            </div>
           </div>
         </div>
       </div>
