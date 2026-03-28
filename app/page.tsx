@@ -95,7 +95,7 @@ export default function Home() {
               <select 
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
-                className="w-full appearance-none bg-white border border-[#E2E8F0] px-4 sm:px-5 py-2 sm:py-2.5 pr-10 rounded-xl text-xs sm:text-sm font-bold shadow-sm hover:bg-[#F8F9FB] focus:outline-none focus:ring-2 focus:ring-[#0047AB] cursor-pointer"
+                className="w-full appearance-none bg-white border border-[#E2E8F0] px-4 py-2.5 pr-10 rounded-xl text-sm font-bold shadow-sm hover:bg-[#F8F9FB] focus:outline-none focus:ring-2 focus:ring-[#0047AB] cursor-pointer"
               >
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -108,7 +108,7 @@ export default function Home() {
       {/* --- GRID KARTU STATISTIK --- */}
       <div className="px-4 sm:px-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
         {/* Omset */}
-        <div className="bg-white p-6 sm:p-7 rounded-[24px] shadow-sm border border-[#F1F5F9] relative overflow-hidden">
+        <div className="bg-white p-6 sm:p-7 rounded-[24px] shadow-sm border border-[#F1F5F9] relative overflow-visible">
           <div className="flex justify-between items-start mb-6 sm:mb-8">
             <div className="p-3 bg-[#F0F7FF] text-[#0047AB] rounded-2xl"><ShoppingBag size={24} /></div>
             <div className="flex items-center space-x-1 text-[#10B981] bg-[#ECFDF5] px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-black">
@@ -126,7 +126,7 @@ export default function Home() {
         </div>
 
         {/* Modal */}
-        <div className="bg-white p-6 sm:p-7 rounded-[24px] shadow-sm border border-[#F1F5F9] relative overflow-hidden">
+        <div className="bg-white p-6 sm:p-7 rounded-[24px] shadow-sm border border-[#F1F5F9] relative overflow-visible">
           <div className="flex justify-between items-start mb-6 sm:mb-8">
             <div className="p-3 bg-[#F0F7FF] text-[#0047AB] rounded-2xl"><Wallet size={24} /></div>
             <div className="flex items-center space-x-1 text-[#0047AB] bg-[#F0F7FF] px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-black">
@@ -144,7 +144,7 @@ export default function Home() {
         </div>
 
         {/* Stok */}
-        <div className="bg-white p-6 sm:p-7 rounded-[24px] shadow-sm border border-[#F1F5F9] relative overflow-hidden md:col-span-2 lg:col-span-1">
+        <div className="bg-white p-6 sm:p-7 rounded-[24px] shadow-sm border border-[#F1F5F9] relative overflow-visible md:col-span-2 lg:col-span-1">
           <div className="flex justify-between items-start mb-6 sm:mb-8">
             <div className="p-3 bg-[#FFF1F2] text-[#E11D48] rounded-2xl"><Box size={24} /></div>
             <div className="flex items-center space-x-1 text-[#E11D48] bg-[#FFF1F2] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-black tracking-tighter">
@@ -166,7 +166,7 @@ export default function Home() {
       <div className="px-4 sm:px-10 py-6 sm:py-10 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         
         {/* Proyeksi Penjualan */}
-        <div className="lg:col-span-2 bg-white p-6 sm:p-10 rounded-[28px] border border-[#F1F5F9] shadow-sm overflow-hidden">
+        <div className="lg:col-span-2 bg-white p-6 sm:p-10 rounded-[28px] border border-[#F1F5F9] shadow-sm overflow-visible">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 sm:mb-10">
             <div>
               <h4 className="text-lg sm:text-xl font-black text-[#0F172A] flex items-center tracking-tight">
@@ -197,15 +197,25 @@ export default function Home() {
                 {day: 'JUM', m: 60, p: 95}, {day: 'SAB', m: 35, p: 65}, 
                 {day: 'MIN', m: 30, p: 55}
               ].map((bar) => (
-                <div key={bar.day} className="flex-1 flex flex-col items-center group">
+                <div key={bar.day} className="flex-1 flex flex-col items-center">
+                  {/* Tooltip diletakkan di paling luar area bar */}
                   <Tooltip text={`M: ${bar.m}% | P: ${bar.p}%`}>
-                    <div className="w-10 sm:w-12 relative h-40 sm:h-48 flex flex-col justify-end cursor-pointer">
-                      <div style={{height: `${bar.p}%`}} className="w-full bg-[#F1F5F9] rounded-t-md transition-all group-hover:bg-[#E2E8F0] z-10"></div>
-                      <div style={{height: `${bar.m}%`}} className="w-full bg-[#0047AB] rounded-t-md absolute bottom-0 left-0 z-20 shadow-[0_-4px_10px_rgba(0,71,171,0.2)]"></div>
+                    <div className="relative h-48 w-12 flex flex-col justify-end cursor-pointer group">
+                      {/* Bar Penjualan (Latar Belakang) */}
+                      <div 
+                        style={{height: `${bar.p}%`}} 
+                        className="w-full bg-[#F1F5F9] rounded-t-md transition-all group-hover:bg-[#E2E8F0]"
+                      ></div>
+                      
+                      {/* Bar Modal (Menumpuk di Atas) */}
+                      <div 
+                        style={{height: `${bar.m}%`}} 
+                        className="w-full bg-[#0047AB] rounded-t-md absolute bottom-0 left-0 shadow-[0_-4px_10px_rgba(0,71,171,0.2)]"
+                      ></div>
                     </div>
                   </Tooltip>
-                  <span className="text-[10px] sm:text-[11px] font-black text-[#94A3B8] mt-4 sm:mt-6 tracking-widest">{bar.day}</span>
-                </div>
+                <span className="text-[11px] font-black text-[#94A3B8] mt-6 tracking-widest">{bar.day}</span>
+              </div>
               ))}
             </div>
           </div>
