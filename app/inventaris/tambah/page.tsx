@@ -19,8 +19,9 @@ export default function TambahProdukPage() {
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
-    category: 'Elektronik',
+    category: 'Dapur',
     price: '',
+    costPrice: '',
     stock: '',
     imageUrl: ''
   });
@@ -41,6 +42,7 @@ export default function TambahProdukPage() {
         sku: formData.sku.toUpperCase(),
         category: formData.category,
         price: Number(formData.price),
+        costPrice: Number(formData.costPrice),
         stock: Number(formData.stock),
         imageUrl: formData.imageUrl || "https://placehold.co/400x400?text=No+Image",
         createdAt: serverTimestamp()
@@ -126,10 +128,13 @@ export default function TambahProdukPage() {
                       onChange={handleChange}
                       className="w-full bg-[#F8F9FB] border-none rounded-xl py-3 px-4 text-sm font-bold focus:ring-2 focus:ring-[#0047AB]"
                     >
-                      <option value="Elektronik">Elektronik</option>
-                      <option value="Perabot">Perabot</option>
-                      <option value="Pakaian">Pakaian</option>
-                      <option value="Aksesoris">Aksesoris</option>
+                      <option value="Dapur">Dapur</option>
+                      <option value="Kamar Mandi">Kamar Mandi</option>
+                      <option value="Kebersihan">Kebersihan</option>
+                      <option value="Penyimpanan">Penyimpanan</option>
+                      <option value="Ruang Tamu">Ruang Tamu</option>
+                      <option value="Kamar Tidur">Kamar Tidur</option>
+                      <option value="Lainnya">Lainnya</option>
                     </select>
                   </div>
                 </div>
@@ -144,6 +149,22 @@ export default function TambahProdukPage() {
                       required
                       name="price"
                       value={formData.price}
+                      onChange={handleChange}
+                      type="number" 
+                      placeholder="0"
+                      className="w-full bg-[#F8F9FB] border-none rounded-xl py-3 px-4 text-sm font-bold focus:ring-2 focus:ring-[#0047AB]"
+                    />
+                  </div>
+
+                  {/* Harga Modal */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black text-[#94A3B8] uppercase tracking-widest flex items-center">
+                      <CircleDollarSign size={14} className="mr-2" /> Harga Modal (IDR)
+                    </label>
+                    <input 
+                      required
+                      name="costPrice"
+                      value={formData.costPrice}
                       onChange={handleChange}
                       type="number" 
                       placeholder="0"

@@ -35,10 +35,11 @@ export default function Sidebar() {
 
   const sidebarItems = [
     { name: "Dasbor", icon: LayoutDashboard, href: "/" },
-    { name: "Inventaris", icon: Calculator, href: "/counter" },
+    { name: "Inventaris", icon: Calculator, href: "/inventaris" },
     { name: "Penjualan", icon: LinkIcon, href: "/links" },
     { name: "Pembayaran", icon: ListTodo, href: "/lists" },
     { name: "Pengaturan", icon: MessageSquare, href: "/prompts" },
+    { name: "Counter (Old)", icon: Calculator, href: "/counter" },
   ];
 
   return (
