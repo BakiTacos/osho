@@ -10,7 +10,7 @@ import {
 import { 
   Search, Bell, HelpCircle, PlusCircle, Wallet, 
   Filter, FileText, MoreVertical, Landmark, Trash2, 
-  Plus, History, Edit3, X, CheckCircle2, AlertCircle, Pencil
+  Plus, History, Edit3, X, CheckCircle2, AlertCircle, Pencil, Calendar
 } from "lucide-react";
 
 export default function PembayaranPage() {
@@ -19,36 +19,26 @@ export default function PembayaranPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   
+  // --- STATE FILTER WAKTU ---
+  const [timeFilter, setTimeFilter] = useState("Hari Ini"); // Hari Ini, 3 Hari, Bulan
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
+
+  // Modal States
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
+  // Form States
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editWithdrawId, setEditWithdrawId] = useState<string | null>(null);
   const [withdrawForm, setWithdrawForm] = useState({ platform: 'Shopee', amount: '' });
   const [invoiceForm, setInvoiceForm] = useState({ 
     noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' 
   });
+  const [invoiceItems, setInvoiceItems] = useState([{ sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }]);
 
-  const openEditWithdraw = (w: any) => {
-    if (w.editCount >= 1) {
-        alert("Saldo ini sudah pernah diubah dan tidak bisa diubah lagi.");
-        return;
-    }
-    setEditWithdrawId(w.id);
-    setWithdrawForm({ 
-        platform: w.platform, 
-        amount: w.amount.toString() 
-    });
-    setIsWithdrawModalOpen(true);
-    setIsHistoryModalOpen(false); // Tutup modal riwayat saat buka modal edit
-    };
-
-  // State Item Nota dengan tambahan field 'unit' (default: lusin)
-  const [invoiceItems, setInvoiceItems] = useState([
-    { sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }
-  ]);
+  const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
   useEffect(() => {
     if (!currentUser) return;
@@ -64,62 +54,115 @@ export default function PembayaranPage() {
     return () => { unsubProd(); unsubWithdraw(); unsubInvoices(); };
   }, [currentUser]);
 
-  const platformStats: Record<string, number> = withdrawals.reduce((acc: any, curr) => {
+  // --- LOGIKA FILTERING DATA ---
+  const filterByTime = (data: any[]) => {
+    const now = new Date();
+    return data.filter(item => {
+      if (!item.createdAt) return false;
+      const itemDate = item.createdAt.toDate();
+      const diffInMs = now.getTime() - itemDate.getTime();
+      const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+
+      if (timeFilter === "Hari Ini") {
+        return itemDate.toDateString() === now.toDateString();
+      } else if (timeFilter === "3 Hari") {
+        return diffInDays <= 3;
+      } else if (timeFilter === "Bulan") {
+        return itemDate.getMonth() === selectedMonth && itemDate.getFullYear() === now.getFullYear();
+      }
+      return true;
+    });
+  };
+
+  const filteredInvoices = filterByTime(invoices);
+  const filteredWithdrawals = filterByTime(withdrawals);
+
+  // --- CALCULATIONS (Berdasarkan data yang sudah difilter) ---
+  const platformStats: Record<string, number> = filteredWithdrawals.reduce((acc: any, curr) => {
     acc[curr.platform] = (acc[curr.platform] || 0) + curr.amount;
     return acc;
-    }, {});
+  }, {});
 
-  const totalUnpaid = invoices.filter(inv => inv.status === 'BELUM BAYAR').reduce((acc, curr) => acc + curr.amount, 0);
-  const totalPaid = invoices.filter(inv => inv.status === 'TERBAYAR').reduce((acc, curr) => acc + curr.amount, 0);
+  const totalUnpaid = filteredInvoices.filter(inv => inv.status === 'BELUM BAYAR').reduce((acc, curr) => acc + curr.amount, 0);
+  const totalPaid = filteredInvoices.filter(inv => inv.status === 'TERBAYAR').reduce((acc, curr) => acc + curr.amount, 0);
 
-  // --- HANDLER SIMPAN NOTA DENGAN LOGIKA SATUAN ---
+  // --- HANDLERS (Withdrawal & Invoices tetap sama seperti sebelumnya) ---
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     const hasInvalidItem = invoiceItems.some(item => Number(item.qty) <= 0 || Number(item.price) <= 0);
-    if (hasInvalidItem) {
-      alert("Qty dan Harga Beli harus lebih besar dari 0!");
-      return;
-    }
-
+    if (hasInvalidItem) return alert("Qty/Harga harus > 0");
     const totalAmount = invoiceItems.reduce((acc, item) => acc + (item.qty * item.price), 0);
 
     if (editingId) {
-      await updateDoc(doc(db, `users/${currentUser?.uid}/supplier_invoices`, editingId), {
-        ...invoiceForm, items: invoiceItems, amount: totalAmount
-      });
+      await updateDoc(doc(db, `users/${currentUser?.uid}/supplier_invoices`, editingId), { ...invoiceForm, items: invoiceItems, amount: totalAmount });
     } else {
-      await addDoc(collection(db, `users/${currentUser?.uid}/supplier_invoices`), {
-        ...invoiceForm, items: invoiceItems, amount: totalAmount, createdAt: serverTimestamp()
-      });
-
-      // Update Stok: Jika lusin maka qty * 12
+      await addDoc(collection(db, `users/${currentUser?.uid}/supplier_invoices`), { ...invoiceForm, items: invoiceItems, amount: totalAmount, createdAt: serverTimestamp() });
       for (const item of invoiceItems) {
         const matched = products.find(p => p.sku === item.sku.toUpperCase());
         if (matched) {
-          const qtyToIncrement = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
-          await updateDoc(doc(db, `users/${currentUser?.uid}/products`, matched.id), {
-            stock: increment(qtyToIncrement)
-          });
+          const qtyToInc = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
+          await updateDoc(doc(db, `users/${currentUser?.uid}/products`, matched.id), { stock: increment(qtyToInc) });
         }
       }
     }
     resetInvoiceForm();
   };
 
-  const handleDeleteInvoice = async (inv: any) => {
-    if (!confirm("Hapus nota ini? Stok akan ditarik kembali sesuai satuan saat input.")) return;
-    for (const item of inv.items) {
-      const matched = products.find(p => p.sku === item.sku.toUpperCase());
-      if (matched) {
-        const qtyToDecrement = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
-        await updateDoc(doc(db, `users/${currentUser?.uid}/products`, matched.id), {
-          stock: increment(-qtyToDecrement)
+  // --- HANDLER: SIMPAN ATAU UPDATE PENARIKAN SALDO ---
+  const handleSaveWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    // Validasi dasar
+    if (Number(withdrawForm.amount) <= 0) {
+      alert("Jumlah penarikan harus lebih besar dari 0!");
+      return;
+    }
+
+    try {
+      if (editWithdrawId) {
+        // LOGIKA EDIT: Cek batas maksimal 1x ubah
+        const target = withdrawals.find(w => w.id === editWithdrawId);
+        if (target && target.editCount >= 1) {
+          alert("Maaf, saldo ini sudah pernah diubah dan tidak bisa diedit lagi.");
+          return;
+        }
+
+        const withdrawRef = doc(db, `users/${currentUser.uid}/withdrawals`, editWithdrawId);
+        await updateDoc(withdrawRef, {
+          platform: withdrawForm.platform,
+          amount: Number(withdrawForm.amount),
+          editCount: increment(1) // Tambah hitungan edit
+        });
+        
+        alert("Penarikan saldo berhasil diperbarui!");
+      } else {
+        // LOGIKA TAMBAH BARU
+        await addDoc(collection(db, `users/${currentUser.uid}/withdrawals`), {
+          platform: withdrawForm.platform,
+          amount: Number(withdrawForm.amount),
+          status: 'Berhasil',
+          editCount: 0,
+          createdAt: serverTimestamp()
         });
       }
+
+      // Reset State & Tutup Modal
+      setIsWithdrawModalOpen(false);
+      setEditWithdrawId(null);
+      setWithdrawForm({ platform: 'Shopee', amount: '' });
+    } catch (error) {
+      console.error("Error saving withdrawal: ", error);
+      alert("Gagal menyimpan data.");
     }
-    await deleteDoc(doc(db, `users/${currentUser?.uid}/supplier_invoices`, inv.id));
-    setActiveMenuId(null);
+  };
+
+  const openEditWithdraw = (w: any) => {
+    if (w.editCount >= 1) return alert("Hanya bisa ubah 1x");
+    setEditWithdrawId(w.id);
+    setWithdrawForm({ platform: w.platform, amount: w.amount.toString() });
+    setIsWithdrawModalOpen(true);
+    setIsHistoryModalOpen(false);
   };
 
   const resetInvoiceForm = () => {
@@ -129,58 +172,68 @@ export default function PembayaranPage() {
     setInvoiceItems([{ sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }]);
   };
 
-  // --- WITHDRAWAL HANDLERS ---
-  const handleSaveWithdraw = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (Number(withdrawForm.amount) <= 0) return alert("Jumlah harus > 0");
-    if (editWithdrawId) {
-      await updateDoc(doc(db, `users/${currentUser?.uid}/withdrawals`, editWithdrawId), {
-        platform: withdrawForm.platform, amount: Number(withdrawForm.amount), editCount: increment(1)
-      });
-    } else {
-      await addDoc(collection(db, `users/${currentUser?.uid}/withdrawals`), {
-        ...withdrawForm, amount: Number(withdrawForm.amount), status: 'Berhasil', editCount: 0, createdAt: serverTimestamp()
-      });
-    }
-    setIsWithdrawModalOpen(false);
-    setEditWithdrawId(null);
-    setWithdrawForm({ platform: 'Shopee', amount: '' });
-  };
-
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-20">
       
-      {/* HEADER & STATS (Tetap sama seperti sebelumnya) */}
-      <div className="px-4 sm:px-10 pt-8 flex items-center justify-between">
-        <h1 className="text-3xl font-black text-[#0F172A] tracking-tighter leading-tight">Manajemen<br/>Pembayaran</h1>
-        <div className="w-10 h-10 rounded-xl bg-[#0047AB] text-white flex items-center justify-center font-black shadow-lg">K</div>
+      {/* HEADER & FILTER BAR */}
+      <div className="px-4 sm:px-10 pt-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h1 className="text-3xl font-black text-[#0F172A] tracking-tighter leading-tight">Manajemen Pembayaran</h1>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic">Pantau Arus Kas Keluar & Masuk</p>
+          </div>
+
+          {/* --- UI FILTER WAKTU --- */}
+          <div className="flex flex-wrap items-center bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm gap-1">
+            {["Hari Ini", "3 Hari", "Bulan"].map((opt) => (
+              <button
+                key={opt}
+                onClick={() => setTimeFilter(opt)}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${timeFilter === opt ? "bg-[#0047AB] text-white shadow-md" : "text-slate-400 hover:text-[#0047AB]"}`}
+              >
+                {opt}
+              </button>
+            ))}
+            
+            {timeFilter === "Bulan" && (
+              <select 
+                value={selectedMonth} 
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="bg-slate-50 border-none rounded-xl text-[10px] font-black uppercase px-3 py-2 outline-none text-[#0047AB] cursor-pointer"
+              >
+                {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* STAT CARDS (Menggunakan Data Terfilter) */}
       <div className="px-4 sm:px-10 mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-[28px] border border-[#F1F5F9] shadow-sm relative group">
           <button onClick={() => setIsHistoryModalOpen(true)} className="absolute top-4 right-4 p-2 bg-slate-50 text-slate-400 rounded-lg hover:text-[#0047AB] transition-all"><History size={16} /></button>
-          <p className="text-[9px] font-black text-[#94A3B8] uppercase tracking-widest mb-3">Total Saldo Ditarik</p>
-          <h3 className="text-xl font-black text-[#0F172A]">Rp {Object.values(platformStats).reduce((a: any, b: any) => a + b, 0).toLocaleString('id-ID')}</h3>
+          <p className="text-[9px] font-black text-[#94A3B8] uppercase tracking-widest mb-3">Saldo Ditarik ({timeFilter})</p>
+          <h3 className="text-xl font-black text-[#0F172A]">Rp {(Object.values(platformStats) as number[]).reduce((a, b) => a + b, 0).toLocaleString('id-ID')}</h3>
           <div className="mt-4 space-y-1">
-            {Object.keys(platformStats).map(p => (
+            {Object.keys(platformStats).length > 0 ? Object.keys(platformStats).map(p => (
               <div key={p} className="flex justify-between text-[10px] font-bold">
                 <span className="text-slate-400">{p}</span>
                 <span className="text-[#0047AB]">Rp {platformStats[p].toLocaleString('id-ID')}</span>
               </div>
-            ))}
+            )) : <p className="text-[10px] text-slate-300 italic">Tidak ada data</p>}
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-red-500">
-          <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-3">Hutang Belum Bayar</p>
+          <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-3">Nota Belum Bayar</p>
           <h3 className="text-xl font-black text-red-600">Rp {totalUnpaid.toLocaleString('id-ID')}</h3>
-          <p className="text-[10px] font-bold text-slate-300 mt-2">{invoices.filter(i => i.status === 'BELUM BAYAR').length} Nota Tertunda</p>
+          <p className="text-[10px] font-bold text-slate-300 mt-2">{filteredInvoices.filter(i => i.status === 'BELUM BAYAR').length} Nota Tertunda</p>
         </div>
 
         <div className="bg-white p-6 rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-emerald-500">
           <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-3">Pembayaran Selesai</p>
           <h3 className="text-xl font-black text-emerald-600">Rp {totalPaid.toLocaleString('id-ID')}</h3>
-          <p className="text-[10px] font-bold text-slate-300 mt-2">Arus Kas Keluar</p>
+          <p className="text-[10px] font-bold text-slate-300 mt-2">Filter: {timeFilter}</p>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -189,9 +242,9 @@ export default function PembayaranPage() {
         </div>
       </div>
 
-      {/* TABLE INVOICES */}
+      {/* TABLE INVOICES (Data Terfilter) */}
       <div className="px-4 sm:px-10 mt-10">
-        <div className="bg-white rounded-[32px] border border-[#F1F5F9] shadow-sm overflow-hidden">
+        <div className="bg-white rounded-[32px] border border-[#F1F5F9] shadow-sm overflow-hidden min-h-[400px]">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-[#F8F9FB] text-[9px] font-black text-[#94A3B8] uppercase tracking-widest">
@@ -203,7 +256,7 @@ export default function PembayaranPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {invoices.map((inv) => (
+                {filteredInvoices.map((inv) => (
                   <tr key={inv.id} className="group hover:bg-slate-50/50 transition-all">
                     <td className="px-8 py-5">
                       <p className="text-sm font-black text-[#0047AB]">#{inv.noNota}</p>
@@ -233,8 +286,19 @@ export default function PembayaranPage() {
                              setInvoiceItems(inv.items);
                              setIsInvoiceModalOpen(true);
                              setActiveMenuId(null);
-                          }} className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-slate-50"><Edit3 size={14}/> EDIT</button>
-                          <button onClick={() => handleDeleteInvoice(inv)} className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black text-red-500 hover:bg-red-50"><Trash2 size={14}/> HAPUS</button>
+                          }} className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-all"><Edit3 size={14}/> EDIT</button>
+                          <button onClick={async () => {
+                             if (!confirm("Hapus nota? Stok akan ditarik kembali.")) return;
+                             for (const item of inv.items) {
+                               const matched = products.find(p => p.sku === item.sku.toUpperCase());
+                               if (matched) {
+                                 const qtyToDec = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
+                                 await updateDoc(doc(db, `users/${currentUser?.uid}/products`, matched.id), { stock: increment(-qtyToDec) });
+                               }
+                             }
+                             await deleteDoc(doc(db, `users/${currentUser?.uid}/supplier_invoices`, inv.id));
+                             setActiveMenuId(null);
+                          }} className="w-full flex items-center gap-3 px-4 py-2.5 text-[10px] font-black text-red-500 hover:bg-red-50 transition-all"><Trash2 size={14}/> HAPUS</button>
                         </div>
                       )}
                     </td>
@@ -242,28 +306,33 @@ export default function PembayaranPage() {
                 ))}
               </tbody>
             </table>
+            {filteredInvoices.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+                <FileText size={48} strokeWidth={1} className="opacity-20 mb-3" />
+                <p className="text-xs font-bold uppercase tracking-widest">Tidak ada nota di periode ini</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* MODAL: NOTA & RESTOCK (With Unit Selection) */}
+      {/* MODAL INVOICE (Tetap sama, hanya pastikan field unit ada) */}
       {isInvoiceModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-5xl rounded-[40px] p-8 max-h-[90vh] overflow-y-auto shadow-2xl relative no-scrollbar">
             <h2 className="text-2xl font-black mb-8 tracking-tighter">{editingId ? "Edit Nota" : "Tambah Nota & Restock"}</h2>
             <form onSubmit={handleSaveInvoice} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input required value={invoiceForm.noNota} className="bg-slate-50 rounded-2xl py-4 px-6 font-bold" placeholder="Nomor Nota" onChange={e => setInvoiceForm({...invoiceForm, noNota: e.target.value})} />
-                <input required value={invoiceForm.supplier} className="bg-slate-50 rounded-2xl py-4 px-6 font-bold" placeholder="Nama Supplier" onChange={e => setInvoiceForm({...invoiceForm, supplier: e.target.value})} />
+                <input required value={invoiceForm.noNota} className="bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm" placeholder="Nomor Nota" onChange={e => setInvoiceForm({...invoiceForm, noNota: e.target.value})} />
+                <input required value={invoiceForm.supplier} className="bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm" placeholder="Nama Supplier" onChange={e => setInvoiceForm({...invoiceForm, supplier: e.target.value})} />
               </div>
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center px-2">
                   <h5 className="text-[10px] font-black uppercase text-[#0047AB] tracking-widest">Detail Item Belanja</h5>
-                  <button type="button" onClick={() => setInvoiceItems([...invoiceItems, {sku:'', name:'', qty:1, price:0, unit:'lusin'}])} className="flex items-center gap-2 text-[9px] font-black bg-blue-50 text-[#0047AB] px-4 py-2 rounded-xl"><Plus size={12}/> TAMBAH ITEM</button>
+                  <button type="button" onClick={() => setInvoiceItems([...invoiceItems, {sku:'', name:'', qty:1, price:0, unit:'lusin'}])} className="flex items-center gap-2 text-[9px] font-black bg-blue-50 text-[#0047AB] px-4 py-2 rounded-xl transition-all"><Plus size={12}/> TAMBAH ITEM</button>
                 </div>
                 
-                {/* --- TABLE HEADERS --- */}
                 <div className="grid grid-cols-12 gap-2 px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">
                   <div className="col-span-2">SKU Produk</div>
                   <div className="col-span-3">Nama Barang</div>
@@ -284,33 +353,12 @@ export default function PembayaranPage() {
                         setInvoiceItems(newItems);
                       }}/>
                       <input className="col-span-3 bg-transparent py-2.5 px-4 rounded-xl text-xs font-bold text-slate-400 border-none" placeholder="Otomatis" value={item.name} readOnly/>
-                      
-                      {/* --- PILIHAN SATUAN --- */}
-                      <select 
-                        className="col-span-2 bg-white py-2.5 px-2 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm cursor-pointer"
-                        value={item.unit}
-                        onChange={e => {
-                          const newItems = [...invoiceItems];
-                          newItems[idx].unit = e.target.value;
-                          setInvoiceItems(newItems);
-                        }}
-                      >
+                      <select className="col-span-2 bg-white py-2.5 px-2 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm cursor-pointer" value={item.unit} onChange={e => { const newItems = [...invoiceItems]; newItems[idx].unit = e.target.value; setInvoiceItems(newItems); }}>
                         <option value="lusin">Lusin (x12)</option>
                         <option value="pcs">Pcs (Satuan)</option>
                       </select>
-
-                      <input type="number" required min="1" className="col-span-2 bg-white py-2.5 px-4 rounded-xl text-xs font-bold text-center border-none shadow-sm" value={item.qty} onChange={e => {
-                        const newItems = [...invoiceItems];
-                        newItems[idx].qty = Number(e.target.value);
-                        setInvoiceItems(newItems);
-                      }}/>
-                      
-                      <input type="number" required min="1" className="col-span-2 bg-white py-2.5 px-4 rounded-xl text-xs font-bold border-none shadow-sm" placeholder="Harga" value={item.price} onChange={e => {
-                        const newItems = [...invoiceItems];
-                        newItems[idx].price = Number(e.target.value);
-                        setInvoiceItems(newItems);
-                      }}/>
-                      
+                      <input type="number" required min="1" className="col-span-2 bg-white py-2.5 px-4 rounded-xl text-xs font-bold text-center border-none shadow-sm" value={item.qty} onChange={e => { const newItems = [...invoiceItems]; newItems[idx].qty = Number(e.target.value); setInvoiceItems(newItems); }}/>
+                      <input type="number" required min="1" className="col-span-2 bg-white py-2.5 px-4 rounded-xl text-xs font-bold border-none shadow-sm" placeholder="Harga" value={item.price} onChange={e => { const newItems = [...invoiceItems]; newItems[idx].price = Number(e.target.value); setInvoiceItems(newItems); }}/>
                       <button type="button" onClick={() => setInvoiceItems(invoiceItems.filter((_, i) => i !== idx))} className="col-span-1 text-red-300 hover:text-red-500 transition-all flex justify-center"><Trash2 size={16}/></button>
                     </div>
                   ))}
@@ -337,11 +385,11 @@ export default function PembayaranPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[32px] p-8 animate-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-black tracking-tighter">Riwayat Penarikan</h2>
-              <button onClick={() => setIsHistoryModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full"><X/></button>
+              <h2 className="text-xl font-black tracking-tighter">Riwayat Penarikan ({timeFilter})</h2>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-all"><X/></button>
             </div>
             <div className="space-y-3 max-h-[400px] overflow-y-auto no-scrollbar">
-              {withdrawals.map(w => (
+              {filteredWithdrawals.map(w => (
                 <div key={w.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl group transition-all">
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-white rounded-lg text-[#0047AB] shadow-sm"><Landmark size={16}/></div>
@@ -359,20 +407,22 @@ export default function PembayaranPage() {
                   </div>
                 </div>
               ))}
+              {filteredWithdrawals.length === 0 && <p className="text-center text-xs text-slate-300 py-10">Tidak ada riwayat</p>}
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL TARIK SALDO (Tetap sama) */}
       {isWithdrawModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[32px] p-8 animate-in zoom-in duration-200">
             <h2 className="text-2xl font-black mb-8 tracking-tighter">{editWithdrawId ? "Ubah Saldo" : "Tarik Saldo Marketplace"}</h2>
             <form onSubmit={handleSaveWithdraw} className="space-y-4">
-              <select className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" value={withdrawForm.platform} onChange={(e) => setWithdrawForm({...withdrawForm, platform: e.target.value})}>
+              <select className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm focus:ring-2 focus:ring-[#0047AB]" value={withdrawForm.platform} onChange={(e) => setWithdrawForm({...withdrawForm, platform: e.target.value})}>
                 <option value="Shopee">Shopee</option><option value="TikTok Shop">TikTok Shop</option><option value="Lazada">Lazada</option>
               </select>
-              <input type="number" required min="1" placeholder="Jumlah (Rp)" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" value={withdrawForm.amount} onChange={(e) => setWithdrawForm({...withdrawForm, amount: e.target.value})} />
+              <input type="number" required min="1" placeholder="Jumlah (Rp)" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm focus:ring-2 focus:ring-[#0047AB]" value={withdrawForm.amount} onChange={(e) => setWithdrawForm({...withdrawForm, amount: e.target.value})} />
               <div className="flex gap-2 pt-4">
                 <button type="button" onClick={() => {setIsWithdrawModalOpen(false); setEditWithdrawId(null);}} className="flex-1 py-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase">Batal</button>
                 <button type="submit" className="flex-1 py-4 bg-[#0047AB] text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-blue-100">{editWithdrawId ? "Simpan Perubahan" : "Konfirmasi Tarik"}</button>
