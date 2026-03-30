@@ -35,9 +35,20 @@ const Tooltip = ({ text, children }: { text: string, children: React.ReactNode }
   </span>
 );
 
-const calculateMargin = (price: number, costPrice: number) => {
+const calculateNetProfit = (price: number, costPrice: number) => {
+  if (!price) return 0;
+  const untungKotor = price - costPrice;
+  const adminMarketplace = price * 0.10; // Admin 10%
+  const adminLayanan = price * 0.06;    // Admin 6%
+  const biayaTetap = 1250;              // Per Pesanan
+  
+  return untungKotor - adminMarketplace - adminLayanan - biayaTetap;
+};
+
+const calculateNetMargin = (price: number, costPrice: number) => {
   if (!price || price === 0) return 0;
-  return ((price - costPrice) / price) * 100;
+  const netProfit = calculateNetProfit(price, costPrice);
+  return (netProfit / price) * 100;
 };
 
 const calculateProfit = (price: number, costPrice: number) => {
@@ -212,15 +223,15 @@ export default function InventarisPage() {
                   <th className="px-6 py-5 text-right">HPP (Modal)</th>
                   <th className="px-6 py-5 text-right">Jual</th>
                   <th className="px-6 py-5 text-right">Margin (%)</th>
-                  <th className="px-6 py-5 text-right">Profit</th>
+                  <th className="px-6 py-5 text-right">Estimasi Profit Bersih</th>
                   <th className="px-6 py-5 text-center">Stok</th>
                   <th className="px-8 py-5 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F8F9FB]">
                 {processedProducts.map((p) => {
-                  const profit = calculateProfit(p.price, p.costPrice || 0);
-                  const margin = calculateMargin(p.price, p.costPrice || 0);
+                  const netProfit = calculateNetProfit(p.price, p.costPrice || 0);
+                  const netMargin = calculateNetMargin(p.price, p.costPrice || 0);
 
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
@@ -240,22 +251,24 @@ export default function InventarisPage() {
                       
                       {/* --- KOLOM MARGIN (%) --- */}
                       <td className="px-6 py-5 text-right">
-                        <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
-                          margin >= 30 ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : 
-                          margin >= 15 ? "bg-amber-50 text-amber-600 border border-amber-100" : 
-                          "bg-red-50 text-red-600 border border-red-100"
-                        }`}>
-                          {margin.toFixed(1)}%
-                        </span>
+                        <Tooltip text="Setelah dipotong Admin 16% + Rp 1.250">
+                          <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
+                            netMargin >= 15 ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : 
+                            netMargin >= 5 ? "bg-amber-50 text-amber-600 border border-amber-100" : 
+                            "bg-red-50 text-red-600 border border-red-100"
+                          }`}>
+                            {netMargin.toFixed(1)}%
+                          </span>
+                        </Tooltip>
                       </td>
 
-                      {/* --- KOLOM POTENSI PROFIT --- */}
+                      {/* --- KOLOM ESTIMASI PROFIT BERSIH --- */}
                       <td className="px-6 py-5 text-right">
                         <div className="flex flex-col items-end">
-                          <span className={`text-sm font-black ${profit > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                            Rp {profit.toLocaleString('id-ID')}
+                          <span className={`text-sm font-black ${netProfit > 0 ? "text-[#0047AB]" : "text-red-600"}`}>
+                            Rp {netProfit.toLocaleString('id-ID')}
                           </span>
-                          <span className="text-[9px] font-bold text-[#94A3B8] uppercase">Net Gross</span>
+                          <span className="text-[9px] font-bold text-[#94A3B8] uppercase italic">Setelah Biaya</span>
                         </div>
                       </td>
 
