@@ -31,6 +31,20 @@ export default function PembayaranPage() {
     noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' 
   });
 
+  const openEditWithdraw = (w: any) => {
+    if (w.editCount >= 1) {
+        alert("Saldo ini sudah pernah diubah dan tidak bisa diubah lagi.");
+        return;
+    }
+    setEditWithdrawId(w.id);
+    setWithdrawForm({ 
+        platform: w.platform, 
+        amount: w.amount.toString() 
+    });
+    setIsWithdrawModalOpen(true);
+    setIsHistoryModalOpen(false); // Tutup modal riwayat saat buka modal edit
+    };
+
   // State Item Nota dengan tambahan field 'unit' (default: lusin)
   const [invoiceItems, setInvoiceItems] = useState([
     { sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }
@@ -50,10 +64,10 @@ export default function PembayaranPage() {
     return () => { unsubProd(); unsubWithdraw(); unsubInvoices(); };
   }, [currentUser]);
 
-  const platformStats = withdrawals.reduce((acc: any, curr) => {
+  const platformStats: Record<string, number> = withdrawals.reduce((acc: any, curr) => {
     acc[curr.platform] = (acc[curr.platform] || 0) + curr.amount;
     return acc;
-  }, {});
+    }, {});
 
   const totalUnpaid = invoices.filter(inv => inv.status === 'BELUM BAYAR').reduce((acc, curr) => acc + curr.amount, 0);
   const totalPaid = invoices.filter(inv => inv.status === 'TERBAYAR').reduce((acc, curr) => acc + curr.amount, 0);
