@@ -37,10 +37,11 @@ export default function Sidebar() {
     { name: "Dasbor", icon: LayoutDashboard, href: "/" },
     { name: "Inventaris", icon: Calculator, href: "/inventaris" },
     { name: "Penjualan", icon: LinkIcon, href: "/penjualan" },
-    { name: "Pembayaran", icon: ListTodo, href: "/lists" },
+    { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
     { name: "Pengaturan", icon: MessageSquare, href: "/prompts" },
     { name: "Counter (Old)", icon: Calculator, href: "/counter" },
     { name: "Links (Old)", icon: LinkIcon, href: "/links" },
+    { name: "Lists (Old)", icon: ListTodo, href: "/lists" },
   ];
 
   return (
