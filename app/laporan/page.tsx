@@ -194,7 +194,7 @@ export default function LaporanPage() {
 
       {/* TABS */}
       <div className="px-4 sm:px-10 mt-8 flex gap-8 border-b border-slate-200">
-        {["Keuangan", "Stok", "Pengembalian"].map((tab) => (
+        {["Keuangan", "Stok"].map((tab) => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`pb-4 text-sm font-bold transition-all relative ${activeTab === tab ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"}`}>
             {tab}
