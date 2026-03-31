@@ -37,24 +37,6 @@ export default function LaporanPage() {
   const years = [2024, 2025, 2026];
   const [invoices, setInvoices] = useState<any[]>([]); // Pastikan ini ada
 
-  const analyzer = new StockAnalyzer(sales, invoices, products, selectedMonth, selectedYear);
-
-  const unsubInvoices = onSnapshot(
-    query(collection(db, `users/${currentUser.uid}/supplier_invoices`), orderBy("createdAt", "desc")), 
-    (snap) => {
-      setInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }
-  );
-
-    const stockStats = {
-    unitOut: analyzer.getTotalUnitOut(),
-    unitIn: analyzer.getTotalUnitIn(),
-    valuationOut: analyzer.getValuationOut(),
-    valuationIn: analyzer.getValuationIn(),
-    mostSold: analyzer.getMostSoldProduct(),
-    topInventory: analyzer.getTopInventory()
-    };
-
   useEffect(() => {
     if (!currentUser) return;
 
@@ -70,8 +52,26 @@ export default function LaporanPage() {
       setProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubInvoices = onSnapshot(
+        query(collection(db, `users/${currentUser.uid}/supplier_invoices`), orderBy("createdAt", "desc")), 
+        (snap) => {
+        setInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }
+    );
+
     return () => { unsubSales(); unsubExpenses(); unsubInvoices(); unsubProd(); };
   }, [currentUser]);
+
+  const analyzer = new StockAnalyzer(sales, invoices, products, selectedMonth, selectedYear);
+
+    const stockStats = {
+    unitOut: analyzer.getTotalUnitOut(),
+    unitIn: analyzer.getTotalUnitIn(),
+    valuationOut: analyzer.getValuationOut(),
+    valuationIn: analyzer.getValuationIn(),
+    mostSold: analyzer.getMostSoldProduct(),
+    topInventory: analyzer.getTopInventory()
+    };
 
   // --- LOGIKA FILTER DATA ---
   const getFilteredData = () => {
