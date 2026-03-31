@@ -66,7 +66,6 @@ export default function PenjualanPage() {
     return revenue - hpp - adminFees - FIXED_FEE;
   };
 
-  // --- 1. FILTER DUPLIKASI PADA IMPORT EXCEL ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
@@ -74,8 +73,6 @@ export default function PenjualanPage() {
     setIsProcessing(true);
     const config = MARKETPLACE_CONFIG[selectedMarketplace];
     const reader = new FileReader();
-
-    // Ambil semua Order ID yang sudah ada di database (dari state transactions)
     const existingOrderIds = new Set(transactions.map(t => String(t.orderId)));
 
     reader.onload = async (evt) => {
@@ -89,12 +86,9 @@ export default function PenjualanPage() {
 
       for (const row of rawRows) {
         const orderIdValue = String(row[config.cols.orderId] || "").trim();
-        if (!orderIdValue) continue;
-
-        // CEK APAKAH ORDER ID SUDAH ADA?
-        if (existingOrderIds.has(orderIdValue)) {
-          skippedCount++;
-          continue; // Lewati baris ini jika duplikat
+        if (!orderIdValue || existingOrderIds.has(orderIdValue)) {
+          if (orderIdValue) skippedCount++;
+          continue;
         }
 
         const sku = String(row[config.cols.sku] || "").trim().toUpperCase();
@@ -123,23 +117,20 @@ export default function PenjualanPage() {
       }
       setIsProcessing(false);
       e.target.value = '';
-      alert(`Impor Selesai!\nBerhasil: ${addedCount}\nDuplikat (Dilewati): ${skippedCount}`);
+      alert(`Impor Selesai!\nBerhasil: ${addedCount}\nDuplikat: ${skippedCount}`);
     };
     reader.readAsBinaryString(file);
   };
 
-  // --- 2. FILTER DUPLIKASI PADA INPUT MANUAL ---
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
 
     const orderIdInput = manualForm.orderId.trim();
-
-    // CEK DUPLIKASI DI STATE
     const isDuplicate = transactions.some(t => String(t.orderId).trim() === orderIdInput);
     if (isDuplicate && orderIdInput !== "") {
-      alert("Nomor Pesanan ini sudah terdaftar di database!");
-      return; // Berhenti jika duplikat
+      alert("Nomor Pesanan ini sudah terdaftar!");
+      return;
     }
 
     const matched = catalog.find(p => p.sku === manualForm.sku.toUpperCase());
@@ -147,7 +138,6 @@ export default function PenjualanPage() {
     const finalPrice = useCatalogPrice && matched ? matched.price : Number(manualForm.manualPrice);
     const finalCost = useCatalogPrice && matched ? matched.costPrice : Number(manualForm.manualCost);
     const sku = manualForm.sku.toUpperCase();
-
     const netProfit = calculateNetProfitEntry(finalPrice, finalCost, qty);
 
     await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
@@ -158,12 +148,29 @@ export default function PenjualanPage() {
       marketplace: manualForm.source, status: manualForm.status, createdAt: serverTimestamp()
     });
 
-    if (manualForm.status !== 'Retur') await updateProductStock(sku, -qty);
+    // Stok selalu dipotong saat ada transaksi masuk (baik status Proses/Selesai/Retur awal)
+    await updateProductStock(sku, -qty);
     setIsManualModalOpen(false);
     setManualForm({ orderId: '', sku: '', qty: '1', manualPrice: '', manualCost: '', source: 'Shopee', status: 'Proses' });
   };
 
-  // Logika Filter Tampilan (Hari ini, dsb)
+  // --- FIX: STATUS CHANGE TANPA INTERVENSI STOK ---
+  const handleStatusChange = async (t: any, newStatus: string) => {
+    if (!currentUser) return;
+    // Cukup update status di Firestore. 
+    // Logika stok (Selesai/Rusak) akan ditangani di Halaman Pengembalian.
+    await updateDoc(doc(db, `users/${currentUser.uid}/sales`, t.id), { 
+      status: newStatus 
+    });
+  };
+
+  const handleDelete = async (t: any) => {
+    if (!confirm("Hapus transaksi? Stok akan dikembalikan.")) return;
+    await deleteDoc(doc(db, `users/${currentUser?.uid}/sales`, t.id));
+    // Jika transaksi dihapus (di-void), stok dikembalikan ke gudang
+    await updateProductStock(t.sku, t.qty);
+  };
+
   const filteredTransactions = transactions.filter((t) => {
     if (!t.createdAt) return false;
     const txDate = t.createdAt.toDate();
@@ -175,20 +182,6 @@ export default function PenjualanPage() {
     if (timeFilter === "1 Bulan") return diffInDays <= 30;
     return true;
   });
-
-  const handleStatusChange = async (t: any, newStatus: string) => {
-    if (!currentUser) return;
-    const oldStatus = t.status;
-    await updateDoc(doc(db, `users/${currentUser.uid}/sales`, t.id), { status: newStatus });
-    if (newStatus === 'Retur' && oldStatus !== 'Retur') await updateProductStock(t.sku, t.qty);
-    else if (oldStatus === 'Retur' && newStatus !== 'Retur') await updateProductStock(t.sku, -t.qty);
-  };
-
-  const handleDelete = async (t: any) => {
-    if (!confirm("Hapus transaksi? Stok akan dikembalikan.")) return;
-    await deleteDoc(doc(db, `users/${currentUser?.uid}/sales`, t.id));
-    if (t.status !== 'Retur') await updateProductStock(t.sku, t.qty);
-  };
 
   const stats = filteredTransactions.reduce((acc, curr) => {
     if (curr.status !== 'Retur') {
@@ -204,9 +197,9 @@ export default function PenjualanPage() {
       {/* HEADER */}
       <div className="px-4 sm:px-10 pt-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-[#0F172A] tracking-tighter leading-none">Laporan Penjualan</h1>
+          <h1 className="text-3xl font-black text-[#0F172A] tracking-tighter leading-none">Penjualan</h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 flex items-center">
-            <Check size={12} className="mr-1 text-emerald-500" /> Duplicate protection & Net Profit active
+            <Check size={12} className="mr-1 text-emerald-500" /> Stock synced with Return System
           </p>
         </div>
 
@@ -229,7 +222,7 @@ export default function PenjualanPage() {
       <div className="px-4 sm:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-[32px] border border-[#F1F5F9] shadow-sm">
           <p className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest mb-1">Omset {timeFilter}</p>
-          <h3 className="text-4xl font-black text-[#0047AB]">Rp {stats.omset.toLocaleString('id-ID')}</h3>
+          <h3 className="text-4xl font-black text-[#0F172A]">Rp {stats.omset.toLocaleString('id-ID')}</h3>
         </div>
         <div className="bg-white p-8 rounded-[32px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-emerald-500">
           <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Profit Bersih {timeFilter}</p>
@@ -238,7 +231,6 @@ export default function PenjualanPage() {
       </div>
 
       <div className="px-4 sm:px-10 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* SIDEBAR UPLOAD */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white p-8 rounded-[32px] border border-[#F1F5F9] shadow-sm">
             <h4 className="text-lg font-black text-[#0F172A] mb-6 uppercase text-[11px] tracking-[0.2em]">Sumber Impor</h4>
@@ -263,7 +255,6 @@ export default function PenjualanPage() {
           </div>
         </div>
 
-        {/* TABLE */}
         <div className="lg:col-span-8">
           <div className="bg-white rounded-[32px] border border-[#F1F5F9] shadow-sm overflow-hidden min-h-[500px]">
             <div className="overflow-x-auto">

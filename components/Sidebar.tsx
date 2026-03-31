@@ -15,7 +15,8 @@ import {
   LogOut, 
   User,
   Menu, // Ikon Hamburger
-  X     // Ikon Tutup
+  X,     // Ikon Tutup
+  BoxIcon
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -38,6 +39,7 @@ export default function Sidebar() {
     { name: "Inventaris", icon: Calculator, href: "/inventaris" },
     { name: "Penjualan", icon: LinkIcon, href: "/penjualan" },
     { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
+    { name: "Pengembalian", icon: BoxIcon, href: "/pengembalian" },
     { name: "Pengaturan", icon: MessageSquare, href: "/prompts" },
     { name: "Counter (Old)", icon: Calculator, href: "/counter" },
     { name: "Links (Old)", icon: LinkIcon, href: "/links" },
