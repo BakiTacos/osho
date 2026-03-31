@@ -85,6 +85,14 @@ export default function PengembalianPage() {
     item.product?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+    if (!currentUser) {
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-[#F8F9FB]">
+        <p className="font-black text-[#0047AB] animate-pulse">MEMUAT DATA ANALISIS...</p>
+        </div>
+    );
+    }
+
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-20">
       

@@ -16,8 +16,10 @@ import {
   User,
   Menu, // Ikon Hamburger
   X,     // Ikon Tutup
-  BoxIcon
+  BoxIcon,
+  MapIcon
 } from "lucide-react";
+import { ReportChartMargin } from 'recharts/types/context/chartLayoutContext';
 
 export default function Sidebar() {
   const { currentUser } = useAuth();
@@ -40,6 +42,7 @@ export default function Sidebar() {
     { name: "Penjualan", icon: LinkIcon, href: "/penjualan" },
     { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
     { name: "Pengembalian", icon: BoxIcon, href: "/pengembalian" },
+    { name: "Laporan", icon: MapIcon, href: "/laporan" },
     { name: "Pengaturan", icon: MessageSquare, href: "/prompts" },
     { name: "Counter (Old)", icon: Calculator, href: "/counter" },
     { name: "Links (Old)", icon: LinkIcon, href: "/links" },
