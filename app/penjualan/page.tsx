@@ -16,7 +16,7 @@ import {
 import * as XLSX from 'xlsx';
 
 const MARKETPLACE_CONFIG: any = {
-  shopee: { name: "Shopee", dataStartRow: 1, cols: { orderId: 0, sku: 6, name: 5, total: 10, qty: 9 } },
+  shopee: { name: "Shopee", dataStartRow: 1, cols: { orderId: 0, resi: 4, sku: 14, name: 13, total: 20, qty: 18 } },
   tiktok: { name: "Tiktok", dataStartRow: 2, cols: { orderId: 0, sku: 6, total: 13, qty: 9 } },
   lazada: { name: "Lazada", dataStartRow: 1, cols: { orderId: 0, sku: 6, name: 4, total: 15, qty: 9 } }
 };
@@ -32,6 +32,7 @@ export default function PenjualanPage() {
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [timeFilter, setTimeFilter] = useState("Hari Ini");
+  const [shopeeWarehouse, setShopeeWarehouse] = useState<any[]>([]);
   
   const [useCatalogPrice, setUseCatalogPrice] = useState(true);
   const [manualForm, setManualForm] = useState({
@@ -48,31 +49,59 @@ export default function PenjualanPage() {
     const unsubSales = onSnapshot(qSales, (snapshot) => {
       setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-    return () => { unsubProd(); unsubSales(); };
+    const unsubWarehouse = onSnapshot(collection(db, `users/${currentUser.uid}/shopee_warehouse`), (snap) => {
+      setShopeeWarehouse(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => { unsubProd(); unsubSales(); unsubWarehouse();};
   }, [currentUser]);
 
-  const updateProductStock = async (sku: string, change: number) => {
-    // 1. Cari produk berdasarkan SKU yang diinput/diimpor
-    const product = catalog.find(p => p.sku === sku.toUpperCase());
+  const updateProductStock = async (skuInput: string, change: number, resiInput?: string) => {
+    // Membersihkan SKU & Resi dari spasi dan karakter aneh
+    const cleanSku = skuInput.replace(/\s+/g, '').toUpperCase();
+    const cleanResi = resiInput?.trim() || "";
+    
+    const product = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === cleanSku);
     
     if (product) {
-      let targetSku = product.sku;
+      let targetSku = product.sku.replace(/\s+/g, '').toUpperCase();
       let productId = product.id;
 
-      // 2. LOGIKA MAPPING: Jika produk adalah mapping, pindahkan target ke SKU Utama
+      // LOGIKA MAPPING
       if (product.isMapping && product.linkedSku) {
-        const mainProduct = catalog.find(p => p.sku === product.linkedSku);
+        const mainProduct = catalog.find(p => 
+          p.sku.replace(/\s+/g, '').toUpperCase() === product.linkedSku.replace(/\s+/g, '').toUpperCase()
+        );
         if (mainProduct) {
-          targetSku = mainProduct.sku;
+          targetSku = mainProduct.sku.replace(/\s+/g, '').toUpperCase();
           productId = mainProduct.id;
         }
       }
 
-      // 3. Eksekusi pengurangan stok pada SKU Utama (atau SKU asli jika bukan mapping)
-      const productRef = doc(db, `users/${currentUser?.uid}/products`, productId);
-      await updateDoc(productRef, { stock: increment(change) });
-      
-      console.log(`Stok ${targetSku} berhasil diperbarui: ${change}`);
+      // LOGIKA GUDANG SHOPEE (Fulfillment)
+      if (cleanResi !== "") {
+        const warehouseMatch = shopeeWarehouse.find(w => 
+          w.resi.trim() === cleanResi && 
+          w.sku.replace(/\s+/g, '').toUpperCase() === targetSku && 
+          !w.isUsed
+        );
+
+        if (warehouseMatch) {
+          await updateDoc(doc(db, `users/${currentUser?.uid}/shopee_warehouse`, warehouseMatch.id), {
+            isUsed: true,
+            usedAt: serverTimestamp()
+          });
+          console.log(`✅ MATCH: Resi ${cleanResi} ditemukan di Gudang Shopee.`);
+          return; 
+        }
+      }
+
+      // POTONG STOK UTAMA
+      await updateDoc(doc(db, `users/${currentUser?.uid}/products`, productId), { 
+        stock: increment(change) 
+      });
+      console.log(`📦 Stok ${targetSku} diperbarui: ${change}`);
+    } else {
+      console.warn(`❌ SKU ${cleanSku} TIDAK TERDETEKSI DI KATALOG`);
     }
   };
 
@@ -90,6 +119,8 @@ export default function PenjualanPage() {
     setIsProcessing(true);
     const config = MARKETPLACE_CONFIG[selectedMarketplace];
     const reader = new FileReader();
+
+    // Memastikan Set ini berisi Nomor Resi yang sudah pernah diimpor sebelumnya
     const existingOrderIds = new Set(transactions.map(t => String(t.orderId)));
 
     reader.onload = async (evt) => {
@@ -102,39 +133,58 @@ export default function PenjualanPage() {
       let skippedCount = 0;
 
       for (const row of rawRows) {
-        const orderIdValue = String(row[config.cols.orderId] || "").trim();
-        if (!orderIdValue || existingOrderIds.has(orderIdValue)) {
-          if (orderIdValue) skippedCount++;
-          continue;
-        }
+  // LOG UNTUK DEBUG: Lihat isi baris di console browser (F12)
+  console.log("Memproses Baris:", row);
+
+  const resiValue = String(row[config.cols.resi] || "").trim();
+  const orderIdLama = String(row[config.cols.orderId] || "").trim();
+
+  // Jika Resi kosong, coba ambil No. Pesanan sebagai cadangan agar tidak 0
+  const finalId = resiValue || orderIdLama;
+
+  if (!finalId) {
+    console.warn("Baris dilewati karena ID/Resi kosong");
+    continue;
+  }
+
+  if (existingOrderIds.has(finalId)) {
+    skippedCount++;
+    continue; 
+  }
 
         const sku = String(row[config.cols.sku] || "").trim().toUpperCase();
-        const matched = catalog.find(p => p.sku === sku);
         const qty = Number(row[config.cols.qty]) || 1;
+        
+        // Ambil data produk untuk kalkulasi profit
+        const matched = catalog.find(p => p.sku === sku);
+        const finalPrice = matched ? matched.price : (Number(row[config.cols.total]) / qty || 0);
+        const finalCost = matched ? matched.costPrice : 0;
+        const netProfit = calculateNetProfitEntry(finalPrice, finalCost, qty);
 
-        const finalPricePerUnit = matched ? matched.price : (Number(row[config.cols.total]) / qty || 0);
-        const finalCostPerUnit = matched ? matched.costPrice : 0;
-        const totalRevenue = finalPricePerUnit * qty;
-        const netProfit = calculateNetProfitEntry(finalPricePerUnit, finalCostPerUnit, qty);
-
+        // SIMPAN TRANSAKSI (Gunakan resiValue sebagai orderId agar sinkron dengan pencarian)
         await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
-          orderId: orderIdValue,
+          orderId: resiValue, // Sekarang orderId di database berisi Nomor Resi
+          noPesananAsli: row[config.cols.orderId], // Opsional: simpan No. Pesanan asli sebagai info tambahan
           sku,
           product: matched ? matched.name : (row[config.cols.name] || "Produk Luar Katalog"),
-          total: totalRevenue,
-          hpp: finalCostPerUnit * qty,
+          total: finalPrice * qty,
+          hpp: finalCost * qty,
           qty,
           profit: netProfit,
           marketplace: config.name,
           status: 'Proses',
           createdAt: serverTimestamp()
         });
-        await updateProductStock(sku, -qty);
+
+        // PANGGIL FUNGSI UPDATE STOK (Sistem akan cek apakah resi ini ada di Gudang Shopee)
+        // Jika ada di Gudang Shopee, stok fisik di inventaris utama tidak akan dipotong lagi
+        await updateProductStock(sku, -qty, resiValue);
+        
         addedCount++;
       }
       setIsProcessing(false);
       e.target.value = '';
-      alert(`Impor Selesai!\nBerhasil: ${addedCount}\nDuplikat: ${skippedCount}`);
+      alert(`Impor Selesai!\nBerhasil: ${addedCount}\nDuplikat (Dilewati): ${skippedCount}`);
     };
     reader.readAsBinaryString(file);
   };
@@ -166,7 +216,7 @@ export default function PenjualanPage() {
     });
 
     // Stok selalu dipotong saat ada transaksi masuk (baik status Proses/Selesai/Retur awal)
-    await updateProductStock(sku, -qty);
+    await updateProductStock(manualForm.sku, -Number(manualForm.qty), manualForm.orderId);
     setIsManualModalOpen(false);
     setManualForm({ orderId: '', sku: '', qty: '1', manualPrice: '', manualCost: '', source: 'Shopee', status: 'Proses' });
   };
