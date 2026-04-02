@@ -57,24 +57,23 @@ export default function PengembalianPage() {
       if (newStatus === "Selesai") {
         if (initialProd) {
           let targetId = initialProd.id;
-          let targetSkuName = initialProd.sku;
+          let qtyToReturn = order.qty || 1;
 
-          // 2. LOGIKA RESOLUSI SKU UTAMA: 
-          // Jika produk adalah mapping, cari SKU Utama-nya untuk ditambah stoknya
           if (initialProd.isMapping && initialProd.linkedSku) {
             const mainProd = products.find(p => p.sku === initialProd.linkedSku);
             if (mainProd) {
               targetId = mainProd.id;
-              targetSkuName = mainProd.sku;
+              // KEMBALIKAN SESUAI MULTIPLIER
+              const multiplier = initialProd.multiplier || 1;
+              qtyToReturn = (order.qty || 1) * multiplier;
             }
           }
 
-          // 3. Tambahkan stok pada produk target (SKU Utama)
           await updateDoc(doc(db, `users/${currentUser?.uid}/products`, targetId), {
-            stock: increment(order.qty || 1)
+            stock: increment(qtyToReturn)
           });
+                
           
-          alert(`Status Selesai: Stok berhasil dikembalikan ke SKU UTAMA (${targetSkuName}).`);
         }
         
         await updateDoc(orderRef, { penanganan: newStatus, profit: 0, returFinal: true });

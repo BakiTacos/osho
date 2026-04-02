@@ -56,31 +56,37 @@ export default function PenjualanPage() {
   }, [currentUser]);
 
   const updateProductStock = async (skuInput: string, change: number, resiInput?: string) => {
-    // Membersihkan SKU & Resi dari spasi dan karakter aneh
-    const cleanSku = skuInput.replace(/\s+/g, '').toUpperCase();
-    const cleanResi = resiInput?.trim() || "";
+    const sku = skuInput.replace(/\s+/g, '').toUpperCase();
+    const resi = resiInput?.trim() || "";
     
-    const product = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === cleanSku);
+    const product = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
     
     if (product) {
-      let targetSku = product.sku.replace(/\s+/g, '').toUpperCase();
+      let targetSku = product.sku;
       let productId = product.id;
+      let finalChange = change; // Default: 1:1
 
-      // LOGIKA MAPPING
+      // LOGIKA MAPPING & MULTIPLIER
       if (product.isMapping && product.linkedSku) {
         const mainProduct = catalog.find(p => 
           p.sku.replace(/\s+/g, '').toUpperCase() === product.linkedSku.replace(/\s+/g, '').toUpperCase()
         );
         if (mainProduct) {
-          targetSku = mainProduct.sku.replace(/\s+/g, '').toUpperCase();
+          targetSku = mainProduct.sku;
           productId = mainProduct.id;
+          
+          // GUNAKAN MULTIPLIER: Jika change -1 dan multiplier 3, maka finalChange jadi -3
+          const multiplier = product.multiplier || 1;
+          finalChange = change * multiplier;
+          
+          console.log(`🔗 Mapping Detect: ${sku} (x${multiplier}) -> Target: ${targetSku}`);
         }
       }
 
       // LOGIKA GUDANG SHOPEE (Fulfillment)
-      if (cleanResi !== "") {
+      if (resi !== "") {
         const warehouseMatch = shopeeWarehouse.find(w => 
-          w.resi.trim() === cleanResi && 
+          w.resi.trim() === resi && 
           w.sku.replace(/\s+/g, '').toUpperCase() === targetSku && 
           !w.isUsed
         );
@@ -90,26 +96,22 @@ export default function PenjualanPage() {
             isUsed: true,
             usedAt: serverTimestamp()
           });
-          console.log(`✅ MATCH: Resi ${cleanResi} ditemukan di Gudang Shopee.`);
           return; 
         }
       }
 
-      // POTONG STOK UTAMA
-      await updateDoc(doc(db, `users/${currentUser?.uid}/products`, productId), { 
-        stock: increment(change) 
-      });
-      console.log(`📦 Stok ${targetSku} diperbarui: ${change}`);
-    } else {
-      console.warn(`❌ SKU ${cleanSku} TIDAK TERDETEKSI DI KATALOG`);
+      // POTONG STOK DENGAN JUMLAH AKHIR (FinalChange)
+      const productRef = doc(db, `users/${currentUser?.uid}/products`, productId);
+      await updateDoc(productRef, { stock: increment(finalChange) });
     }
   };
 
-  const calculateNetProfitEntry = (price: number, cost: number, qty: number) => {
-    const revenue = price * qty;
-    const hpp = cost * qty;
-    const adminFees = (price * ADMIN_PERCENT) * qty;
-    return revenue - hpp - adminFees - FIXED_FEE;
+  const calculateNetProfitEntry = (price: number, totalHpp: number, qty: number) => {
+    const totalRevenue = price * qty;
+    // Admin fee dihitung dari total harga jual (Omset)
+    const adminFees = (totalRevenue * ADMIN_PERCENT); 
+    // Rumus: Omset - Total Modal - Admin Fee - Biaya Tetap
+    return totalRevenue - totalHpp - adminFees - FIXED_FEE;
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -134,32 +136,49 @@ export default function PenjualanPage() {
 
       for (const row of rawRows) {
   // LOG UNTUK DEBUG: Lihat isi baris di console browser (F12)
-  console.log("Memproses Baris:", row);
+        console.log("Memproses Baris:", row);
 
-  const resiValue = String(row[config.cols.resi] || "").trim();
-  const orderIdLama = String(row[config.cols.orderId] || "").trim();
+        const resiValue = String(row[config.cols.resi] || "").trim();
+        const orderIdLama = String(row[config.cols.orderId] || "").trim();
 
-  // Jika Resi kosong, coba ambil No. Pesanan sebagai cadangan agar tidak 0
-  const finalId = resiValue || orderIdLama;
+        // Jika Resi kosong, coba ambil No. Pesanan sebagai cadangan agar tidak 0
+        const finalId = resiValue || orderIdLama;
 
-  if (!finalId) {
-    console.warn("Baris dilewati karena ID/Resi kosong");
-    continue;
-  }
+        if (!finalId) {
+          console.warn("Baris dilewati karena ID/Resi kosong");
+          continue;
+        }
 
-  if (existingOrderIds.has(finalId)) {
-    skippedCount++;
-    continue; 
-  }
+        if (existingOrderIds.has(finalId)) {
+          skippedCount++;
+          continue; 
+        }
 
         const sku = String(row[config.cols.sku] || "").trim().toUpperCase();
         const qty = Number(row[config.cols.qty]) || 1;
+        const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
         
-        // Ambil data produk untuk kalkulasi profit
-        const matched = catalog.find(p => p.sku === sku);
-        const finalPrice = matched ? matched.price : (Number(row[config.cols.total]) / qty || 0);
+        // LOGIKA HPP & MULTIPLIER BARU:
+        let finalPrice = 0;
+        let unitCost = 0;
+        let multiplier = 1;
         const finalCost = matched ? matched.costPrice : 0;
-        const netProfit = calculateNetProfitEntry(finalPrice, finalCost, qty);
+
+        if (matched) {
+          finalPrice = matched.price;
+          unitCost = matched.costPrice || 0;
+          
+          // Jika ini produk mapping, ambil multiplier-nya
+          if (matched.isMapping) {
+            multiplier = matched.multiplier || 1;
+          }
+        } else {
+          finalPrice = (Number(row[config.cols.total]) / qty || 0);
+        }
+
+        const totalHpp = (unitCost * multiplier) * qty;
+        // HITUNG PROFIT: Masukkan totalHpp yang sudah dikalikan multiplier
+        const netProfit = calculateNetProfitEntry(finalPrice, totalHpp, qty);
 
         // SIMPAN TRANSAKSI (Gunakan resiValue sebagai orderId agar sinkron dengan pencarian)
         await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
@@ -168,7 +187,7 @@ export default function PenjualanPage() {
           sku,
           product: matched ? matched.name : (row[config.cols.name] || "Produk Luar Katalog"),
           total: finalPrice * qty,
-          hpp: finalCost * qty,
+          hpp: totalHpp,
           qty,
           profit: netProfit,
           marketplace: config.name,
@@ -193,32 +212,42 @@ export default function PenjualanPage() {
     e.preventDefault();
     if (!currentUser) return;
 
-    const orderIdInput = manualForm.orderId.trim();
-    const isDuplicate = transactions.some(t => String(t.orderId).trim() === orderIdInput);
-    if (isDuplicate && orderIdInput !== "") {
-      alert("Nomor Pesanan ini sudah terdaftar!");
-      return;
+    const sku = manualForm.sku.replace(/\s+/g, '').toUpperCase();
+    const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
+    const qty = Number(manualForm.qty);
+
+    let multiplier = 1;
+    let unitCost = 0;
+    let unitPrice = 0;
+
+    if (matched) {
+      unitPrice = useCatalogPrice ? matched.price : Number(manualForm.manualPrice);
+      unitCost = useCatalogPrice ? matched.costPrice : Number(manualForm.manualCost);
+      if (matched.isMapping) multiplier = matched.multiplier || 1;
+    } else {
+      unitPrice = Number(manualForm.manualPrice);
+      unitCost = Number(manualForm.manualCost);
     }
 
-    const matched = catalog.find(p => p.sku === manualForm.sku.toUpperCase());
-    const qty = Number(manualForm.qty);
-    const finalPrice = useCatalogPrice && matched ? matched.price : Number(manualForm.manualPrice);
-    const finalCost = useCatalogPrice && matched ? matched.costPrice : Number(manualForm.manualCost);
-    const sku = manualForm.sku.toUpperCase();
-    const netProfit = calculateNetProfitEntry(finalPrice, finalCost, qty);
+    const totalRevenue = unitPrice * qty;
+    const totalHpp = (unitCost * multiplier) * qty;
+    const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp, qty);
 
     await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
-      orderId: orderIdInput || `MAN-${Date.now()}`,
-      sku, product: matched ? matched.name : "Input Manual",
-      total: finalPrice * qty, hpp: finalCost * qty, qty, 
+      orderId: manualForm.orderId || `MAN-${Date.now()}`,
+      sku,
+      product: matched ? matched.name : "Input Manual",
+      total: totalRevenue,
+      hpp: totalHpp,
+      qty,
       profit: netProfit,
-      marketplace: manualForm.source, status: manualForm.status, createdAt: serverTimestamp()
+      marketplace: manualForm.source,
+      status: manualForm.status,
+      createdAt: serverTimestamp()
     });
 
-    // Stok selalu dipotong saat ada transaksi masuk (baik status Proses/Selesai/Retur awal)
-    await updateProductStock(manualForm.sku, -Number(manualForm.qty), manualForm.orderId);
+    await updateProductStock(sku, -qty, manualForm.orderId);
     setIsManualModalOpen(false);
-    setManualForm({ orderId: '', sku: '', qty: '1', manualPrice: '', manualCost: '', source: 'Shopee', status: 'Proses' });
   };
 
   // --- FIX: STATUS CHANGE TANPA INTERVENSI STOK ---

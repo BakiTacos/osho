@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../context/AuthContext";
 import { collection, onSnapshot, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore";
-import { ArrowLeftRight, Package, Save, Info, Search, X } from "lucide-react";
+import { ArrowLeftRight, Package, Save, Info, Search, X, Hash } from "lucide-react";
 import { useRouter } from 'next/navigation';
 
 export default function SkuMappingPage() {
@@ -17,8 +17,9 @@ export default function SkuMappingPage() {
     aliasSku: '',
     targetSku: '',
     name: '',
-    useCustomPrice: false, // Default: Ikut harga utama
-    customPrice: ''
+    useCustomPrice: false,
+    customPrice: '',
+    multiplier: '1' 
     });
 
   useEffect(() => {
@@ -36,44 +37,27 @@ export default function SkuMappingPage() {
     setLoading(true);
 
     try {
-        // 1. Cari data produk utama berdasarkan targetSku yang dipilih
         const targetProduct = products.find(p => p.sku === form.targetSku.toUpperCase());
-        
-        if (!targetProduct) {
-        alert("SKU Utama tidak ditemukan!");
-        setLoading(false);
-        return;
-        }
+        if (!targetProduct) return alert("SKU Utama tidak ditemukan!");
 
-        // 2. Simpan SKU Mapping dengan menyertakan Kategori dari SKU Utama
         await addDoc(collection(db, `users/${currentUser.uid}/products`), {
         sku: form.aliasSku.toUpperCase(),
         name: form.name || `${targetProduct.name} (Mapping)`,
         isMapping: true,
         linkedSku: form.targetSku.toUpperCase(),
-        imageUrl: targetProduct.imageUrl || null, 
-        
-        // --- PENAMBAHAN KATEGORI ---
-        category: targetProduct.category || "Uncategorized", 
-        
-        stock: 0, 
+        multiplier: Number(form.multiplier) || 1, // Simpan kelipatan
+        imageUrl: targetProduct.imageUrl || null,
+        category: targetProduct.category || "Uncategorized",
+        stock: 0,
         useCustomPrice: form.useCustomPrice,
         price: form.useCustomPrice ? Number(form.customPrice) : targetProduct.price,
-        
-        // HPP selalu ikut pusat agar profit per kategori tetap akurat
-        costPrice: targetProduct.costPrice || 0, 
-        
+        costPrice: targetProduct.costPrice,
         createdAt: serverTimestamp()
         });
 
-        alert("SKU Mapping berhasil disimpan dengan kategori yang sama!");
+        alert("SKU Mapping dengan Kelipatan Stok berhasil disimpan!");
         router.push('/inventaris');
-    } catch (error) {
-        console.error("Gagal menyimpan mapping:", error);
-        alert("Terjadi kesalahan saat menyimpan.");
-    } finally {
-        setLoading(false);
-    }
+    } catch (error) { console.error(error); } finally { setLoading(false); }
     };
 
   return (
@@ -168,6 +152,28 @@ export default function SkuMappingPage() {
                 Sistem akan memotong stok pada **SKU UTAMA** setiap kali ada penjualan menggunakan **SKU ALIAS** ini. Pastikan SKU Utama memiliki stok yang cukup.
               </p>
             </div>
+
+            <div className="bg-white p-6 rounded-[24px] border border-slate-100 space-y-4 shadow-sm">
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Hash size={18}/></div>
+                    <div>
+                    <h4 className="text-xs font-black text-[#0F172A] uppercase tracking-wider">Kelipatan Potong Stok</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">Berapa unit stok utama yang berkurang untuk 1 penjualan SKU ini?</p>
+                    </div>
+                </div>
+                
+                <div className="relative">
+                    <input 
+                    type="number"
+                    min="1"
+                    required
+                    className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm focus:ring-2 focus:ring-[#0047AB]"
+                    value={form.multiplier}
+                    onChange={e => setForm({...form, multiplier: e.target.value})}
+                    />
+                    <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-slate-300 text-[10px] uppercase">Unit per paket</span>
+                </div>
+                </div>
 
             <button 
               disabled={loading}

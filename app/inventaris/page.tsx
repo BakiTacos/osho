@@ -20,6 +20,9 @@ interface Product {
   costPrice: number;
   stock: number;
   imageUrl: string;
+  isMapping?: boolean;   // Baru
+  linkedSku?: string;    // Baru
+  multiplier?: number;   // Baru
 }
 
 // --- UTILITY FUNCTIONS ---
@@ -35,20 +38,25 @@ const Tooltip = ({ text, children }: { text: string, children: React.ReactNode }
   </span>
 );
 
-const calculateNetProfit = (price: number, costPrice: number) => {
-  if (!price) return 0;
-  const untungKotor = price - costPrice;
+const calculateNetProfit = (product: Product) => {
+  const price = product.price || 0;
+  const unitCost = product.costPrice || 0;
+  
+  // LOGIKA MULTIPLIER: Jika mapping, gunakan multiplier, jika tidak default 1
+  const multiplier = product.isMapping ? (product.multiplier || 1) : 1;
+  const totalCost = unitCost * multiplier;
+
   const adminMarketplace = price * 0.10; // Admin 10%
   const adminLayanan = price * 0.06;    // Admin 6%
   const biayaTetap = 1250;              // Per Pesanan
   
-  return untungKotor - adminMarketplace - adminLayanan - biayaTetap;
+  return price - totalCost - adminMarketplace - adminLayanan - biayaTetap;
 };
 
-const calculateNetMargin = (price: number, costPrice: number) => {
-  if (!price || price === 0) return 0;
-  const netProfit = calculateNetProfit(price, costPrice);
-  return (netProfit / price) * 100;
+const calculateNetMargin = (product: Product) => {
+  if (!product.price || product.price === 0) return 0;
+  const netProfit = calculateNetProfit(product);
+  return (netProfit / product.price) * 100;
 };
 
 const calculateProfit = (price: number, costPrice: number) => {
@@ -237,9 +245,11 @@ export default function InventarisPage() {
               </thead>
               <tbody className="divide-y divide-[#F8F9FB]">
                 {processedProducts.map((p) => {
-                  const netProfit = calculateNetProfit(p.price, p.costPrice || 0);
-                  const netMargin = calculateNetMargin(p.price, p.costPrice || 0);
-
+                  const netProfit = calculateNetProfit(p);
+                  const netMargin = calculateNetMargin(p);
+                  const multiplier = p.isMapping ? (p.multiplier || 1) : 1;
+                  const totalCost = (p.costPrice || 0) * multiplier;
+                  
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-8 py-5">
