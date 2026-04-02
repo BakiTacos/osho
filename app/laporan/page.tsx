@@ -11,13 +11,17 @@ import {
   PackageMinus,
   PackagePlus,
   BadgeDollarSign,
-  Trophy
+  Trophy,
+  AlertTriangle
 } from "lucide-react";
 import { StockAnalyzer } from "../../lib/StockAnalyzer"; // Import class tadi
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Legend, Cell 
 } from 'recharts';
+
+const ADMIN_PERCENT = 0.16;
+const FIXED_FEE = 1250;
 
 export default function LaporanPage() {
   const { currentUser } = useAuth();
@@ -62,15 +66,50 @@ export default function LaporanPage() {
     return () => { unsubSales(); unsubExpenses(); unsubInvoices(); unsubProd(); };
   }, [currentUser]);
 
+  const totalInventoryValuation = products.reduce((acc, p) => {
+    // Pastikan menggunakan costPrice (HPP) bukan harga jual
+    return acc + ((p.stock || 0) * (p.costPrice || 0));
+  }, 0);
+
+  // --- ANALISIS FINANSIAL STOK (SINKRON DENGAN BULAN & TAHUN) ---
+  const stockFinancials = products.reduce((acc, p) => {
+    const stock = p.stock || 0;
+    const unitCost = p.costPrice || 0;
+    const price = p.price || 0;
+    const multiplier = p.isMapping ? (p.multiplier || 1) : 1;
+
+    // 1. Hitung Total HPP per Unit (sudah dikali multiplier)
+    const totalHppPerUnit = unitCost * multiplier;
+    
+    // 2. Hitung Profit Bersih per Unit (sudah dipotong admin 16% & fee 1250)
+    const netProfitPerUnit = price - totalHppPerUnit - (price * ADMIN_PERCENT) - FIXED_FEE;
+    
+    // 3. Margin Persentase
+    const marginPercent = price > 0 ? (netProfitPerUnit / price) * 100 : 0;
+
+    // Akumulasi hanya jika produk aktif (memiliki stok)
+    if (stock > 0) {
+      acc.totalValuation += (totalHppPerUnit * stock);
+      acc.totalEstProfit += (netProfitPerUnit * stock);
+      
+      if (marginPercent < 10) {
+        acc.lowMarginCount += 1;
+      }
+    }
+
+    return acc;
+  }, { totalValuation: 0, totalEstProfit: 0, lowMarginCount: 0 });
+
   const analyzer = new StockAnalyzer(sales, invoices, products, selectedMonth, selectedYear);
 
     const stockStats = {
-    unitOut: analyzer.getTotalUnitOut(),
-    unitIn: analyzer.getTotalUnitIn(),
-    valuationOut: analyzer.getValuationOut(),
-    valuationIn: analyzer.getValuationIn(),
-    mostSold: analyzer.getMostSoldProduct(),
-    topInventory: analyzer.getTopInventory()
+      unitOut: analyzer.getTotalUnitOut(),
+      unitIn: analyzer.getTotalUnitIn(),
+      valuationOut: analyzer.getValuationOut(),
+      valuationIn: analyzer.getValuationIn(),
+      mostSold: analyzer.getMostSoldProduct(),
+      topInventory: analyzer.getTopInventory(),
+      totalWarehouseAsset: totalInventoryValuation // Masukkan ke object stats
     };
 
   // --- LOGIKA FILTER DATA ---
@@ -263,6 +302,36 @@ export default function LaporanPage() {
             <StatCard title="STOK MASUK" value={`${stockStats.unitIn} Unit`} icon={<PackagePlus size={20}/>} color="blue" trend="Restock" isUp={true} />
             <StatCard title="VALUASI KELUAR" value={`Rp ${stockStats.valuationOut.toLocaleString('id-ID')}`} icon={<BadgeDollarSign size={20}/>} color="red" trend="Total HPP" isUp={false} />
             <StatCard title="VALUASI MASUK" value={`Rp ${stockStats.valuationIn.toLocaleString('id-ID')}`} icon={<Banknote size={20}/>} color="blue" trend="Modal Belanja" isUp={true} />
+            <StatCard 
+              title={`VALUASI ASET`} 
+              value={`Rp ${stockFinancials.totalValuation.toLocaleString('id-ID')}`} 
+              icon={<Wallet size={20}/>} 
+              color="blue" 
+              trend={`${months[selectedMonth]}`} 
+              isUp={true} 
+              subtitle="Posisi Modal"
+            />
+
+            <StatCard 
+              title={`POTENSI CUAN`} 
+            value={`Rp ${stockFinancials.totalEstProfit.toLocaleString('id-ID')}`} 
+            icon={<TrendingUp size={20}/>} 
+            color="emerald" 
+            trend={`${months[selectedMonth]}`} 
+            isUp={true} 
+            highlight={true}
+            subtitle="Sisa Margin"
+          />
+
+            <StatCard 
+              title="MARGIN < 10%" 
+              value={`${stockFinancials.lowMarginCount} Produk`} 
+              icon={<AlertTriangle size={20}/>} 
+              color="red" 
+              trend="Evaluasi" 
+              isUp={false} 
+              subtitle="Profit Tipis"
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-10">
