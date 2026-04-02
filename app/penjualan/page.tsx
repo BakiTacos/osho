@@ -52,10 +52,27 @@ export default function PenjualanPage() {
   }, [currentUser]);
 
   const updateProductStock = async (sku: string, change: number) => {
+    // 1. Cari produk berdasarkan SKU yang diinput/diimpor
     const product = catalog.find(p => p.sku === sku.toUpperCase());
-    if (product && product.id) {
-      const productRef = doc(db, `users/${currentUser?.uid}/products`, product.id);
+    
+    if (product) {
+      let targetSku = product.sku;
+      let productId = product.id;
+
+      // 2. LOGIKA MAPPING: Jika produk adalah mapping, pindahkan target ke SKU Utama
+      if (product.isMapping && product.linkedSku) {
+        const mainProduct = catalog.find(p => p.sku === product.linkedSku);
+        if (mainProduct) {
+          targetSku = mainProduct.sku;
+          productId = mainProduct.id;
+        }
+      }
+
+      // 3. Eksekusi pengurangan stok pada SKU Utama (atau SKU asli jika bukan mapping)
+      const productRef = doc(db, `users/${currentUser?.uid}/products`, productId);
       await updateDoc(productRef, { stock: increment(change) });
+      
+      console.log(`Stok ${targetSku} berhasil diperbarui: ${change}`);
     }
   };
 

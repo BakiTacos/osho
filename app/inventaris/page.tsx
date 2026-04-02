@@ -140,6 +140,13 @@ export default function InventarisPage() {
             <span>Tambah Produk</span>
           </button>
         </Link>
+
+        <Link href="/inventaris/mapping">
+          <button className="bg-[#0047AB] text-white px-6 py-3 rounded-xl font-black text-sm shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-all flex items-center space-x-2">
+            <Plus size={18} strokeWidth={3} />
+            <span>Tambah Produk Cabang</span>
+          </button>
+        </Link>
       </div>
 
       {/* STAT CARDS */}

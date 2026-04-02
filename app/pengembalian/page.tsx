@@ -49,17 +49,36 @@ export default function PengembalianPage() {
     }
 
     const orderRef = doc(db, `users/${currentUser?.uid}/sales`, order.id);
-    const matchedProd = products.find(p => p.sku === order.sku?.toUpperCase());
+    
+    // 1. Cari produk awal berdasarkan SKU yang ada di pesanan
+    const initialProd = products.find(p => p.sku === order.sku?.toUpperCase());
 
     try {
       if (newStatus === "Selesai") {
-        if (matchedProd) {
-          await updateDoc(doc(db, `users/${currentUser?.uid}/products`, matchedProd.id), {
+        if (initialProd) {
+          let targetId = initialProd.id;
+          let targetSkuName = initialProd.sku;
+
+          // 2. LOGIKA RESOLUSI SKU UTAMA: 
+          // Jika produk adalah mapping, cari SKU Utama-nya untuk ditambah stoknya
+          if (initialProd.isMapping && initialProd.linkedSku) {
+            const mainProd = products.find(p => p.sku === initialProd.linkedSku);
+            if (mainProd) {
+              targetId = mainProd.id;
+              targetSkuName = mainProd.sku;
+            }
+          }
+
+          // 3. Tambahkan stok pada produk target (SKU Utama)
+          await updateDoc(doc(db, `users/${currentUser?.uid}/products`, targetId), {
             stock: increment(order.qty || 1)
           });
+          
+          alert(`Status Selesai: Stok berhasil dikembalikan ke SKU UTAMA (${targetSkuName}).`);
         }
+        
         await updateDoc(orderRef, { penanganan: newStatus, profit: 0, returFinal: true });
-        alert("Status Selesai: Barang masuk kembali ke stok.");
+
       } else if (newStatus === "Rusak" || newStatus === "Tidak Kembali") {
         const kerugian = -(order.hpp || 0);
         await updateDoc(orderRef, { penanganan: newStatus, profit: kerugian, returFinal: true });
@@ -69,6 +88,7 @@ export default function PengembalianPage() {
       }
     } catch (error) {
       console.error("Gagal memproses retur:", error);
+      alert("Terjadi kesalahan sistem saat memproses retur.");
     }
   };
 
