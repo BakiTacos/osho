@@ -43,10 +43,7 @@ export default function Sidebar() {
     { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
     { name: "Pengembalian", icon: BoxIcon, href: "/pengembalian" },
     { name: "Laporan", icon: MapIcon, href: "/laporan" },
-    { name: "Pengaturan", icon: MessageSquare, href: "/prompts" },
-    { name: "Counter (Old)", icon: Calculator, href: "/counter" },
-    { name: "Links (Old)", icon: LinkIcon, href: "/links" },
-    { name: "Lists (Old)", icon: ListTodo, href: "/lists" },
+    
   ];
 
   return (
