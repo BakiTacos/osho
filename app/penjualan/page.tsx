@@ -41,12 +41,17 @@ export default function PenjualanPage() {
   
   // PAGINATION & VIEW STATES
   const [currentPage, setCurrentPage] = useState(1);
-  const [activeView, setActiveView] = useState("Semua"); // "Semua" | "Pending"
+  const [activeView, setActiveView] = useState("Semua"); 
   const itemsPerPage = 20;
 
   const [useCatalogPrice, setUseCatalogPrice] = useState(true);
+  
+  // --- STATE BARU: MULTI-PRODUCT MANUAL FORM ---
   const [manualForm, setManualForm] = useState({
-    orderId: '', sku: '', qty: '1', manualPrice: '', manualCost: '', source: 'Shopee', status: 'Proses'
+    orderId: '',
+    source: 'Shopee',
+    status: 'Proses',
+    items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }]
   });
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -79,18 +84,16 @@ export default function PenjualanPage() {
     return () => { unsubProd(); unsubSales(); unsubWarehouse(); };
   }, [currentUser]);
 
-  // RESET PAGINATION ON FILTER CHANGE
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds([]);
   }, [activeView, timeFilter, selectedMarketplace]);
 
-  // LOGIKA PROFIT BERSIH (FIXED: Menghindari Double Multiplication)
   const calculateNetProfitEntry = (totalRevenue: number, totalHpp: number) => {
     const adminFees = totalRevenue * ADMIN_PERCENT; 
     return totalRevenue - totalHpp - adminFees - FIXED_FEE;
   };
 
-  // LOGIKA UPDATE STOK & WAREHOUSE
   const updateProductStock = async (skuInput: string, change: number, resiInput?: string) => {
     const sku = skuInput.replace(/\s+/g, '').toUpperCase();
     const resi = resiInput?.trim() || "";
@@ -125,7 +128,29 @@ export default function PenjualanPage() {
     }
   };
 
-  // FILE UPLOAD HANDLER (Force Pending on Unmatch)
+  // --- LOGIKA DYNAMIC MANUAL FORM ---
+  const addManualItem = () => {
+    setManualForm({
+      ...manualForm,
+      items: [...manualForm.items, { sku: '', qty: 1, manualPrice: '', manualCost: '' }]
+    });
+  };
+
+  const removeManualItem = (index: number) => {
+    if (manualForm.items.length === 1) return;
+    setManualForm({
+      ...manualForm,
+      items: manualForm.items.filter((_, i) => i !== index)
+    });
+  };
+
+  const updateManualItem = (index: number, field: string, value: any) => {
+    const newItems = [...manualForm.items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setManualForm({ ...manualForm, items: newItems });
+  };
+
+  // --- HANDLER: EXCEL UPLOAD ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
@@ -135,45 +160,80 @@ export default function PenjualanPage() {
     const existingOrderIds = new Set(transactions.map(t => String(t.orderId).trim()));
 
     reader.onload = async (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
-      const headers = data[0];
-      const autoSkuIdx = headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU") || String(h).toUpperCase().includes("REFERENSI"));
-      const finalSkuIdx = (config.cols.sku !== undefined) 
-        ? config.cols.sku 
-        : headers.findIndex((h: any) => 
-            String(h).toUpperCase().includes("SKU") || 
-            String(h).toUpperCase().includes("REFERENSI")
-          );
-      const rawRows = data.slice(config.dataStartRow);
-      
-      let addedCount = 0;
-      for (const row of rawRows) {
-        const resiValue = String(row[config.cols.resi] || "").trim();
-        const orderIdLama = String(row[config.cols.orderId] || "").trim();
-        const finalId = resiValue || orderIdLama;
-        if (!finalId || existingOrderIds.has(finalId)) continue;
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
+        const headers = data[0];
+        const finalSkuIdx = (config.cols.sku !== undefined) 
+          ? config.cols.sku 
+          : headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU") || String(h).toUpperCase().includes("REFERENSI"));
+        
+        const rawRows = data.slice(config.dataStartRow);
+        let addedCount = 0;
+        for (const row of rawRows) {
+          const resiValue = String(row[config.cols.resi] || "").trim();
+          const orderIdLama = String(row[config.cols.orderId] || "").trim();
+          const finalId = resiValue || orderIdLama;
+          if (!finalId || existingOrderIds.has(finalId)) continue;
+          const sku = String(row[finalSkuIdx] || "").replace(/\s+/g, '').toUpperCase();
+          const qty = Number(row[config.cols.qty]) || 1;
+          const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
+          let unitPrice = 0, unitCost = 0, multiplier = 1, productName = "Produk Luar Katalog";
+          if (matched) {
+            productName = matched.name;
+            unitPrice = matched.price || (Number(row[config.cols.total]) / qty);
+            if (matched.isMapping && matched.linkedSku) {
+              const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
+              unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
+              multiplier = Number(matched.multiplier) || 1;
+            } else { unitCost = Number(matched.costPrice) || 0; }
+          } else { unitPrice = (Number(row[config.cols.total]) / qty || 0); }
+          const totalRevenue = unitPrice * qty;
+          const totalHpp = (unitCost * multiplier) * qty;
+          const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp);
+          await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
+            orderId: finalId, sku, product: productName, total: totalRevenue,
+            hpp: totalHpp, qty, profit: netProfit, marketplace: config.name,
+            status: 'Proses', createdAt: serverTimestamp()
+          });
+          await updateProductStock(sku, -qty, finalId);
+          addedCount++;
+        }
+        alert(`Berhasil impor ${addedCount} data.`);
+      } catch (err) { alert("Gagal memproses file."); }
+      finally { setIsProcessing(false); e.target.value = ''; }
+    };
+    reader.readAsBinaryString(file);
+  };
 
-        const sku = String(row[finalSkuIdx] || "").replace(/\s+/g, '').toUpperCase();
-        const qty = Number(row[config.cols.qty]) || 1;
+  // --- HANDLER: MANUAL SUBMIT (MULTI-PRODUCT) ---
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setIsProcessing(true);
+    const orderId = manualForm.orderId.trim() || `MAN-${Date.now()}`;
+
+    try {
+      // Loop untuk setiap item yang ditambahkan di form
+      for (const item of manualForm.items) {
+        const sku = item.sku.replace(/\s+/g, '').toUpperCase();
+        const qty = Number(item.qty);
         const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
         
-        let unitPrice = 0, unitCost = 0, multiplier = 1;
-        let productName = "Produk Luar Katalog"; // Default: Force Pending
+        let unitPrice = 0, unitCost = 0, multiplier = 1, productName = "Produk Luar Katalog";
 
         if (matched) {
           productName = matched.name;
-          unitPrice = matched.price || (Number(row[config.cols.total]) / qty);
+          unitPrice = useCatalogPrice ? Number(matched.price) : Number(item.manualPrice);
           if (matched.isMapping && matched.linkedSku) {
             const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
-            unitCost = main ? (main.costPrice || 0) : (matched.costPrice || 0);
-            multiplier = matched.multiplier || 1;
-          } else {
-            unitCost = matched.costPrice || 0;
-          }
+            unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
+            multiplier = Number(matched.multiplier) || 1;
+          } else { unitCost = Number(matched.costPrice) || 0; }
         } else {
-          unitPrice = (Number(row[config.cols.total]) / qty || 0);
+          unitPrice = Number(item.manualPrice) || 0;
+          unitCost = Number(item.manualCost) || 0;
         }
 
         const totalRevenue = unitPrice * qty;
@@ -181,159 +241,63 @@ export default function PenjualanPage() {
         const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp);
 
         await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
-          orderId: finalId, sku, product: productName, total: totalRevenue,
-          hpp: totalHpp, qty, profit: netProfit, marketplace: config.name,
-          status: 'Proses', createdAt: serverTimestamp()
+          orderId, sku, product: productName, total: totalRevenue, hpp: totalHpp,
+          qty, profit: netProfit, marketplace: manualForm.source, 
+          status: manualForm.status, createdAt: serverTimestamp()
         });
-
-        await updateProductStock(sku, -qty, finalId);
-        addedCount++;
+        await updateProductStock(sku, -qty, orderId);
       }
-      setIsProcessing(false);
-      e.target.value = '';
-      alert(`Berhasil impor ${addedCount} data.`);
-    };
-    reader.readAsBinaryString(file);
+      setIsManualModalOpen(false);
+      setManualForm({
+        orderId: '', source: 'Shopee', status: 'Proses',
+        items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }]
+      });
+      alert("Pesanan berhasil disimpan!");
+    } catch (err) { console.error(err); }
+    finally { setIsProcessing(false); }
   };
 
-  // MANUAL SUBMIT HANDLER (Force Pending on Unmatch)
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentUser) return;
-    const sku = manualForm.sku.replace(/\s+/g, '').toUpperCase();
-    const qty = Number(manualForm.qty);
-    const orderId = manualForm.orderId.trim() || `MAN-${Date.now()}`;
-    const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
-    
-    let unitPrice = 0, unitCost = 0, multiplier = 1;
-    let productName = "Produk Luar Katalog"; // Force Pending
-
-    if (matched) {
-      productName = matched.name;
-      unitPrice = useCatalogPrice ? (matched.price || 0) : Number(manualForm.manualPrice);
-      if (matched.isMapping && matched.linkedSku) {
-        const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
-        unitCost = main ? (main.costPrice || 0) : (matched.costPrice || 0);
-        multiplier = matched.multiplier || 1;
-      } else {
-        unitCost = matched.costPrice || 0;
-      }
-    } else {
-      unitPrice = Number(manualForm.manualPrice) || 0;
-      unitCost = Number(manualForm.manualCost) || 0;
-    }
-
-    const totalRevenue = unitPrice * qty;
-    const totalHpp = (unitCost * multiplier) * qty;
-    const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp);
-
-    await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
-      orderId, sku, product: productName, total: totalRevenue, hpp: totalHpp,
-      qty, profit: netProfit, marketplace: manualForm.source, status: manualForm.status, createdAt: serverTimestamp()
-    });
-
-    await updateProductStock(sku, -qty, orderId);
-    setIsManualModalOpen(false);
-    setManualForm({ orderId: '', sku: '', qty: '1', manualPrice: '', manualCost: '', source: 'Shopee', status: 'Proses' });
-  };
-
-  // EDIT PENDING HANDLER
   const handleEditTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !selectedTx) return;
-
-    // 1. Bersihkan SKU & Cari di Katalog (Sumber Kebenaran)
     const newSku = selectedTx.sku.replace(/\s+/g, '').toUpperCase();
     const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === newSku);
-
-    if (!matched) return alert("SKU tetap tidak ditemukan di katalog!");
-
-    // 2. AMBIL DATA HARGA DARI KATALOG (Jangan pakai data dari selectedTx)
-    // Ini kunci supaya profit nggak minus lagi
+    if (!matched) return alert("SKU tidak ditemukan!");
     const unitPrice = Number(matched.price) || 0;
     const qty = Number(selectedTx.qty) || 1;
     const finalTotalRevenue = unitPrice * qty;
-
-    // 3. HITUNG HPP & MULTIPLIER
     let unitCost = Number(matched.costPrice) || 0;
     let multiplier = 1;
-
     if (matched.isMapping && matched.linkedSku) {
       const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
-      if (main) {
-        unitCost = Number(main.costPrice) || 0;
-        multiplier = Number(matched.multiplier) || 1;
-      }
+      unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
+      multiplier = Number(matched.multiplier) || 1;
     }
-
     const finalTotalHpp = unitCost * multiplier * qty;
-    
-    // 4. HITUNG ULANG PROFIT (Pakai Revenue yang baru ditarik dari katalog)
     const finalNetProfit = calculateNetProfitEntry(finalTotalRevenue, finalTotalHpp);
-
-    // LOG DEBUG (Cek di Console F12 buat mastiin angkanya jalan)
-    console.log("--- DEBUG EDIT PENJUALAN ---");
-    console.log("SKU:", newSku);
-    console.log("Revenue (Jual):", finalTotalRevenue);
-    console.log("HPP (Modal):", finalTotalHpp);
-    console.log("Hasil Profit:", finalNetProfit);
-
-    // 5. UPDATE FIREBASE
-    try {
-      await updateDoc(doc(db, `users/${currentUser.uid}/sales`, selectedTx.id), {
-        sku: newSku,
-        product: matched.name,
-        total: finalTotalRevenue, // Update total revenue agar tidak 0
-        hpp: finalTotalHpp,       // Update HPP agar akurat
-        profit: finalNetProfit    // Update Profit
-      });
-
-      // 6. POTONG STOK (Karena sebelumnya statusnya Pending/Gagal potong)
-      await updateProductStock(newSku, -qty, selectedTx.orderId);
-
-      setIsEditTxModalOpen(false);
-      setSelectedTx(null);
-      alert("Data berhasil disinkronkan dengan Katalog!");
-    } catch (err) {
-      console.error(err);
-      alert("Gagal update data.");
-    }
-  };
-
-  const handleStatusChange = async (t: any, newStatus: string) => {
-    if (!currentUser) return;
-    await updateDoc(doc(db, `users/${currentUser.uid}/sales`, t.id), { status: newStatus });
+    await updateDoc(doc(db, `users/${currentUser.uid}/sales`, selectedTx.id), {
+      sku: newSku, product: matched.name, total: finalTotalRevenue, hpp: finalTotalHpp, profit: finalNetProfit
+    });
+    await updateProductStock(newSku, -qty, selectedTx.orderId);
+    setIsEditTxModalOpen(false);
+    setSelectedTx(null);
   };
 
   const handleBulkDelete = async () => {
     const count = selectedIds.length;
-    if (!confirm(`Hapus ${count} transaksi terpilih? Stok akan dikembalikan otomatis.`)) return;
-
+    if (!confirm(`Hapus ${count} transaksi terpilih? Stok akan dikembalikan.`)) return;
     setIsProcessing(true);
-    try {
-      const batch = writeBatch(db); // Gunakan writeBatch untuk performa
-      
-      // Cari data transaksi yang dipilih untuk mengembalikan stok
-      for (const id of selectedIds) {
-        const tx = transactions.find(t => t.id === id);
-        if (tx) {
-          // Kembalikan stok
-          await updateProductStock(tx.sku, tx.qty);
-          // Tambahkan ke antrian hapus
-          const docRef = doc(db, `users/${currentUser?.uid}/sales`, id);
-          batch.delete(docRef);
-        }
+    const batch = writeBatch(db);
+    for (const id of selectedIds) {
+      const tx = transactions.find(t => t.id === id);
+      if (tx) {
+        await updateProductStock(tx.sku, tx.qty);
+        batch.delete(doc(db, `users/${currentUser?.uid}/sales`, id));
       }
-
-      await batch.commit();
-      setSelectedIds([]);
-      alert(`Berhasil menghapus ${count} transaksi.`);
-    } catch (err) {
-      console.error(err);
-      alert("Gagal menghapus beberapa data.");
-    } finally {
-      setIsProcessing(false);
     }
+    await batch.commit();
+    setSelectedIds([]);
+    setIsProcessing(false);
   };
 
   const handleDelete = async (t: any) => {
@@ -342,7 +306,6 @@ export default function PenjualanPage() {
     await updateProductStock(t.sku, t.qty);
   };
 
-  // LOGIKA FILTERING & PAGINATION
   const filteredTransactions = transactions.filter((t) => {
     if (!t.createdAt) return false;
     const txDate = t.createdAt.toDate();
@@ -356,12 +319,10 @@ export default function PenjualanPage() {
 
   const pendingTransactions = filteredTransactions.filter(t => t.product === "Produk Luar Katalog");
   const listToDisplay = activeView === "Pending" ? pendingTransactions : filteredTransactions;
-
   const totalPages = Math.ceil(listToDisplay.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = listToDisplay.slice(indexOfFirstItem, indexOfLastItem);
-
   const stats = filteredTransactions.reduce((acc, curr) => {
     if (curr.status !== 'Retur') {
       acc.omset += curr.total;
@@ -378,7 +339,7 @@ export default function PenjualanPage() {
         <div>
           <h1 className="text-3xl font-black text-[#0F172A] tracking-tighter leading-none">Penjualan</h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 flex items-center">
-            <Check size={12} className="mr-1 text-emerald-500" /> Stock synced with Return System
+            <Check size={12} className="mr-1 text-emerald-500" /> Multi-Product Input Ready
           </p>
         </div>
 
@@ -391,19 +352,16 @@ export default function PenjualanPage() {
           ))}
         </div>
 
-        <button onClick={() => setIsManualModalOpen(true)} className="bg-[#0047AB] text-white px-5 py-3 rounded-2xl font-black text-xs shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-all flex items-center space-x-2">
-          <Plus size={18} strokeWidth={3} />
-          <span>Input Manual</span>
-        </button>
-
-        {/* HAPUS tag <button> di dalamnya, pindahkan semua styling ke <Link> */}
-          <button 
-          onClick={() => router.push('/penjualan/advanced')}
-          className="bg-[#0047AB] text-white px-5 py-3 rounded-2xl font-black text-xs shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-all flex items-center space-x-2"
-        >
-          <Plus size={18} strokeWidth={3} />
-          <span>Advance Shipment</span>
-        </button>
+        <div className="flex gap-3">
+          <button onClick={() => setIsManualModalOpen(true)} className="bg-white text-[#0047AB] border-2 border-[#0047AB] px-5 py-3 rounded-2xl font-black text-xs hover:bg-blue-50 transition-all flex items-center space-x-2">
+            <Plus size={18} strokeWidth={3} />
+            <span>Multi-Input</span>
+          </button>
+          <button onClick={() => router.push('/penjualan/advanced')} className="bg-[#0047AB] text-white px-5 py-3 rounded-2xl font-black text-xs shadow-xl shadow-blue-100 hover:scale-105 transition-all flex items-center space-x-2">
+            <Plus size={18} strokeWidth={3} />
+            <span>Advance Shipment</span>
+          </button>
+        </div>
       </div>
 
       {/* STATS */}
@@ -418,41 +376,31 @@ export default function PenjualanPage() {
         </div>
       </div>
 
+      {/* BULK ACTION BAR */}
       {selectedIds.length > 0 && (
         <div className="px-4 sm:px-10 mt-6 flex items-center justify-between bg-red-50 p-4 rounded-2xl border border-red-100 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs font-black text-red-600 uppercase tracking-widest">
-            {selectedIds.length} Transaksi Terpilih
-          </p>
-          <button 
-            onClick={handleBulkDelete}
-            className="bg-red-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase flex items-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-100"
-          >
-            <Trash2 size={14} />
-            Hapus Terpilih
+          <p className="text-xs font-black text-red-600 uppercase tracking-widest">{selectedIds.length} Item Terpilih</p>
+          <button onClick={handleBulkDelete} className="bg-red-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase flex items-center gap-2 shadow-lg shadow-red-100 transition-all hover:bg-red-700">
+            <Trash2 size={14} /> Hapus Terpilih
           </button>
         </div>
       )}
 
       {/* MONITORING TABS */}
       <div className="px-4 sm:px-10 mt-10 flex gap-8 border-b border-slate-200">
-        <button onClick={() => setActiveView("Semua")}
-          className={`pb-4 text-sm font-bold transition-all relative ${activeView === "Semua" ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"}`}>
+        <button onClick={() => setActiveView("Semua")} className={`pb-4 text-sm font-bold transition-all relative ${activeView === "Semua" ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"}`}>
           Semua Transaksi
           {activeView === "Semua" && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#0047AB]"></div>}
         </button>
-        <button onClick={() => setActiveView("Pending")}
-          className={`pb-4 text-sm font-bold transition-all relative flex items-center gap-2 ${activeView === "Pending" ? "text-red-500" : "text-slate-400 hover:text-red-500"}`}>
+        <button onClick={() => setActiveView("Pending")} className={`pb-4 text-sm font-bold transition-all relative flex items-center gap-2 ${activeView === "Pending" ? "text-red-500" : "text-slate-400 hover:text-red-500"}`}>
           Pending Monitoring
-          {pendingTransactions.length > 0 && (
-            <span className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full animate-pulse font-black">
-              {pendingTransactions.length}
-            </span>
-          )}
+          {pendingTransactions.length > 0 && <span className="bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black animate-pulse">{pendingTransactions.length}</span>}
           {activeView === "Pending" && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-red-500"></div>}
         </button>
       </div>
 
       <div className="px-4 sm:px-10 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* LEFT: SOURCES */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white p-8 rounded-[32px] border border-[#F1F5F9] shadow-sm">
             <h4 className="text-lg font-black text-[#0F172A] mb-6 uppercase text-[11px] tracking-[0.2em]">Sumber Impor</h4>
@@ -471,12 +419,13 @@ export default function PenjualanPage() {
               <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-10 text-center group-hover:bg-slate-50 transition-all group-hover:border-[#0047AB]">
                 <Upload className="mx-auto text-[#0047AB] mb-4" size={32} />
                 <p className="text-sm font-black text-[#0F172A]">Upload Laporan</p>
-                <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-tighter">Headers auto-detected</p>
+                <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-tighter italic">Headers auto-detected</p>
               </div>
             </div>
           </div>
         </div>
 
+        {/* RIGHT: TABLE */}
         <div className="lg:col-span-8">
           <div className="bg-white rounded-[32px] border border-[#F1F5F9] shadow-sm overflow-hidden flex flex-col min-h-[600px]">
             <div className="overflow-x-auto flex-1">
@@ -484,12 +433,10 @@ export default function PenjualanPage() {
                 <thead className="bg-[#F8F9FB] border-b border-[#F1F5F9]">
                   <tr className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
                     <th className="px-8 py-5 w-10">
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB] cursor-pointer"
-                        checked={selectedIds.length === currentItems.length && currentItems.length > 0}
-                        onChange={toggleSelectAll}
-                      />
+                      <input type="checkbox" className="rounded text-[#0047AB] cursor-pointer" checked={selectedIds.length === currentItems.length && currentItems.length > 0} onChange={() => {
+                        if (selectedIds.length === currentItems.length) setSelectedIds([]);
+                        else setSelectedIds(currentItems.map(t => t.id));
+                      }} />
                     </th>
                     <th className="px-4 py-5 text-left">Item</th>
                     <th className="px-6 py-5 text-right">Qty</th>
@@ -501,114 +448,100 @@ export default function PenjualanPage() {
                 <tbody className="divide-y divide-slate-50">
                   {currentItems.map((t) => (
                     <tr key={t.id} className={`hover:bg-slate-50/50 transition-colors group ${t.product === "Produk Luar Katalog" ? "bg-red-50/40" : ""}`}>
-                      <td className="px-6 py-5 text-right font-black text-xs text-slate-400">
-                        <input 
-                          type="checkbox" 
-                          className="rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB] cursor-pointer"
-                          checked={selectedIds.includes(t.id)}
-                          onChange={() => toggleSelect(t.id)}
-                        />
-                      </td>
                       <td className="px-8 py-5">
-                        
+                        <input type="checkbox" className="rounded text-[#0047AB] cursor-pointer" checked={selectedIds.includes(t.id)} onChange={() => {
+                          setSelectedIds(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]);
+                        }} />
+                      </td>
+                      <td className="px-4 py-5">
                         <div className="flex flex-col">
-                          <span className={`text-sm font-black leading-tight uppercase ${t.product === "Produk Luar Katalog" ? "text-red-600" : "text-[#0F172A]"}`}>
-                            {t.product}
-                          </span>
+                          <span className={`text-sm font-black leading-tight uppercase ${t.product === "Produk Luar Katalog" ? "text-red-600" : "text-[#0F172A]"}`}>{t.product}</span>
                           <span className="text-[9px] font-bold text-[#0047AB] mt-1 tracking-tighter">#{t.orderId} • {t.sku}</span>
-                          {t.product === "Produk Luar Katalog" && (
-                             <span className="text-[8px] font-black text-red-400 uppercase mt-1 italic flex items-center">
-                               <AlertCircle size={10} className="mr-1" /> SKU not found in Catalog
-                             </span>
-                          )}
+                          {t.product === "Produk Luar Katalog" && <span className="text-[8px] font-black text-red-400 uppercase mt-1 flex items-center italic"><AlertCircle size={10} className="mr-1" /> SKU not found</span>}
                         </div>
                       </td>
                       <td className="px-6 py-5 text-right font-black text-xs text-slate-400">{t.qty}</td>
-                      <td className={`px-6 py-5 text-right text-sm font-black ${t.status === 'Retur' ? 'text-slate-300 line-through' : 'text-emerald-600'}`}>
-                        Rp {t.profit.toLocaleString('id-ID')}
-                      </td>
+                      <td className={`px-6 py-5 text-right text-sm font-black ${t.status === 'Retur' ? 'text-slate-300 line-through' : 'text-emerald-600'}`}>Rp {t.profit.toLocaleString('id-ID')}</td>
                       <td className="px-6 py-5 text-center">
-                        <select value={t.status} onChange={(e) => handleStatusChange(t, e.target.value)}
-                          className={`text-[9px] font-black px-3 py-1.5 rounded-full border bg-transparent cursor-pointer outline-none ${t.status === 'Selesai' ? "text-emerald-600 border-emerald-100" : t.status === 'Retur' ? "text-red-600 border-red-100" : "text-amber-600 border-amber-100"}`}>
-                          <option value="Proses">Proses</option>
-                          <option value="Selesai">Selesai</option>
-                          <option value="Retur">Retur</option>
+                        <select value={t.status} onChange={(e) => updateDoc(doc(db, `users/${currentUser?.uid}/sales`, t.id), { status: e.target.value })} className={`text-[9px] font-black px-3 py-1.5 rounded-full border bg-transparent outline-none ${t.status === 'Selesai' ? "text-emerald-600 border-emerald-100" : "text-amber-600 border-amber-100"}`}>
+                          <option value="Proses">Proses</option><option value="Selesai">Selesai</option><option value="Retur">Retur</option>
                         </select>
                       </td>
                       <td className="px-8 py-5 text-right flex items-center justify-end gap-2">
-                        {t.product === "Produk Luar Katalog" && (
-                          <button onClick={() => { setSelectedTx(t); setIsEditTxModalOpen(true); }} className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all">
-                            <Edit2 size={16} />
-                          </button>
-                        )}
-                        <button onClick={() => handleDelete(t)} className="p-2 text-slate-300 hover:text-red-500 transition-all"><Trash2 size={16} /></button>
+                        {t.product === "Produk Luar Katalog" && <button onClick={() => { setSelectedTx(t); setIsEditTxModalOpen(true); }} className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all"><Edit2 size={16} /></button>}
+                        <button onClick={async () => { if(confirm("Hapus?")) { await deleteDoc(doc(db, `users/${currentUser?.uid}/sales`, t.id)); await updateProductStock(t.sku, t.qty); } }} className="p-2 text-slate-300 hover:text-red-500 transition-all"><Trash2 size={16} /></button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {currentItems.length === 0 && <div className="flex flex-col items-center justify-center py-32 text-slate-200"><ShoppingBag size={64} strokeWidth={1} className="mb-4 opacity-20" /><p className="text-sm font-bold uppercase tracking-widest text-slate-300">No Transactions Found</p></div>}
             </div>
 
-            {/* PAGINATION FOOTER */}
-            <div className="p-8 border-t border-[#F8F9FB] flex items-center justify-between bg-white">
-              <p className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
-                Showing {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, listToDisplay.length)} of {listToDisplay.length}
-              </p>
+            <div className="p-8 border-t border-[#F8F9FB] flex items-center justify-between">
+              <p className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">Page {currentPage} of {totalPages || 1}</p>
               <div className="flex items-center space-x-2">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="p-2 border border-[#E2E8F0] rounded-lg text-[#94A3B8] disabled:opacity-20"><ChevronLeft size={16}/></button>
+                <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="p-2 border border-[#E2E8F0] rounded-lg text-[#94A3B8] disabled:opacity-20 hover:bg-slate-50"><ChevronLeft size={16}/></button>
                 <div className="flex items-center gap-1">
                   {totalPages > 0 && [...Array(totalPages)].map((_, i) => (
-                    <button key={i} onClick={() => setCurrentPage(i + 1)} className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${currentPage === i + 1 ? "bg-[#0047AB] text-white shadow-lg" : "text-slate-400 hover:bg-slate-50"}`}>{i + 1}</button>
+                    <button key={i} onClick={() => setCurrentPage(i + 1)} className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${currentPage === i + 1 ? "bg-[#0047AB] text-white shadow-lg shadow-blue-100" : "text-slate-400 hover:bg-slate-50"}`}>{i + 1}</button>
                   )).slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))}
                 </div>
-                <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(prev => prev + 1)} className="p-2 border border-[#E2E8F0] rounded-lg text-[#94A3B8] disabled:opacity-20"><ChevronRight size={16}/></button>
+                <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(prev => prev + 1)} className="p-2 border border-[#E2E8F0] rounded-lg text-[#94A3B8] disabled:opacity-20 hover:bg-slate-50"><ChevronRight size={16}/></button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* MODAL INPUT MANUAL */}
+      {/* MODAL MULTI-PRODUCT MANUAL INPUT */}
       {isManualModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[150] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden p-10">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-black text-[#0F172A] tracking-tighter">Input Manual</h2>
-              <button onClick={() => setIsManualModalOpen(false)}><X /></button>
+        <div className="fixed inset-0 bg-[#0F172A]/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
+              <div><h2 className="text-2xl font-black text-[#0F172A] tracking-tighter">Manual Multi-Input</h2><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Satu Nomor Pesanan untuk Banyak Produk</p></div>
+              <button onClick={() => setIsManualModalOpen(false)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-full transition-colors"><X/></button>
             </div>
-            <form onSubmit={handleManualSubmit} className="space-y-5">
-              <input required value={manualForm.orderId} onChange={(e) => setManualForm({...manualForm, orderId: e.target.value})} placeholder="Nomor Pesanan (ID)" className="w-full bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm" />
-              <div className="grid grid-cols-3 gap-4">
-                <input required value={manualForm.sku} onChange={(e) => setManualForm({...manualForm, sku: e.target.value})} placeholder="SKU" className="col-span-2 bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm" />
-                <input type="number" min="1" required value={manualForm.qty} onChange={(e) => setManualForm({...manualForm, qty: e.target.value})} className="bg-blue-50/50 border-none rounded-[20px] text-center font-black text-[#0047AB]" />
+
+            <form onSubmit={handleManualSubmit} className="flex-1 overflow-y-auto p-10 space-y-8 no-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nomor Pesanan</label><input required value={manualForm.orderId} onChange={(e) => setManualForm({...manualForm, orderId: e.target.value})} placeholder="ID Pesanan" className="w-full bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm focus:ring-2 focus:ring-blue-100" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Sumber</label><select value={manualForm.source} onChange={(e) => setManualForm({...manualForm, source: e.target.value})} className="w-full bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm"><option>Shopee</option><option>Tiktok</option><option>Lazada</option><option>Offline</option></select></div>
+                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Status</label><select value={manualForm.status} onChange={(e) => setManualForm({...manualForm, status: e.target.value})} className="w-full bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm"><option value="Proses">Proses</option><option value="Selesai">Selesai</option></select></div>
               </div>
-              <div className="flex justify-center py-2">
-                 <button type="button" onClick={() => setUseCatalogPrice(!useCatalogPrice)} className={`px-6 py-2 rounded-full text-[9px] font-black uppercase transition-all border-2 ${useCatalogPrice ? "bg-[#0047AB] text-white" : "text-slate-400"}`}>Harga {useCatalogPrice ? "Katalog" : "Manual"}</button>
+
+              <div className="flex items-center justify-between"><h4 className="text-[11px] font-black text-[#0047AB] uppercase tracking-[0.2em]">Daftar Produk ({manualForm.items.length})</h4><button type="button" onClick={() => setUseCatalogPrice(!useCatalogPrice)} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase transition-all border-2 ${useCatalogPrice ? "bg-[#0047AB] text-white shadow-md shadow-blue-100" : "text-slate-400"}`}>{useCatalogPrice ? "Gunakan Harga Katalog" : "Gunakan Harga Manual"}</button></div>
+
+              <div className="space-y-4">
+                {manualForm.items.map((item, index) => (
+                  <div key={index} className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 flex flex-col gap-4 relative animate-in slide-in-from-bottom-2">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="md:col-span-2"><input required value={item.sku} onChange={(e) => updateManualItem(index, 'sku', e.target.value)} placeholder="SKU Produk" className="w-full bg-white border-none rounded-2xl py-3 px-5 font-bold text-sm shadow-sm focus:ring-2 focus:ring-blue-100" /></div>
+                      <div className="flex items-center bg-white rounded-2xl px-3 shadow-sm"><span className="text-[9px] font-black text-slate-300 mr-2 uppercase">Qty</span><input type="number" min="1" required value={item.qty} onChange={(e) => updateManualItem(index, 'qty', e.target.value)} className="w-full border-none font-black text-[#0047AB] text-center" /></div>
+                      {manualForm.items.length > 1 && (<button type="button" onClick={() => removeManualItem(index)} className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all self-center md:self-auto"><Trash2 size={18}/></button>)}
+                    </div>
+                    {!useCatalogPrice && (<div className="grid grid-cols-2 gap-4 animate-in fade-in duration-300"><div className="flex items-center bg-white rounded-2xl px-5 shadow-sm"><span className="text-[9px] font-black text-slate-300 mr-2">RP</span><input type="number" placeholder="Jual per Unit" value={item.manualPrice} onChange={(e) => updateManualItem(index, 'manualPrice', e.target.value)} className="w-full border-none py-3 font-bold text-sm" /></div><div className="flex items-center bg-white rounded-2xl px-5 shadow-sm"><span className="text-[9px] font-black text-slate-300 mr-2">MODAL</span><input type="number" placeholder="Modal per Unit" value={item.manualCost} onChange={(e) => updateManualItem(index, 'manualCost', e.target.value)} className="w-full border-none py-3 font-bold text-sm" /></div></div>)}
+                  </div>
+                ))}
               </div>
-              {!useCatalogPrice && (
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="number" placeholder="Jual Unit" value={manualForm.manualPrice} onChange={(e) => setManualForm({...manualForm, manualPrice: e.target.value})} className="bg-slate-50 rounded-xl py-3 px-4 font-bold text-sm" />
-                  <input type="number" placeholder="Modal Unit" value={manualForm.manualCost} onChange={(e) => setManualForm({...manualForm, manualCost: e.target.value})} className="bg-slate-50 rounded-xl py-3 px-4 font-bold text-sm" />
-                </div>
-              )}
-              <button type="submit" className="w-full bg-[#0047AB] text-white py-5 rounded-[24px] font-black text-sm shadow-xl">Simpan & Potong Stok</button>
+
+              <button type="button" onClick={addManualItem} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-[24px] text-slate-400 font-black text-[10px] uppercase tracking-widest hover:border-[#0047AB] hover:text-[#0047AB] transition-all flex items-center justify-center gap-2 hover:bg-blue-50/30"><Plus size={16}/> Tambah Produk Lagi</button>
             </form>
+
+            <div className="p-10 border-t border-slate-50 bg-white"><button type="submit" onClick={handleManualSubmit} disabled={isProcessing} className="w-full bg-[#0047AB] text-white py-5 rounded-[24px] font-black text-sm shadow-xl shadow-blue-100 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50">{isProcessing ? <Loader2 className="animate-spin" size={20}/> : <Plus size={20} strokeWidth={3}/>}{isProcessing ? "MEMPROSES..." : "SIMPAN SEMUA & POTONG STOK"}</button></div>
           </div>
         </div>
       )}
 
-      {/* MODAL EDIT PENDING */}
+      {/* MODAL EDIT PENDING SKU */}
       {isEditTxModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-[32px] shadow-2xl p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-black text-[#0F172A]">Perbaiki SKU</h2>
-              <button onClick={() => setIsEditTxModalOpen(false)}><X /></button>
-            </div>
-            <form onSubmit={handleEditTransaction} className="space-y-4">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID: {selectedTx?.orderId}</p>
-              <input required value={selectedTx?.sku || ""} onChange={(e) => setSelectedTx({...selectedTx, sku: e.target.value})} placeholder="Masukkan SKU Katalog yang Benar" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" />
-              <button type="submit" className="w-full bg-[#0047AB] text-white py-4 rounded-2xl font-black text-xs">Simpan & Sinkronkan</button>
+        <div className="fixed inset-0 bg-[#0F172A]/60 backdrop-blur-md z-[300] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl p-10 animate-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-8"><h2 className="text-xl font-black text-[#0F172A] tracking-tighter">Perbaiki SKU</h2><button onClick={() => setIsEditTxModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors"><X /></button></div>
+            <form onSubmit={handleEditTransaction} className="space-y-6">
+              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nomor Pesanan</label><p className="bg-slate-50 py-3 px-6 rounded-2xl font-black text-xs text-[#0047AB]">#{selectedTx?.orderId}</p></div>
+              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">SKU Katalog Baru</label><input required value={selectedTx?.sku || ""} onChange={(e) => setSelectedTx({...selectedTx, sku: e.target.value})} placeholder="Masukkan SKU Katalog" className="w-full bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm focus:ring-2 focus:ring-blue-100" /></div>
+              <button type="submit" className="w-full bg-[#0047AB] text-white py-4 rounded-[20px] font-black text-xs shadow-lg shadow-blue-100 transition-all hover:scale-[1.02] active:scale-95">SIMPAN & SINKRONKAN</button>
             </form>
           </div>
         </div>
