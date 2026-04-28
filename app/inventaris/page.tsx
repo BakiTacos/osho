@@ -3,13 +3,18 @@
 import React, { useState, useEffect } from 'react';
 import { db } from "../../lib/firebase"; 
 import { useAuth } from "../../context/AuthContext";
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { 
+  collection, onSnapshot, query, orderBy, doc, 
+  updateDoc, deleteDoc, setDoc, addDoc, serverTimestamp, writeBatch 
+} from "firebase/firestore";
 import { 
   Search, Bell, HelpCircle, Plus, Package, 
   AlertTriangle, Slash, MoreVertical, ChevronLeft, ChevronRight,
-  Edit2, Trash2, Check, ArrowUpDown
+  Edit2, Trash2, Check, ArrowUpDown, Download, Loader2
 } from "lucide-react";
+
 import Link from "next/link";
+import * as XLSX from 'xlsx'; // Pastikan sudah install: npm install xlsx
 
 interface Product {
   id: string;
@@ -20,9 +25,9 @@ interface Product {
   costPrice: number;
   stock: number;
   imageUrl: string;
-  isMapping?: boolean;   // Baru
-  linkedSku?: string;    // Baru
-  multiplier?: number;   // Baru
+  isMapping?: boolean;
+  linkedSku?: string;
+  multiplier?: number;
 }
 
 // --- UTILITY FUNCTIONS ---
@@ -41,14 +46,12 @@ const Tooltip = ({ text, children }: { text: string, children: React.ReactNode }
 const calculateNetProfit = (product: Product) => {
   const price = product.price || 0;
   const unitCost = product.costPrice || 0;
-  
-  // LOGIKA MULTIPLIER: Jika mapping, gunakan multiplier, jika tidak default 1
   const multiplier = product.isMapping ? (product.multiplier || 1) : 1;
   const totalCost = unitCost * multiplier;
 
-  const adminMarketplace = price * 0.10; // Admin 10%
-  const adminLayanan = price * 0.06;    // Admin 6%
-  const biayaTetap = 1250;              // Per Pesanan
+  const adminMarketplace = price * 0.10; 
+  const adminLayanan = price * 0.06;    
+  const biayaTetap = 1250;              
   
   return price - totalCost - adminMarketplace - adminLayanan - biayaTetap;
 };
@@ -59,18 +62,15 @@ const calculateNetMargin = (product: Product) => {
   return (netProfit / product.price) * 100;
 };
 
-const calculateProfit = (price: number, costPrice: number) => {
-  return price - costPrice;
-};
-
 export default function InventarisPage() {
   const { currentUser } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Semua");
-  const [sortBy, setSortBy] = useState<"name" | "price" | "stock">("name");
+  const [sortBy, setSortBy] = useState<"name" | "price" | "stock" | "netProfit" | "netMargin">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [tempStock, setTempStock] = useState<number>(0);
@@ -86,6 +86,93 @@ export default function InventarisPage() {
     });
     return () => unsubscribe();
   }, [currentUser]);
+
+  // --- LOGIKA IMPOR MASSAL ---
+  const handleMassImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+
+    setIsImporting(true);
+    const reader = new FileReader();
+
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
+        
+        const rawRows = data.slice(1); // Skip Header
+        const latestDataMap: Record<string, any> = {};
+
+        rawRows.forEach((row) => {
+          const rawSku = String(row[0] || "").trim().replace(/\s+/g, '').toUpperCase();
+          if (!rawSku || rawSku === "UNDEFINED") return;
+
+          // Parsing Tanggal (Kolom E / Index 4)
+          const dateValue = row[4]; 
+          const currentDate = dateValue ? new Date(dateValue) : new Date(0);
+
+          // Logika: Jika SKU belum ada di map ATAU tanggal baris ini lebih baru dari yang di map
+          if (!latestDataMap[rawSku] || currentDate > latestDataMap[rawSku].date) {
+            latestDataMap[rawSku] = {
+              sku: rawSku,
+              name: String(row[1] || "Tanpa Nama").toUpperCase(),
+              price: Number(String(row[2] || "0").replace(/[^0-9.-]+/g, "")),
+              costPrice: Number(String(row[3] || "0").replace(/[^0-9.-]+/g, "")),
+              date: currentDate
+            };
+          }
+        });
+
+        // Upload hasil filter ke Firestore menggunakan setDoc (ID = SKU)
+        const uploadPromises = Object.values(latestDataMap).map((item) => {
+          const docRef = doc(db, `users/${currentUser.uid}/products`, item.sku); // ID disetel ke SKU
+          return setDoc(docRef, {
+            sku: item.sku,
+            name: item.name,
+            price: item.price,
+            costPrice: item.costPrice,
+            stock: 0, // Default stok awal
+            category: "Lainnya",
+            imageUrl: "",
+            isMapping: false,
+            updatedAt: serverTimestamp()
+          }, { merge: true }); // Merge true agar field lain (seperti stok) tidak terhapus jika sudah ada
+        });
+
+        await Promise.all(uploadPromises);
+        alert(`Impor selesai. ${Object.keys(latestDataMap).length} SKU unik berhasil diproses.`);
+      } catch (err) {
+        console.error(err);
+        alert("Format file tidak didukung atau kolom salah.");
+      } finally {
+        setIsImporting(false);
+        e.target.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleDeleteAll = async () => {
+    const confirmDelete = window.confirm("PERINGATAN: Semua data inventaris akan dihapus permanen. Lanjutkan?");
+    if (!confirmDelete || !currentUser) return;
+
+    setIsImporting(true);
+    try {
+      const batch = writeBatch(db);
+      products.forEach((p) => {
+        const docRef = doc(db, `users/${currentUser.uid}/products`, p.id);
+        batch.delete(docRef);
+      });
+      await batch.commit();
+      alert("Semua data berhasil dibersihkan.");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus data.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Hapus produk ini dari inventaris?")) {
@@ -105,8 +192,22 @@ export default function InventarisPage() {
       (selectedCategory === "Semua" || p.category === selectedCategory)
     )
     .sort((a, b) => {
-      const valA = a[sortBy];
-      const valB = b[sortBy];
+      let valA: any;
+      let valB: any;
+
+      // Logika pengurutan untuk nilai hasil kalkulasi
+      if (sortBy === "netProfit") {
+        valA = calculateNetProfit(a);
+        valB = calculateNetProfit(b);
+      } else if (sortBy === "netMargin") {
+        valA = calculateNetMargin(a);
+        valB = calculateNetMargin(b);
+      } else {
+        // Logika pengurutan untuk field standar
+        valA = a[sortBy as keyof Product] || 0;
+        valB = b[sortBy as keyof Product] || 0;
+      }
+
       if (sortOrder === "asc") return valA > valB ? 1 : -1;
       return valA < valB ? 1 : -1;
     });
@@ -115,7 +216,7 @@ export default function InventarisPage() {
   const outOfStockCount = products.filter(p => p.stock === 0).length;
 
   return (
-    <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300">
+    <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-10">
       
       {/* HEADER */}
       <div className="px-4 sm:px-10 pt-6 sm:pt-8 flex items-center justify-between gap-4">
@@ -136,30 +237,49 @@ export default function InventarisPage() {
         </div>
       </div>
 
-      {/* TITLE BAR */}
-      <div className="px-4 sm:px-10 mt-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* TITLE BAR & ACTIONS */}
+      <div className="px-4 sm:px-10 mt-10 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
         <div>
-          <h1 className="text-4xl font-black text-[#0F172A] tracking-tighter">Inventaris</h1>
-          <p className="text-[#64748B] mt-2 text-sm font-medium">Manajemen stok dan performa margin produk.</p>
+          <h1 className="text-4xl font-black text-[#0F172A] tracking-tighter leading-tight">Inventaris</h1>
+          <p className="text-[#64748B] mt-2 text-sm font-medium">Manajemen stok dan performa margin produk secara massal.</p>
         </div>
-        <Link href="/inventaris/tambah">
-          <button className="bg-[#0047AB] text-white px-6 py-3 rounded-xl font-black text-sm shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-all flex items-center space-x-2">
-            <Plus size={18} strokeWidth={3} />
-            <span>Tambah Produk</span>
-          </button>
-        </Link>
+        
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+          
+          
+          {/* TOMBOL IMPOR MASSAL (Excel) */}
+          <div className="relative">
+            <input 
+              type="file" accept=".xlsx, .xls" 
+              onChange={handleMassImport} 
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              disabled={isImporting}
+            />
+            <button className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-black text-xs shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center space-x-2">
+              {isImporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} strokeWidth={3} />}
+              <span>{isImporting ? "Memproses..." : "Impor Excel"}</span>
+            </button>
+          </div>
 
-        <Link href="/inventaris/mapping">
-          <button className="bg-[#0047AB] text-white px-6 py-3 rounded-xl font-black text-sm shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-all flex items-center space-x-2">
-            <Plus size={18} strokeWidth={3} />
-            <span>Tambah Produk Cabang</span>
-          </button>
-        </Link>
+          <Link href="/inventaris/tambah">
+            <button className="bg-[#0047AB] text-white px-5 py-3 rounded-xl font-black text-xs shadow-xl shadow-blue-100 hover:scale-105 transition-all flex items-center space-x-2">
+              <Plus size={16} strokeWidth={3} />
+              <span>Tambah Produk</span>
+            </button>
+          </Link>
+
+          <Link href="/inventaris/mapping">
+            <button className="bg-white text-[#0047AB] border-2 border-[#0047AB] px-5 py-3 rounded-xl font-black text-xs hover:bg-blue-50 transition-all flex items-center space-x-2">
+              <ArrowUpDown size={16} strokeWidth={3} />
+              <span>Mapping SKU</span>
+            </button>
+          </Link>
+        </div>
       </div>
 
       {/* STAT CARDS */}
       <div className="px-4 sm:px-10 mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-7 rounded-[28px] border border-[#F1F5F9] shadow-sm relative overflow-visible">
+        <div className="bg-white p-7 rounded-[28px] border border-[#F1F5F9] shadow-sm relative">
           <div className="flex justify-between items-start mb-6">
             <div className="p-3 bg-[#F0F7FF] text-[#0047AB] rounded-2xl"><Package size={22} /></div>
             <Tooltip text="Total variasi produk terdaftar."><HelpCircle size={14} className="opacity-20 cursor-help" /></Tooltip>
@@ -169,20 +289,17 @@ export default function InventarisPage() {
           <div className="absolute bottom-0 left-0 w-32 h-[6px] bg-[#0047AB] rounded-tr-full rounded-bl-[28px]"></div>
         </div>
 
-        <div className="bg-white p-7 rounded-[28px] border border-[#F1F5F9] shadow-sm relative overflow-visible">
+        <div className="bg-white p-7 rounded-[28px] border border-[#F1F5F9] shadow-sm relative">
           <div className="flex justify-between items-start mb-6">
             <div className="p-3 bg-[#FFF1F2] text-[#E11D48] rounded-2xl"><AlertTriangle size={22} /></div>
             <Tooltip text="Stok menipis (di bawah 10 unit)."><HelpCircle size={14} className="opacity-20 cursor-help" /></Tooltip>
           </div>
           <p className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-widest mb-1">Stok Rendah</p>
-          <div className="flex items-center space-x-2">
-            <h3 className="text-3xl font-black text-[#0F172A] tracking-tight">{lowStockCount}</h3>
-            <span className="bg-[#E11D48] text-white text-[9px] font-black px-2 py-0.5 rounded uppercase">Restock</span>
-          </div>
+          <h3 className="text-3xl font-black text-[#0F172A] tracking-tight">{lowStockCount}</h3>
           <div className="absolute bottom-0 left-0 w-32 h-[6px] bg-[#E11D48] rounded-tr-full rounded-bl-[28px]"></div>
         </div>
 
-        <div className="bg-white p-7 rounded-[28px] border border-[#F1F5F9] shadow-sm relative overflow-visible">
+        <div className="bg-white p-7 rounded-[28px] border border-[#F1F5F9] shadow-sm relative">
           <div className="flex justify-between items-start mb-6">
             <div className="p-3 bg-slate-100 text-slate-400 rounded-2xl"><Slash size={22} /></div>
             <Tooltip text="Produk yang stoknya benar-benar habis."><HelpCircle size={14} className="opacity-20 cursor-help" /></Tooltip>
@@ -194,41 +311,39 @@ export default function InventarisPage() {
       </div>
 
       {/* FILTER & SORT */}
-      <div className="px-4 sm:px-10 mt-10 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex bg-white p-1 rounded-xl border border-[#E2E8F0] shadow-sm overflow-x-auto no-scrollbar">
-            {categories.map((cat) => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)}
-                className={`px-5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  selectedCategory === cat ? "bg-[#0047AB] text-white shadow-md" : "text-[#64748B] hover:bg-slate-50"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center space-x-3 self-end">
-            <div className="flex bg-white rounded-xl border border-[#E2E8F0] p-1 shadow-sm">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}
-                className="bg-transparent border-none text-[11px] font-black text-[#0F172A] uppercase tracking-wider focus:ring-0 px-3 cursor-pointer"
-              >
-                <option value="name">Urut: Nama</option>
-                <option value="price">Urut: Harga</option>
-                <option value="stock">Urut: Stok</option>
-              </select>
-              <button onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                className="p-1.5 hover:bg-slate-50 rounded-lg text-[#0047AB] transition-all"
-              >
-                <ArrowUpDown size={14} />
-              </button>
-            </div>
-          </div>
+      <div className="px-4 sm:px-10 mt-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex bg-white p-1 rounded-xl border border-[#E2E8F0] shadow-sm overflow-x-auto no-scrollbar">
+          {categories.map((cat) => (
+            <button key={cat} onClick={() => setSelectedCategory(cat)}
+              className={`px-5 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                selectedCategory === cat ? "bg-[#0047AB] text-white shadow-md" : "text-[#64748B] hover:bg-slate-50"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+        <div className="flex bg-white rounded-xl border border-[#E2E8F0] p-1 shadow-sm items-center">
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}
+            className="bg-transparent border-none text-[10px] font-black text-[#0F172A] uppercase tracking-wider focus:ring-0 px-3"
+          >
+            <option value="name">Urut: Nama</option>
+            <option value="stock">Urut: Stok</option>
+            <option value="price">Urut: Harga Jual</option>
+            <option value="netProfit">Urut: Keuntungan (Rp)</option>
+            <option value="netMargin">Urut: Margin (%)</option>
+          </select>
+          <button onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+            className="p-1.5 hover:bg-slate-50 rounded-lg text-[#0047AB]"
+          >
+            <ArrowUpDown size={14} />
+          </button>
         </div>
       </div>
 
       {/* TABLE */}
       <div className="px-4 sm:px-10 py-8">
-        <div className="bg-white rounded-[28px] border border-[#F1F5F9] shadow-sm overflow-visible">
+        <div className="bg-white rounded-[28px] border border-[#F1F5F9] shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-[#F8F9FB] border-b border-[#F1F5F9]">
@@ -238,7 +353,7 @@ export default function InventarisPage() {
                   <th className="px-6 py-5 text-right">HPP (Modal)</th>
                   <th className="px-6 py-5 text-right">Jual</th>
                   <th className="px-6 py-5 text-right">Margin (%)</th>
-                  <th className="px-6 py-5 text-right">Estimasi Profit Bersih</th>
+                  <th className="px-6 py-5 text-right">Net Profit</th>
                   <th className="px-6 py-5 text-center">Stok</th>
                   <th className="px-8 py-5 text-right">Aksi</th>
                 </tr>
@@ -247,14 +362,14 @@ export default function InventarisPage() {
                 {processedProducts.map((p) => {
                   const netProfit = calculateNetProfit(p);
                   const netMargin = calculateNetMargin(p);
-                  const multiplier = p.isMapping ? (p.multiplier || 1) : 1;
-                  const totalCost = (p.costPrice || 0) * multiplier;
                   
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-8 py-5">
                         <div className="flex items-center space-x-4">
-                          <img src={p.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-100" />
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-100 overflow-hidden">
+                            {p.imageUrl ? <img src={p.imageUrl} alt="" className="object-cover w-full h-full" /> : <Package size={18} className="text-slate-300" />}
+                          </div>
                           <span className="text-sm font-black text-[#0F172A] uppercase leading-tight">{p.name}</span>
                         </div>
                       </td>
@@ -265,30 +380,19 @@ export default function InventarisPage() {
                       <td className="px-6 py-5 text-right text-sm font-black text-[#0F172A]">
                         Rp {p.price.toLocaleString('id-ID')}
                       </td>
-                      
-                      {/* --- KOLOM MARGIN (%) --- */}
                       <td className="px-6 py-5 text-right">
-                        <Tooltip text="Setelah dipotong Admin 16% + Rp 1.250">
-                          <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
-                            netMargin >= 15 ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : 
-                            netMargin >= 5 ? "bg-amber-50 text-amber-600 border border-amber-100" : 
-                            "bg-red-50 text-red-600 border border-red-100"
-                          }`}>
-                            {netMargin.toFixed(1)}%
-                          </span>
-                        </Tooltip>
+                        <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
+                          netMargin >= 15 ? "bg-emerald-50 text-emerald-600" : 
+                          netMargin >= 5 ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
+                        }`}>
+                          {netMargin.toFixed(1)}%
+                        </span>
                       </td>
-
-                      {/* --- KOLOM ESTIMASI PROFIT BERSIH --- */}
                       <td className="px-6 py-5 text-right">
-                        <div className="flex flex-col items-end">
-                          <span className={`text-sm font-black ${netProfit > 0 ? "text-[#0047AB]" : "text-red-600"}`}>
-                            Rp {netProfit.toLocaleString('id-ID')}
-                          </span>
-                          <span className="text-[9px] font-bold text-[#94A3B8] uppercase italic">Setelah Biaya</span>
-                        </div>
+                        <span className={`text-sm font-black ${netProfit > 0 ? "text-[#0047AB]" : "text-red-600"}`}>
+                          Rp {netProfit.toLocaleString('id-ID')}
+                        </span>
                       </td>
-
                       <td className="px-6 py-5 text-center">
                         {editingStockId === p.id ? (
                           <div className="flex items-center justify-center space-x-1">
@@ -301,7 +405,7 @@ export default function InventarisPage() {
                           </div>
                         ) : (
                           <div onClick={() => { setEditingStockId(p.id); setTempStock(p.stock); }}
-                            className={`cursor-pointer inline-block text-sm font-black p-1 px-3 rounded-md transition-all ${p.stock <= 10 ? "text-red-600 bg-red-50 hover:bg-red-100" : "text-[#0F172A] hover:bg-slate-100"}`}
+                            className={`cursor-pointer inline-block text-sm font-black p-1 px-3 rounded-md transition-all ${p.stock <= 10 ? "text-red-600 bg-red-50" : "text-[#0F172A] hover:bg-slate-100"}`}
                           >
                             {p.stock}
                           </div>
@@ -309,24 +413,21 @@ export default function InventarisPage() {
                       </td>
                       <td className="px-8 py-5 text-right relative">
                         <button onClick={() => setActiveMenuId(activeMenuId === p.id ? null : p.id)}
-                          className="p-2 hover:bg-slate-100 rounded-lg text-[#94A3B8] hover:text-[#0F172A]"
+                          className="p-2 hover:bg-slate-100 rounded-lg text-[#94A3B8]"
                         >
                           <MoreVertical size={18} />
                         </button>
                         {activeMenuId === p.id && (
-                          <>
-                            <div className="fixed inset-0 z-[105]" onClick={() => setActiveMenuId(null)}></div>
-                            <div className="absolute right-10 top-12 w-40 bg-white border border-[#F1F5F9] rounded-xl shadow-2xl z-[110] overflow-hidden py-1">
-                              <Link href={`/inventaris/edit/${p.id}`} className="flex items-center space-x-3 px-4 py-3 text-xs font-black text-[#64748B] hover:bg-[#F8F9FB] hover:text-[#0047AB]">
-                                <Edit2 size={14} /> <span>Edit Produk</span>
-                              </Link>
-                              <button onClick={() => handleDelete(p.id)}
-                                className="w-full flex items-center space-x-3 px-4 py-3 text-xs font-black text-red-500 hover:bg-red-50"
-                              >
-                                <Trash2 size={14} /> <span>Hapus Produk</span>
-                              </button>
-                            </div>
-                          </>
+                          <div className="absolute right-10 top-12 w-40 bg-white border border-[#F1F5F9] rounded-xl shadow-2xl z-[110] py-1">
+                            <Link href={`/inventaris/edit/${p.id}`} className="flex items-center space-x-3 px-4 py-3 text-xs font-black text-[#64748B] hover:bg-blue-50 hover:text-[#0047AB]">
+                              <Edit2 size={14} /> <span>Edit Produk</span>
+                            </Link>
+                            <button onClick={() => handleDelete(p.id)}
+                              className="w-full flex items-center space-x-3 px-4 py-3 text-xs font-black text-red-500 hover:bg-red-50"
+                            >
+                              <Trash2 size={14} /> <span>Hapus</span>
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -334,16 +435,6 @@ export default function InventarisPage() {
                 })}
               </tbody>
             </table>
-          </div>
-          <div className="p-8 border-t border-[#F8F9FB] flex items-center justify-between">
-            <p className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
-              Total {processedProducts.length} Produk ditampilkan
-            </p>
-            <div className="flex items-center space-x-2">
-               <button className="p-2 border border-[#E2E8F0] rounded-lg text-[#94A3B8] opacity-50 cursor-not-allowed"><ChevronLeft size={16}/></button>
-               <button className="w-8 h-8 rounded-lg bg-[#0047AB] text-white text-xs font-black shadow-lg shadow-blue-100">1</button>
-               <button className="p-2 border border-[#E2E8F0] rounded-lg text-[#94A3B8] opacity-50 cursor-not-allowed"><ChevronRight size={16}/></button>
-            </div>
           </div>
         </div>
       </div>
