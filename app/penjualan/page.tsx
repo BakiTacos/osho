@@ -5,7 +5,8 @@ import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { 
   collection, onSnapshot, query, addDoc, 
-  serverTimestamp, deleteDoc, doc, updateDoc, orderBy, increment 
+  serverTimestamp, deleteDoc, doc, updateDoc, orderBy, increment, 
+  writeBatch
 } from "firebase/firestore";
 import { 
   Search, Bell, ShoppingBag, Wallet, Info, 
@@ -14,6 +15,7 @@ import {
   AlertCircle, Edit2
 } from "lucide-react";
 import * as XLSX from 'xlsx';
+import { useRouter } from 'next/navigation';
 
 const MARKETPLACE_CONFIG: any = {
   shopee: { name: "Shopee", dataStartRow: 1, cols: { orderId: 0, resi: 4, sku: 14, name: 13, total: 20, qty: 18 } },
@@ -25,6 +27,7 @@ const ADMIN_PERCENT = 0.16;
 const FIXED_FEE = 1250;     
 
 export default function PenjualanPage() {
+  const router = useRouter();
   const { currentUser } = useAuth();
   const [selectedMarketplace, setSelectedMarketplace] = useState("shopee");
   const [catalog, setCatalog] = useState<any[]>([]);
@@ -45,6 +48,22 @@ export default function PenjualanPage() {
   const [manualForm, setManualForm] = useState({
     orderId: '', sku: '', qty: '1', manualPrice: '', manualCost: '', source: 'Shopee', status: 'Proses'
   });
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === currentItems.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(currentItems.map(t => t.id));
+    }
+  };
 
   useEffect(() => {
     if (!currentUser) return;
@@ -121,7 +140,12 @@ export default function PenjualanPage() {
       const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
       const headers = data[0];
       const autoSkuIdx = headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU") || String(h).toUpperCase().includes("REFERENSI"));
-      const finalSkuIdx = autoSkuIdx !== -1 ? autoSkuIdx : config.cols.sku;
+      const finalSkuIdx = (config.cols.sku !== undefined) 
+        ? config.cols.sku 
+        : headers.findIndex((h: any) => 
+            String(h).toUpperCase().includes("SKU") || 
+            String(h).toUpperCase().includes("REFERENSI")
+          );
       const rawRows = data.slice(config.dataStartRow);
       
       let addedCount = 0;
@@ -281,6 +305,37 @@ export default function PenjualanPage() {
     await updateDoc(doc(db, `users/${currentUser.uid}/sales`, t.id), { status: newStatus });
   };
 
+  const handleBulkDelete = async () => {
+    const count = selectedIds.length;
+    if (!confirm(`Hapus ${count} transaksi terpilih? Stok akan dikembalikan otomatis.`)) return;
+
+    setIsProcessing(true);
+    try {
+      const batch = writeBatch(db); // Gunakan writeBatch untuk performa
+      
+      // Cari data transaksi yang dipilih untuk mengembalikan stok
+      for (const id of selectedIds) {
+        const tx = transactions.find(t => t.id === id);
+        if (tx) {
+          // Kembalikan stok
+          await updateProductStock(tx.sku, tx.qty);
+          // Tambahkan ke antrian hapus
+          const docRef = doc(db, `users/${currentUser?.uid}/sales`, id);
+          batch.delete(docRef);
+        }
+      }
+
+      await batch.commit();
+      setSelectedIds([]);
+      alert(`Berhasil menghapus ${count} transaksi.`);
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus beberapa data.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDelete = async (t: any) => {
     if (!confirm("Hapus transaksi? Stok akan dikembalikan.")) return;
     await deleteDoc(doc(db, `users/${currentUser?.uid}/sales`, t.id));
@@ -340,6 +395,15 @@ export default function PenjualanPage() {
           <Plus size={18} strokeWidth={3} />
           <span>Input Manual</span>
         </button>
+
+        {/* HAPUS tag <button> di dalamnya, pindahkan semua styling ke <Link> */}
+          <button 
+          onClick={() => router.push('/penjualan/advanced')}
+          className="bg-[#0047AB] text-white px-5 py-3 rounded-2xl font-black text-xs shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-all flex items-center space-x-2"
+        >
+          <Plus size={18} strokeWidth={3} />
+          <span>Advance Shipment</span>
+        </button>
       </div>
 
       {/* STATS */}
@@ -353,6 +417,21 @@ export default function PenjualanPage() {
           <h3 className="text-4xl font-black text-emerald-600">Rp {stats.profit.toLocaleString('id-ID')}</h3>
         </div>
       </div>
+
+      {selectedIds.length > 0 && (
+        <div className="px-4 sm:px-10 mt-6 flex items-center justify-between bg-red-50 p-4 rounded-2xl border border-red-100 animate-in fade-in slide-in-from-top-2">
+          <p className="text-xs font-black text-red-600 uppercase tracking-widest">
+            {selectedIds.length} Transaksi Terpilih
+          </p>
+          <button 
+            onClick={handleBulkDelete}
+            className="bg-red-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase flex items-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-100"
+          >
+            <Trash2 size={14} />
+            Hapus Terpilih
+          </button>
+        </div>
+      )}
 
       {/* MONITORING TABS */}
       <div className="px-4 sm:px-10 mt-10 flex gap-8 border-b border-slate-200">
@@ -404,7 +483,15 @@ export default function PenjualanPage() {
               <table className="w-full text-left">
                 <thead className="bg-[#F8F9FB] border-b border-[#F1F5F9]">
                   <tr className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
-                    <th className="px-8 py-5">Item</th>
+                    <th className="px-8 py-5 w-10">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB] cursor-pointer"
+                        checked={selectedIds.length === currentItems.length && currentItems.length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
+                    <th className="px-4 py-5 text-left">Item</th>
                     <th className="px-6 py-5 text-right">Qty</th>
                     <th className="px-6 py-5 text-right">Net Profit</th>
                     <th className="px-6 py-5 text-center">Status</th>
@@ -414,7 +501,16 @@ export default function PenjualanPage() {
                 <tbody className="divide-y divide-slate-50">
                   {currentItems.map((t) => (
                     <tr key={t.id} className={`hover:bg-slate-50/50 transition-colors group ${t.product === "Produk Luar Katalog" ? "bg-red-50/40" : ""}`}>
+                      <td className="px-6 py-5 text-right font-black text-xs text-slate-400">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB] cursor-pointer"
+                          checked={selectedIds.includes(t.id)}
+                          onChange={() => toggleSelect(t.id)}
+                        />
+                      </td>
                       <td className="px-8 py-5">
+                        
                         <div className="flex flex-col">
                           <span className={`text-sm font-black leading-tight uppercase ${t.product === "Produk Luar Katalog" ? "text-red-600" : "text-[#0F172A]"}`}>
                             {t.product}
