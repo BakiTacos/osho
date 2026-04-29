@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from "../../lib/firebase"; 
 import { useAuth } from "../../context/AuthContext";
+import AuthComponent from "../../components/AuthComponent"; // Sesuaikan path
 import { 
   collection, onSnapshot, query, orderBy, doc, 
   updateDoc, deleteDoc, setDoc, addDoc, serverTimestamp, writeBatch 
@@ -214,6 +215,24 @@ export default function InventarisPage() {
 
   const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= 10).length;
   const outOfStockCount = products.filter(p => p.stock === 0).length;
+
+
+  if (!currentUser) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-8 md:p-24 dark:bg-black">
+        <div className="w-full max-w-2xl text-center">
+          <h1 className="mb-8 text-4xl font-bold dark:text-white">My Lists</h1>
+          <p className="mb-8 dark:text-gray-300">
+            Silakan login atau daftar untuk membuat daftar kustom.
+          </p>
+          <AuthComponent />
+          <Link href="/" className="mt-12 inline-block text-blue-600 hover:underline dark:text-blue-400">
+            Back to Home
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-10">
