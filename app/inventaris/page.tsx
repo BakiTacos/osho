@@ -274,6 +274,14 @@ export default function InventarisPage() {
               <span>Mapping SKU</span>
             </button>
           </Link>
+
+          {/* Tombol Baru: Edit Massal */}
+          <Link href="/inventaris/multi-edit">
+            <button className="bg-white text-emerald-600 border-2 border-emerald-600 px-5 py-3 rounded-xl font-black text-xs hover:bg-emerald-50 transition-all flex items-center space-x-2">
+              <Edit2 size={16} strokeWidth={3} />
+              <span>Edit Massal</span>
+            </button>
+          </Link>
         </div>
       </div>
 
@@ -427,6 +435,7 @@ export default function InventarisPage() {
                             >
                               <Trash2 size={14} /> <span>Hapus</span>
                             </button>
+                            
                           </div>
                         )}
                       </td>
