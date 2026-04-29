@@ -165,21 +165,28 @@ export default function PenjualanPage() {
         const wb = XLSX.read(bstr, { type: 'binary' });
         const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
         const headers = data[0];
-        const finalSkuIdx = (config.cols.sku !== undefined) 
-          ? config.cols.sku 
-          : headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU") || String(h).toUpperCase().includes("REFERENSI"));
-        
+        const finalSkuIdx = (config.cols.sku !== undefined) ? config.cols.sku : headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU") || String(h).toUpperCase().includes("REFERENSI"));
         const rawRows = data.slice(config.dataStartRow);
         let addedCount = 0;
+
         for (const row of rawRows) {
           const resiValue = String(row[config.cols.resi] || "").trim();
           const orderIdLama = String(row[config.cols.orderId] || "").trim();
           const finalId = resiValue || orderIdLama;
           if (!finalId || existingOrderIds.has(finalId)) continue;
-          const sku = String(row[finalSkuIdx] || "").replace(/\s+/g, '').toUpperCase();
+
+          // --- LOGIKA FALLBACK SKU SHOPEE (INDEX 14 -> 12) ---
+          let rawSku = String(row[finalSkuIdx] || "").trim();
+          if (selectedMarketplace === 'shopee' && !rawSku) {
+            rawSku = String(row[12] || "").trim(); // Cek Index 12 jika 14 kosong
+          }
+          const sku = rawSku.replace(/\s+/g, '').toUpperCase();
+          // ----------------------------------------------------
+
           const qty = Number(row[config.cols.qty]) || 1;
           const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
           let unitPrice = 0, unitCost = 0, multiplier = 1, productName = "Produk Luar Katalog";
+
           if (matched) {
             productName = matched.name;
             unitPrice = matched.price || (Number(row[config.cols.total]) / qty);
@@ -189,9 +196,11 @@ export default function PenjualanPage() {
               multiplier = Number(matched.multiplier) || 1;
             } else { unitCost = Number(matched.costPrice) || 0; }
           } else { unitPrice = (Number(row[config.cols.total]) / qty || 0); }
+
           const totalRevenue = unitPrice * qty;
           const totalHpp = (unitCost * multiplier) * qty;
           const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp);
+
           await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
             orderId: finalId, sku, product: productName, total: totalRevenue,
             hpp: totalHpp, qty, profit: netProfit, marketplace: config.name,
