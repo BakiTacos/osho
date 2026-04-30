@@ -47,7 +47,7 @@ export default function SettingsPage() {
           {Object.keys(feeSettings).filter(k => k !== 'updatedAt').map((mp) => (
             <div key={mp} className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm flex flex-col">
               <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-black uppercase text-[#0047AB] tracking-tight">{mp} Dashboard</h3>
+                <h3 className="text-xl font-black uppercase text-[#0047AB] tracking-tight">{mp} Fees</h3>
                 <div className="bg-blue-50 px-4 py-2 rounded-2xl">
                    <span className="text-[10px] font-black text-[#0047AB] uppercase">Total Fee: {calculateTotal(mp)}%</span>
                 </div>

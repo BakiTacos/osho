@@ -114,25 +114,22 @@ export default function PenjualanPage() {
   }, [currentUser]);
 
   const calculateNetProfitEntry = (totalRevenue: number, totalHpp: number, marketplace: string) => {
-    // 1. Pastikan data fee sudah ter-sync
     if (!activeFees) {
-      console.warn("⚠️ Perhitungan menggunakan fallback karena activeFees null");
+      // Fallback jika data belum terload (16% + 1250 fixed)
       return totalRevenue - totalHpp - (totalRevenue * 0.16) - 1250;
     }
 
-    // 2. Normalisasi nama marketplace ke lowercase agar cocok dengan Firestore
-    // Ubah baris ini jika tetap ingin pakai huruf kapital di Firestore
-    const mpKey = marketplace; // Menghilangkan .toLowerCase()
-    const mpSettings = activeFees[mpKey];
+    // Cari key di Firestore yang cocok secara case-insensitive (misal: 'shopee' matches 'Shopee')
+    const feeKeys = Object.keys(activeFees);
+    const matchedKey = feeKeys.find(key => key.toLowerCase() === marketplace.toLowerCase().trim());
+    const mpSettings = matchedKey ? activeFees[matchedKey] : null;
     
-    // 3. Jika "Offline" atau marketplace tidak ada di settings, jangan hanya return selisih
     if (!mpSettings) {
-      console.error(`❌ Settings untuk marketplace '${mpKey}' tidak ditemukan!`);
-      // Berikan biaya admin default 0% jika memang offline, atau tetap potong biaya tetap
-      return totalRevenue - totalHpp; 
+      console.warn(`⚠️ Settings untuk marketplace '${marketplace}' tidak ditemukan!`);
+      return totalRevenue - totalHpp; // Jika tidak ketemu, hanya profit kotor
     }
 
-    // 4. Hitung menggunakan helper yang sudah mendukung CAP (Batas Maksimal)
+    // Hitung biaya admin menggunakan helper dinamis
     const adminFees = calculateMarketplaceFee(totalRevenue, mpSettings);
     
     return totalRevenue - totalHpp - adminFees;
@@ -200,6 +197,8 @@ export default function PenjualanPage() {
     if (!file || !currentUser) return;
     setIsProcessing(true);
     const reader = new FileReader();
+    
+    // Ambil config berdasarkan marketplace yang dipilih di UI (shopee/tiktok/lazada)
     const config = MARKETPLACE_CONFIG[selectedMarketplace];
     const existingOrderIds = new Set(transactions.map(t => String(t.orderId).trim()));
 
@@ -209,7 +208,12 @@ export default function PenjualanPage() {
         const wb = XLSX.read(bstr, { type: 'binary' });
         const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
         const headers = data[0];
-        const finalSkuIdx = (config.cols.sku !== undefined) ? config.cols.sku : headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU") || String(h).toUpperCase().includes("REFERENSI"));
+        
+        // Tentukan index SKU
+        const finalSkuIdx = (config.cols.sku !== undefined) 
+          ? config.cols.sku 
+          : headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU") || String(h).toUpperCase().includes("REFERENSI"));
+        
         const rawRows = data.slice(config.dataStartRow);
         let addedCount = 0;
 
@@ -217,51 +221,68 @@ export default function PenjualanPage() {
           const resiValue = String(row[config.cols.resi] || "").trim();
           const orderIdLama = String(row[config.cols.orderId] || "").trim();
           const finalId = resiValue || orderIdLama;
+          
+          // Skip jika ID kosong atau sudah ada
           if (!finalId || existingOrderIds.has(finalId)) continue;
 
-          // --- LOGIKA FALLBACK SKU SHOPEE (INDEX 14 -> 12) ---
+          // Logika Fallback SKU Shopee
           let rawSku = String(row[finalSkuIdx] || "").trim();
           if (selectedMarketplace === 'shopee' && !rawSku) {
-            rawSku = String(row[12] || "").trim(); // Cek Index 12 jika 14 kosong
+            rawSku = String(row[12] || "").trim(); 
           }
           const sku = rawSku.replace(/\s+/g, '').toUpperCase();
-          // ----------------------------------------------------
 
           const qty = Number(row[config.cols.qty]) || 1;
           const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
+          
           let unitPrice = 0, unitCost = 0, multiplier = 1, productName = "Produk Luar Katalog";
 
           if (matched) {
             productName = matched.name;
-            unitPrice = matched.price || (Number(row[config.cols.total]) / qty);
+            // Gunakan harga katalog jika tersedia, jika tidak ambil dari baris Excel
+            unitPrice = Number(matched.price) || (Number(row[config.cols.total]) / qty);
+            
             if (matched.isMapping && matched.linkedSku) {
               const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
               unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
               multiplier = Number(matched.multiplier) || 1;
-            } else { unitCost = Number(matched.costPrice) || 0; }
-          } else { unitPrice = (Number(row[config.cols.total]) / qty || 0); }
+            } else { 
+              unitCost = Number(matched.costPrice) || 0; 
+            }
+          } else { 
+            unitPrice = (Number(row[config.cols.total]) / qty || 0); 
+          }
 
-          // Contoh di dalam loop handleFileUpload atau handleManualSubmit
           const totalRevenue = unitPrice * qty;
           const totalHpp = (unitCost * multiplier) * qty;
 
-          // Ambil sumber marketplace (Shopee/Tiktok/Lazada)
-          const mpSource = selectedMarketplace; // atau manualForm.source
-
-          // Panggil fungsi dengan parameter marketplace
-          const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp, mpSource);
+          // PANGGIL HELPER DENGAN MARKETPLACE KEY (shopee/tiktok/lazada)
+          const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp, selectedMarketplace);
 
           await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
-            orderId: finalId, sku, product: productName, total: totalRevenue,
-            hpp: totalHpp, qty, profit: netProfit, marketplace: config.name,
-            status: 'Proses', createdAt: serverTimestamp()
+            orderId: finalId, 
+            sku, 
+            product: productName, 
+            total: totalRevenue,
+            hpp: totalHpp, 
+            qty, 
+            profit: netProfit, 
+            marketplace: config.name, // Nama tampilan (Shopee/Tiktok/Lazada)
+            status: 'Proses', 
+            createdAt: serverTimestamp()
           });
+          
           await updateProductStock(sku, -qty, finalId);
           addedCount++;
         }
-        alert(`Berhasil impor ${addedCount} data.`);
-      } catch (err) { alert("Gagal memproses file."); }
-      finally { setIsProcessing(false); e.target.value = ''; }
+        alert(`Berhasil impor ${addedCount} data dengan kalkulasi biaya admin.`);
+      } catch (err) { 
+        console.error(err);
+        alert("Gagal memproses file."); 
+      } finally { 
+        setIsProcessing(false); 
+        e.target.value = ''; 
+      }
     };
     reader.readAsBinaryString(file);
   };
