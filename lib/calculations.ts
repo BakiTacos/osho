@@ -22,22 +22,3 @@ export const calculateMarketplaceFee = (revenue: number, settings: any) => {
   return baseCharge + programCharge + (Number(settings.fixedFee) || 0);
 };
 
-const getMarketplaceEstimation = (price: number, cost: number) => {
-  if (!activeFees) return null;
-
-  const results: any = {};
-  
-  ['shopee', 'tiktok', 'lazada'].forEach((mp) => {
-    const settings = activeFees[mp];
-    if (settings) {
-      // Hitung Biaya Admin menggunakan helper yang sudah mendukung CAP
-      const adminFee = calculateMarketplaceFee(price, settings);
-      const netProfit = price - cost - adminFee;
-      const margin = (netProfit / price) * 100;
-      
-      results[mp] = { netProfit, margin };
-    }
-  });
-  
-  return results;
-};

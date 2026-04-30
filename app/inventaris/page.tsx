@@ -258,21 +258,6 @@ const calculateMarketplaceFee = (revenue: number, settings: any) => {
   return baseCharge + programCharge + (Number(settings.fixedFee) || 0);
 };
 
-
-  if (!currentUser) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-8 md:p-24 dark:bg-black">
-        <div className="w-full max-w-2xl text-center">
-
-          <AuthComponent />
-          <Link href="/" className="mt-12 inline-block text-blue-600 hover:underline dark:text-blue-400">
-            Back to Home
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-10">
       
