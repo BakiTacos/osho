@@ -6,8 +6,10 @@ import { useAuth } from "../../context/AuthContext";
 import { 
   collection, onSnapshot, query, addDoc, 
   serverTimestamp, deleteDoc, doc, updateDoc, orderBy, increment, 
-  writeBatch
+  writeBatch,
+  getDoc
 } from "firebase/firestore";
+import { calculateMarketplaceFee } from "../../lib/calculations";
 import { 
   Search, Bell, ShoppingBag, Wallet, Info, 
   Upload, MoreHorizontal, ChevronRight, ChevronLeft, Plus, 
@@ -45,6 +47,7 @@ export default function PenjualanPage() {
   const itemsPerPage = 20;
 
   const [useCatalogPrice, setUseCatalogPrice] = useState(true);
+  const [activeFees, setActiveFees] = useState<any>(null);
   
   // --- STATE BARU: MULTI-PRODUCT MANUAL FORM ---
   const [manualForm, setManualForm] = useState({
@@ -70,28 +73,65 @@ export default function PenjualanPage() {
     }
   };
 
+  // TAMBAHKAN BLOK INI AGAR DATA MUNCUL
   useEffect(() => {
     if (!currentUser) return;
+
+    // 1. Listen ke Katalog Produk
     const unsubProd = onSnapshot(query(collection(db, `users/${currentUser.uid}/products`)), (snap) => {
       setCatalog(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+
+    // 2. Listen ke Data Penjualan (Sales)
     const unsubSales = onSnapshot(query(collection(db, `users/${currentUser.uid}/sales`), orderBy("createdAt", "desc")), (snap) => {
       setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+
+    // 3. Listen ke Warehouse Shopee
     const unsubWarehouse = onSnapshot(collection(db, `users/${currentUser.uid}/shopee_warehouse`), (snap) => {
       setShopeeWarehouse(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-    return () => { unsubProd(); unsubSales(); unsubWarehouse(); };
+
+    // 4. Listen ke Pengaturan Biaya Admin (Kunci Utama activeFees)
+    const unsubFees = onSnapshot(doc(db, `users/${currentUser.uid}/settings`, "admin_fees"), (snap) => {
+      if (snap.exists()) {
+        setActiveFees(snap.data());
+        console.log("✅ Admin Fees Sync Berhasil");
+      }
+    });
+
+    // Cleanup: Pastikan semua listener dimatikan saat komponen unmount
+    return () => { 
+      unsubProd(); 
+      unsubSales(); 
+      unsubWarehouse(); 
+      unsubFees(); 
+    };
   }, [currentUser]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-    setSelectedIds([]);
-  }, [activeView, timeFilter, selectedMarketplace]);
+  const calculateNetProfitEntry = (totalRevenue: number, totalHpp: number, marketplace: string) => {
+    // 1. Pastikan data fee sudah ter-sync
+    if (!activeFees) {
+      console.warn("⚠️ Perhitungan menggunakan fallback karena activeFees null");
+      return totalRevenue - totalHpp - (totalRevenue * 0.16) - 1250;
+    }
 
-  const calculateNetProfitEntry = (totalRevenue: number, totalHpp: number) => {
-    const adminFees = totalRevenue * ADMIN_PERCENT; 
-    return totalRevenue - totalHpp - adminFees - FIXED_FEE;
+    // 2. Normalisasi nama marketplace ke lowercase agar cocok dengan Firestore
+    // Ubah baris ini jika tetap ingin pakai huruf kapital di Firestore
+    const mpKey = marketplace; // Menghilangkan .toLowerCase()
+    const mpSettings = activeFees[mpKey];
+    
+    // 3. Jika "Offline" atau marketplace tidak ada di settings, jangan hanya return selisih
+    if (!mpSettings) {
+      console.error(`❌ Settings untuk marketplace '${mpKey}' tidak ditemukan!`);
+      // Berikan biaya admin default 0% jika memang offline, atau tetap potong biaya tetap
+      return totalRevenue - totalHpp; 
+    }
+
+    // 4. Hitung menggunakan helper yang sudah mendukung CAP (Batas Maksimal)
+    const adminFees = calculateMarketplaceFee(totalRevenue, mpSettings);
+    
+    return totalRevenue - totalHpp - adminFees;
   };
 
   const updateProductStock = async (skuInput: string, change: number, resiInput?: string) => {
@@ -197,9 +237,15 @@ export default function PenjualanPage() {
             } else { unitCost = Number(matched.costPrice) || 0; }
           } else { unitPrice = (Number(row[config.cols.total]) / qty || 0); }
 
+          // Contoh di dalam loop handleFileUpload atau handleManualSubmit
           const totalRevenue = unitPrice * qty;
           const totalHpp = (unitCost * multiplier) * qty;
-          const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp);
+
+          // Ambil sumber marketplace (Shopee/Tiktok/Lazada)
+          const mpSource = selectedMarketplace; // atau manualForm.source
+
+          // Panggil fungsi dengan parameter marketplace
+          const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp, mpSource);
 
           await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
             orderId: finalId, sku, product: productName, total: totalRevenue,
@@ -220,11 +266,17 @@ export default function PenjualanPage() {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+
+    // Pastikan data fee sudah terload sebelum memproses
+    if (!activeFees) {
+      alert("Data pengaturan biaya belum dimuat. Silakan tunggu sebentar atau refresh halaman.");
+      return;
+    }
+
     setIsProcessing(true);
     const orderId = manualForm.orderId.trim() || `MAN-${Date.now()}`;
 
     try {
-      // Loop untuk setiap item yang ditambahkan di form
       for (const item of manualForm.items) {
         const sku = item.sku.replace(/\s+/g, '').toUpperCase();
         const qty = Number(item.qty);
@@ -247,34 +299,58 @@ export default function PenjualanPage() {
 
         const totalRevenue = unitPrice * qty;
         const totalHpp = (unitCost * multiplier) * qty;
-        const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp);
+
+        // PERBAIKAN: Tambahkan parameter ketiga (manualForm.source)
+        const netProfit = calculateNetProfitEntry(totalRevenue, totalHpp, manualForm.source);
 
         await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
-          orderId, sku, product: productName, total: totalRevenue, hpp: totalHpp,
-          qty, profit: netProfit, marketplace: manualForm.source, 
-          status: manualForm.status, createdAt: serverTimestamp()
+          orderId, 
+          sku, 
+          product: productName, 
+          total: totalRevenue, 
+          hpp: totalHpp,
+          qty, 
+          profit: netProfit, 
+          marketplace: manualForm.source, 
+          status: manualForm.status, 
+          createdAt: serverTimestamp()
         });
+        
         await updateProductStock(sku, -qty, orderId);
       }
+
       setIsManualModalOpen(false);
       setManualForm({
-        orderId: '', source: 'Shopee', status: 'Proses',
+        orderId: '', 
+        source: 'Shopee', 
+        status: 'Proses',
         items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }]
       });
-      alert("Pesanan berhasil disimpan!");
-    } catch (err) { console.error(err); }
-    finally { setIsProcessing(false); }
+      alert("Pesanan Multi-Produk berhasil disimpan dengan kalkulasi biaya dinamis!");
+    } catch (err) { 
+      console.error(err); 
+      alert("Terjadi kesalahan saat menyimpan pesanan.");
+    } finally { 
+      setIsProcessing(false); 
+    }
   };
 
   const handleEditTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !selectedTx) return;
+
+    // 1. Bersihkan SKU & Cari di Katalog
     const newSku = selectedTx.sku.replace(/\s+/g, '').toUpperCase();
     const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === newSku);
-    if (!matched) return alert("SKU tidak ditemukan!");
+    
+    if (!matched) return alert("SKU tidak ditemukan di katalog!");
+
+    // 2. Ambil data harga dan qty
     const unitPrice = Number(matched.price) || 0;
     const qty = Number(selectedTx.qty) || 1;
     const finalTotalRevenue = unitPrice * qty;
+
+    // 3. Hitung HPP & Multiplier
     let unitCost = Number(matched.costPrice) || 0;
     let multiplier = 1;
     if (matched.isMapping && matched.linkedSku) {
@@ -282,14 +358,32 @@ export default function PenjualanPage() {
       unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
       multiplier = Number(matched.multiplier) || 1;
     }
+
     const finalTotalHpp = unitCost * multiplier * qty;
-    const finalNetProfit = calculateNetProfitEntry(finalTotalRevenue, finalTotalHpp);
+
+    // --- PERBAIKAN DI SINI ---
+    // Sertakan selectedTx.marketplace sebagai parameter ketiga
+    const finalNetProfit = calculateNetProfitEntry(
+      finalTotalRevenue, 
+      finalTotalHpp, 
+      selectedTx.marketplace
+    );
+
+    // 4. Update ke Firestore
     await updateDoc(doc(db, `users/${currentUser.uid}/sales`, selectedTx.id), {
-      sku: newSku, product: matched.name, total: finalTotalRevenue, hpp: finalTotalHpp, profit: finalNetProfit
+      sku: newSku, 
+      product: matched.name, 
+      total: finalTotalRevenue, 
+      hpp: finalTotalHpp, 
+      profit: finalNetProfit
     });
+
+    // 5. Update stok
     await updateProductStock(newSku, -qty, selectedTx.orderId);
+    
     setIsEditTxModalOpen(false);
     setSelectedTx(null);
+    alert("Data berhasil disinkronkan dengan profit dinamis!");
   };
 
   const handleBulkDelete = async () => {

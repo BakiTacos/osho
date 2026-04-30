@@ -17,7 +17,8 @@ import {
   Menu, // Ikon Hamburger
   X,     // Ikon Tutup
   BoxIcon,
-  MapIcon
+  MapIcon,
+  Settings
 } from "lucide-react";
 import { ReportChartMargin } from 'recharts/types/context/chartLayoutContext';
 
@@ -43,7 +44,7 @@ export default function Sidebar() {
     { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
     { name: "Pengembalian", icon: BoxIcon, href: "/pengembalian" },
     { name: "Laporan", icon: MapIcon, href: "/laporan" },
-    
+    { name: "Settings", icon: Settings, href: "/settings" },
   ];
 
   return (

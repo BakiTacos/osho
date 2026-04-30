@@ -44,24 +44,7 @@ const Tooltip = ({ text, children }: { text: string, children: React.ReactNode }
   </span>
 );
 
-const calculateNetProfit = (product: Product) => {
-  const price = product.price || 0;
-  const unitCost = product.costPrice || 0;
-  const multiplier = product.isMapping ? (product.multiplier || 1) : 1;
-  const totalCost = unitCost * multiplier;
 
-  const adminMarketplace = price * 0.10; 
-  const adminLayanan = price * 0.06;    
-  const biayaTetap = 1250;              
-  
-  return price - totalCost - adminMarketplace - adminLayanan - biayaTetap;
-};
-
-const calculateNetMargin = (product: Product) => {
-  if (!product.price || product.price === 0) return 0;
-  const netProfit = calculateNetProfit(product);
-  return (netProfit / product.price) * 100;
-};
 
 export default function InventarisPage() {
   const { currentUser } = useAuth();
@@ -72,6 +55,7 @@ export default function InventarisPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [activeFees, setActiveFees] = useState<any>(null);
   
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [tempStock, setTempStock] = useState<number>(0);
@@ -87,6 +71,33 @@ export default function InventarisPage() {
     });
     return () => unsubscribe();
   }, [currentUser]);
+
+const getMarketplaceEstimation = (price: number, cost: number, multiplier: number = 1) => {
+  if (!activeFees) return null; //
+
+  const totalCost = cost * multiplier; //
+  const results: any = {}; //
+  
+  // Ambil semua kunci yang ada di dokumen admin_fees (contoh: ['Shopee', 'Lazada'])
+  const feeKeys = Object.keys(activeFees); //
+
+  ['shopee', 'tiktok', 'lazada'].forEach((mp) => {
+    // Cari kunci di Firestore yang cocok dengan 'mp' (shopee/tiktok/lazada) secara case-insensitive
+    const matchedKey = feeKeys.find(key => key.toLowerCase() === mp); //
+    const settings = matchedKey ? activeFees[matchedKey] : null; //
+
+    if (settings) {
+      // Gunakan helper calculateMarketplaceFee yang sudah kita buat sebelumnya
+      const adminFee = calculateMarketplaceFee(price, settings); //
+      const netProfit = price - totalCost - adminFee; //
+      const margin = price > 0 ? (netProfit / price) * 100 : 0; //
+      
+      results[mp] = { netProfit, margin }; //
+    }
+  });
+  
+  return results; //
+};
 
   // --- LOGIKA IMPOR MASSAL ---
   const handleMassImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,39 +199,71 @@ export default function InventarisPage() {
   };
 
   const processedProducts = products
-    .filter(p => 
-      (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (selectedCategory === "Semua" || p.category === selectedCategory)
-    )
-    .sort((a, b) => {
-      let valA: any;
-      let valB: any;
+  .filter(p => 
+    (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.sku.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    (selectedCategory === "Semua" || p.category === selectedCategory)
+  )
+  .sort((a, b) => {
+    let valA: any;
+    let valB: any;
 
-      // Logika pengurutan untuk nilai hasil kalkulasi
-      if (sortBy === "netProfit") {
-        valA = calculateNetProfit(a);
-        valB = calculateNetProfit(b);
-      } else if (sortBy === "netMargin") {
-        valA = calculateNetMargin(a);
-        valB = calculateNetMargin(b);
-      } else {
-        // Logika pengurutan untuk field standar
-        valA = a[sortBy as keyof Product] || 0;
-        valB = b[sortBy as keyof Product] || 0;
-      }
+    if (sortBy === "netProfit" || sortBy === "netMargin") {
+      // Kita gunakan Shopee sebagai acuan default untuk pengurutan profit/margin
+      const estA = getMarketplaceEstimation(a.price, a.costPrice, a.isMapping ? a.multiplier : 1);
+      const estB = getMarketplaceEstimation(b.price, b.costPrice, b.isMapping ? b.multiplier : 1);
+      
+      // Ambil data shopee (pastikan data fees sudah terload)
+      const dataA = estA?.shopee || { netProfit: 0, margin: 0 };
+      const dataB = estB?.shopee || { netProfit: 0, margin: 0 };
 
-      if (sortOrder === "asc") return valA > valB ? 1 : -1;
-      return valA < valB ? 1 : -1;
-    });
+      valA = sortBy === "netProfit" ? dataA.netProfit : dataA.margin;
+      valB = sortBy === "netProfit" ? dataB.netProfit : dataB.margin;
+    } else {
+      // Logika pengurutan untuk field standar (name, stock, price)
+      valA = a[sortBy as keyof Product] || 0;
+      valB = b[sortBy as keyof Product] || 0;
+    }
+
+    if (sortOrder === "asc") return valA > valB ? 1 : -1;
+    return valA < valB ? 1 : -1;
+  });
 
   const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= 10).length;
   const outOfStockCount = products.filter(p => p.stock === 0).length;
+  
+
+  useEffect(() => {
+  if (!currentUser) return;
+  const docRef = doc(db, `users/${currentUser.uid}/settings`, "admin_fees");
+  const unsubscribe = onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      setActiveFees(snap.data());
+    }
+  });
+  return () => unsubscribe();
+}, [currentUser]);
+
+const calculateMarketplaceFee = (revenue: number, settings: any) => {
+  if (!settings) return 0;
+  const baseCharge = revenue * (Number(settings.baseFee) / 100);
+  const programCharge = settings.programs
+    ? settings.programs
+        .filter((p: any) => p.enabled)
+        .reduce((acc: number, p: any) => {
+          const calculated = revenue * (Number(p.percent) / 100);
+          const finalCharge = p.cap ? Math.min(calculated, Number(p.cap)) : calculated;
+          return acc + finalCharge;
+        }, 0)
+    : 0;
+  return baseCharge + programCharge + (Number(settings.fixedFee) || 0);
+};
 
 
   if (!currentUser) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-8 md:p-24 dark:bg-black">
         <div className="w-full max-w-2xl text-center">
+
           <AuthComponent />
           <Link href="/" className="mt-12 inline-block text-blue-600 hover:underline dark:text-blue-400">
             Back to Home
@@ -375,47 +418,55 @@ export default function InventarisPage() {
                   <th className="px-6 py-5">SKU</th>
                   <th className="px-6 py-5 text-right">HPP (Modal)</th>
                   <th className="px-6 py-5 text-right">Jual</th>
-                  <th className="px-6 py-5 text-right">Margin (%)</th>
-                  <th className="px-6 py-5 text-right">Net Profit</th>
+                  <th className="px-4 py-5 text-center bg-orange-50/30">Shopee</th>
+                  <th className="px-4 py-5 text-center bg-slate-50">TikTok</th>
+                  <th className="px-4 py-5 text-center bg-blue-50/30">Lazada</th>
                   <th className="px-6 py-5 text-center">Stok</th>
                   <th className="px-8 py-5 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F8F9FB]">
                 {processedProducts.map((p) => {
-                  const netProfit = calculateNetProfit(p);
-                  const netMargin = calculateNetMargin(p);
+                  const multiplier = p.isMapping ? (p.multiplier || 1) : 1;
+                  const estimations = getMarketplaceEstimation(p.price, p.costPrice, multiplier);
                   
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-8 py-5">
                         <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center border border-slate-100 overflow-hidden">
-                            {p.imageUrl ? <img src={p.imageUrl} alt="" className="object-cover w-full h-full" /> : <Package size={18} className="text-slate-300" />}
-                          </div>
                           <span className="text-sm font-black text-[#0F172A] uppercase leading-tight">{p.name}</span>
                         </div>
                       </td>
                       <td className="px-6 py-5 text-xs font-bold text-[#64748B] uppercase">{p.sku}</td>
-                      <td className="px-6 py-5 text-right text-sm font-bold text-[#94A3B8]">
-                        Rp {p.costPrice?.toLocaleString('id-ID') || 0}
+                      <td className="px-6 py-5 text-right text-xs font-bold text-slate-400">
+                        Rp {(p.costPrice * multiplier).toLocaleString('id-ID')}
                       </td>
-                      <td className="px-6 py-5 text-right text-sm font-black text-[#0F172A]">
+                      <td className="px-6 py-5 text-right text-xs font-black text-[#0F172A]">
                         Rp {p.price.toLocaleString('id-ID')}
                       </td>
-                      <td className="px-6 py-5 text-right">
-                        <span className={`text-[11px] font-black px-2 py-1 rounded-lg ${
-                          netMargin >= 15 ? "bg-emerald-50 text-emerald-600" : 
-                          netMargin >= 5 ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-                        }`}>
-                          {netMargin.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 text-right">
-                        <span className={`text-sm font-black ${netProfit > 0 ? "text-[#0047AB]" : "text-red-600"}`}>
-                          Rp {netProfit.toLocaleString('id-ID')}
-                        </span>
-                      </td>
+
+                      {/* Render 3 Kolom Profit Marketplace */}
+                      {['shopee', 'tiktok', 'lazada'].map((mp) => (
+                        <td key={mp} className="px-4 py-5 text-center border-l border-slate-50">
+                          {estimations && estimations[mp] ? (
+                            <div className="flex flex-col items-center">
+                              <span className={`text-[11px] font-black ${estimations[mp].netProfit > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                Rp {estimations[mp].netProfit.toLocaleString('id-ID')}
+                              </span>
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md mt-1 ${
+                                estimations[mp].margin >= 15 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                              }`}>
+                                {estimations[mp].margin.toFixed(1)}%
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-300 italic">No Data</span>
+                          )}
+                        </td>
+
+                        
+                      ))}
+
                       <td className="px-6 py-5 text-center">
                         {editingStockId === p.id ? (
                           <div className="flex items-center justify-center space-x-1">
@@ -434,6 +485,7 @@ export default function InventarisPage() {
                           </div>
                         )}
                       </td>
+
                       <td className="px-8 py-5 text-right relative">
                         <button onClick={() => setActiveMenuId(activeMenuId === p.id ? null : p.id)}
                           className="p-2 hover:bg-slate-100 rounded-lg text-[#94A3B8]"
@@ -454,7 +506,7 @@ export default function InventarisPage() {
                           </div>
                         )}
                       </td>
-                    </tr>
+                      </tr>
                   );
                 })}
               </tbody>
