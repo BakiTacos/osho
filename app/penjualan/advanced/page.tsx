@@ -6,7 +6,8 @@ import { useAuth } from "../../../context/AuthContext";
 import * as XLSX from 'xlsx';
 import { 
   collection, onSnapshot, query, addDoc, 
-  serverTimestamp, orderBy, doc, updateDoc, increment, deleteDoc 
+  serverTimestamp, orderBy, doc, updateDoc, increment, deleteDoc, setDoc,
+  writeBatch
 } from "firebase/firestore";
 import { 
   PackageCheck, Search, Plus, X, Trash2, 
@@ -53,10 +54,22 @@ export default function GudangShopeePage() {
     e.preventDefault();
     if (!currentUser || isProcessing) return;
 
+    const resiClean = form.resi.trim().toUpperCase();
+    const skuClean = form.sku.replace(/\s+/g, '').toUpperCase();
+    
+    // 1. Cek Duplikat di State lokal dulu (biar cepet)
+    const isDuplicate = items.some(item => 
+      item.resi.toUpperCase() === resiClean && 
+      item.sku.toUpperCase() === skuClean
+    );
+
+    if (isDuplicate) {
+      alert(`Gagal! Resi ${resiClean} dengan SKU ${skuClean} sudah terdaftar.`);
+      return;
+    }
+
     setIsProcessing(true);
-    // 1. Pembersihan SKU (Sama dengan logika Penjualan)
-    const cleanSku = form.sku.replace(/\s+/g, '').toUpperCase();
-    const product = products.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === cleanSku);
+    const product = products.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === skuClean);
 
     if (!product) {
       alert("SKU tidak ditemukan di katalog utama!");
@@ -70,11 +83,8 @@ export default function GudangShopeePage() {
       let targetProductName = product.name;
       let finalDeductionQty = form.qty;
 
-      // 2. Logika Mapping & Multiplier (Sync dengan Penjualan)
       if (product.isMapping && product.linkedSku) {
-        const mainProd = products.find(p => 
-          p.sku.replace(/\s+/g, '').toUpperCase() === product.linkedSku.replace(/\s+/g, '').toUpperCase()
-        );
+        const mainProd = products.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === product.linkedSku.replace(/\s+/g, '').toUpperCase());
         if (mainProd) {
           targetSku = mainProd.sku;
           targetProductId = mainProd.id;
@@ -83,10 +93,11 @@ export default function GudangShopeePage() {
         }
       }
 
-      // 3. Simpan ke Database Warehouse
-      await addDoc(collection(db, `users/${currentUser.uid}/shopee_warehouse`), {
-        resi: form.resi.trim(),
-        sku: targetSku, // Simpan SKU Utamanya
+      // 2. Gunakan setDoc dengan ID Spesifik (RESI_SKU) untuk mencegah duplikasi di DB
+      const compositeId = `${resiClean}_${targetSku}`;
+      await setDoc(doc(db, `users/${currentUser.uid}/shopee_warehouse`, compositeId), {
+        resi: resiClean,
+        sku: targetSku,
         qty: form.qty,
         productName: targetProductName,
         note: form.note,
@@ -94,17 +105,72 @@ export default function GudangShopeePage() {
         createdAt: serverTimestamp()
       });
 
-      // 4. Potong Stok Utama secara Akurat
       await updateDoc(doc(db, `users/${currentUser.uid}/products`, targetProductId), {
         stock: increment(-finalDeductionQty)
       });
 
-      alert(`Berhasil! Stok ${targetProductName} berkurang ${finalDeductionQty} unit.`);
+      alert("Data berhasil disimpan!");
       setIsModalOpen(false);
       setForm({ resi: '', sku: '', qty: 1, note: 'Pengiriman Kilat Shopee' });
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan sistem.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCleanupDuplicates = async () => {
+    if (!currentUser || items.length === 0) return;
+    
+    const confirmClean = window.confirm("Sistem akan menghapus duplikat DAN mengembalikan stok yang terpotong ganda. Lanjutkan?");
+    if (!confirmClean) return;
+
+    setIsProcessing(true);
+    try {
+      const batch = writeBatch(db);
+      const seen = new Set();
+      let deleteCount = 0;
+      let totalStockRestored = 0;
+
+      // Urutkan dari yang terlama ke terbaru
+      const sortedItems = [...items].sort((a, b) => 
+        (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)
+      );
+
+      for (const item of sortedItems) {
+        const identifier = `${item.resi.trim().toUpperCase()}_${item.sku.trim().toUpperCase()}`;
+        
+        if (seen.has(identifier)) {
+          // 1. Ambil referensi dokumen di warehouse dan katalog produk
+          const docRef = doc(db, `users/${currentUser.uid}/shopee_warehouse`, item.id);
+          const product = products.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === item.sku.toUpperCase());
+
+          if (product) {
+            const productRef = doc(db, `users/${currentUser.uid}/products`, product.id);
+            const restoreQty = Number(item.qty || 1) * (product.multiplier || 1);
+            
+            // 2. Kembalikan stok yang terpotong ganda ke katalog
+            batch.update(productRef, { stock: increment(restoreQty) });
+            totalStockRestored += restoreQty;
+          }
+
+          // 3. Masukkan ke antrean hapus untuk baris yang duplikat
+          batch.delete(docRef);
+          deleteCount++;
+        } else {
+          seen.add(identifier);
+        }
+      }
+
+      if (deleteCount > 0) {
+        await batch.commit();
+        alert(`Sukses! ${deleteCount} data duplikat dihapus dan ${totalStockRestored} unit stok berhasil dikembalikan ke gudang.`);
+      } else {
+        alert("Hebat! Tidak ditemukan data duplikat.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan saat sinkronisasi stok.");
     } finally {
       setIsProcessing(false);
     }
@@ -167,7 +233,6 @@ export default function GudangShopeePage() {
     setIsProcessing(true);
 
     const reader = new FileReader();
-    // Config khusus Shopee Kilat
     const config = { dataStartRow: 1, cols: { orderId: 1, sku: 8, name: 7 } };
 
     reader.onload = async (evt) => {
@@ -175,30 +240,33 @@ export default function GudangShopeePage() {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
-        
         const rawRows = data.slice(config.dataStartRow);
+        
+        // Buat "Set" untuk mengecek data yang sudah ada di state items saat ini
+        const existingKeys = new Set(items.map(i => `${i.resi.toUpperCase()}_${i.sku.toUpperCase()}`));
         let addedCount = 0;
 
         for (const row of rawRows) {
-          const orderIdVal = String(row[config.cols.orderId] || "").trim();
+          const orderIdVal = String(row[config.cols.orderId] || "").trim().toUpperCase();
           const rawSku = String(row[config.cols.sku] || "").replace(/\s+/g, '').toUpperCase();
           
           if (!orderIdVal || !rawSku) continue;
 
-          // Cek apakah sudah ada di warehouse
-          const isDuplicate = items.some(w => w.resi === orderIdVal && w.sku === rawSku);
-          if (isDuplicate) continue;
+          // CEK DUPLIKAT: Jika kombinasi Resi_SKU sudah ada, skip baris ini
+          const currentKey = `${orderIdVal}_${rawSku}`;
+          if (existingKeys.has(currentKey)) {
+            console.log(`Skipping duplicate: ${currentKey}`);
+            continue;
+          }
 
-          // Cari di Katalog untuk Mapping & Potong Stok
           const product = products.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === rawSku);
           if (!product) continue;
 
           let targetSku = product.sku;
           let targetProductId = product.id;
           let targetProductName = product.name;
-          let finalDeductionQty = 1; // Fixed 1 untuk Shopee Kilat
+          let finalDeductionQty = 1;
 
-          // Handle Mapping
           if (product.isMapping && product.linkedSku) {
             const mainProd = products.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === product.linkedSku.replace(/\s+/g, '').toUpperCase());
             if (mainProd) {
@@ -209,8 +277,8 @@ export default function GudangShopeePage() {
             }
           }
 
-          // Simpan ke Warehouse
-          await addDoc(collection(db, `users/${currentUser.uid}/shopee_warehouse`), {
+          // Gunakan setDoc dengan ID Unik
+          await setDoc(doc(db, `users/${currentUser.uid}/shopee_warehouse`, `${orderIdVal}_${targetSku}`), {
             resi: orderIdVal,
             sku: targetSku,
             qty: 1,
@@ -220,17 +288,17 @@ export default function GudangShopeePage() {
             createdAt: serverTimestamp()
           });
 
-          // Potong Stok Utama
           await updateDoc(doc(db, `users/${currentUser.uid}/products`, targetProductId), {
             stock: increment(-finalDeductionQty)
           });
 
+          // Tambahkan ke Set agar dalam satu file yang sama tidak ada duplikat berulang
+          existingKeys.add(currentKey);
           addedCount++;
         }
-        alert(`Berhasil impor massal ${addedCount} data kilat.`);
+        alert(`Berhasil impor ${addedCount} data baru. Data duplikat otomatis dilewati.`);
       } catch (err) {
         console.error(err);
-        alert("Gagal memproses file.");
       } finally {
         setIsProcessing(false);
         e.target.value = '';
@@ -254,18 +322,28 @@ export default function GudangShopeePage() {
           <Plus size={18} strokeWidth={3}/> INPUT RESI KILAT
         </button>
 
+        {/* Tombol Pembersih Duplikat */}
+          <button 
+            onClick={handleCleanupDuplicates}
+            disabled={isProcessing || items.length === 0}
+            className="bg-white text-orange-500 border-2 border-orange-500 px-5 py-3 rounded-[24px] font-black text-xs hover:bg-orange-50 transition-all flex items-center gap-2"
+          >
+            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <AlertCircle size={16} />}
+            <span>BERSIHKAN DUPLIKAT</span>
+          </button>
+
         <div className="relative group">
-  <input 
-    type="file" accept=".xlsx, .xls" 
-    onChange={handleFileUpload} 
-    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-    disabled={isProcessing}
-  />
-  <button className="bg-emerald-600 text-white px-6 py-4 rounded-[24px] font-black text-xs shadow-xl shadow-emerald-100 flex items-center gap-2">
-    {isProcessing ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18}/>}
-    <span>{isProcessing ? "MEMPROSES..." : "IMPOR MASSAL SHOPEE"}</span>
-  </button>
-</div>
+          <input 
+            type="file" accept=".xlsx, .xls" 
+            onChange={handleFileUpload} 
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            disabled={isProcessing}
+          />
+          <button className="bg-emerald-600 text-white px-6 py-4 rounded-[24px] font-black text-xs shadow-xl shadow-emerald-100 flex items-center gap-2">
+            {isProcessing ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18}/>}
+            <span>{isProcessing ? "MEMPROSES..." : "IMPOR MASSAL SHOPEE"}</span>
+          </button>
+        </div>
       </div>
 
       {/* STATS ROW */}
