@@ -48,7 +48,11 @@ export default function PenjualanPage() {
 
   const [useCatalogPrice, setUseCatalogPrice] = useState(true);
   const [activeFees, setActiveFees] = useState<any>(null);
-  
+
+  const [statusFilter, setStatusFilter] = useState("Semua"); // Filter Status
+  const [searchSales, setSearchSales] = useState(""); // Fitur Search
+  const [isCompleting, setIsCompleting] = useState(false); // Loading untuk matching
+    
   // --- STATE BARU: MULTI-PRODUCT MANUAL FORM ---
   const [manualForm, setManualForm] = useState({
     orderId: '',
@@ -414,25 +418,43 @@ export default function PenjualanPage() {
     const txDate = t.createdAt.toDate();
     const now = new Date();
     const diffInDays = (now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24);
-    if (timeFilter === "Hari Ini") return txDate.toDateString() === now.toDateString();
-    if (timeFilter === "3 Hari") return diffInDays <= 3;
-    if (timeFilter === "1 Bulan") return diffInDays <= 30;
-    return true;
+
+    // 1. Time Filter
+    let timeMatch = true;
+    if (timeFilter === "Hari Ini") timeMatch = txDate.toDateString() === now.toDateString();
+    else if (timeFilter === "3 Hari") timeMatch = diffInDays <= 3;
+    else if (timeFilter === "1 Bulan") timeMatch = diffInDays <= 30;
+
+    // 2. Status Filter
+    const statusMatch = statusFilter === "Semua" || t.status === statusFilter;
+
+    // 3. Search Match (Order ID, SKU, atau Nama Produk)
+    const searchMatch = 
+      t.orderId.toLowerCase().includes(searchSales.toLowerCase()) ||
+      t.product.toLowerCase().includes(searchSales.toLowerCase()) ||
+      t.sku.toLowerCase().includes(searchSales.toLowerCase());
+
+    return timeMatch && statusMatch && searchMatch;
   });
 
-  const pendingTransactions = filteredTransactions.filter(t => t.product === "Produk Luar Katalog");
-  const listToDisplay = activeView === "Pending" ? pendingTransactions : filteredTransactions;
-  const totalPages = Math.ceil(listToDisplay.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = listToDisplay.slice(indexOfFirstItem, indexOfLastItem);
-  const stats = filteredTransactions.reduce((acc, curr) => {
-    if (curr.status !== 'Retur') {
-      acc.omset += curr.total;
-      acc.profit += curr.profit;
-    }
-    return acc;
-  }, { omset: 0, profit: 0 });
+  // Hitung Saldo yang sudah benar-benar "Selesai"
+  const completedBalance = filteredTransactions
+    .filter(t => t.status === "Selesai")
+    .reduce((acc, curr) => acc + curr.profit, 0);
+
+    const pendingTransactions = filteredTransactions.filter(t => t.product === "Produk Luar Katalog");
+    const listToDisplay = activeView === "Pending" ? pendingTransactions : filteredTransactions;
+    const totalPages = Math.ceil(listToDisplay.length / itemsPerPage);
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = listToDisplay.slice(indexOfFirstItem, indexOfLastItem);
+    const stats = filteredTransactions.reduce((acc, curr) => {
+      if (curr.status !== 'Retur') {
+        acc.omset += curr.total;
+        acc.profit += curr.profit;
+      }
+      return acc;
+    }, { omset: 0, profit: 0 });
 
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-10">
