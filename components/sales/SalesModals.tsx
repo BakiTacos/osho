@@ -16,6 +16,26 @@ export const ManualInputModal = ({ isOpen, onClose, manualForm, setManualForm, u
             <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Sumber</label><select value={manualForm.source} onChange={(e) => setManualForm({...manualForm, source: e.target.value})} className="w-full bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm"><option>Shopee</option><option>Tiktok</option><option>Lazada</option><option>Offline</option></select></div>
             <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Status</label><select value={manualForm.status} onChange={(e) => setManualForm({...manualForm, status: e.target.value})} className="w-full bg-slate-50 border-none rounded-[20px] py-4 px-6 font-bold text-sm"><option value="Proses">Proses</option><option value="Selesai">Selesai</option></select></div>
           </div>
+          {manualForm.source.toLowerCase() === 'tiktok' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-5 bg-blue-50/50 border border-blue-100 rounded-[24px] mt-4 animate-in fade-in slide-in-from-top-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-[#0047AB] uppercase ml-2 tracking-widest">Tipe Layanan</label>
+                <select value={manualForm.tiktokType} onChange={(e) => setManualForm({...manualForm, tiktokType: e.target.value})} className="w-full bg-white border-none rounded-xl py-3 px-4 font-bold text-sm focus:ring-2 focus:ring-[#0047AB]">
+                  <option value="Standard">Standard</option>
+                  <option value="Economy">Economy</option>
+                  <option value="Cargo">Cargo</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-[#0047AB] uppercase ml-2 tracking-widest">Provinsi Tujuan</label>
+                <input type="text" placeholder="Contoh: DKI JAKARTA" value={manualForm.tiktokProvince} onChange={(e) => setManualForm({...manualForm, tiktokProvince: e.target.value})} className="w-full bg-white border-none rounded-xl py-3 px-4 font-bold text-sm focus:ring-2 focus:ring-[#0047AB]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-[#0047AB] uppercase ml-2 tracking-widest">Total Berat (KG)</label>
+                <input type="number" step="0.1" min="0.1" placeholder="Contoh: 1.5" value={manualForm.tiktokWeight} onChange={(e) => setManualForm({...manualForm, tiktokWeight: Number(e.target.value)})} className="w-full bg-white border-none rounded-xl py-3 px-4 font-bold text-sm focus:ring-2 focus:ring-[#0047AB]" />
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between"><h4 className="text-[11px] font-black text-[#0047AB] uppercase tracking-[0.2em]">Daftar Produk ({manualForm.items.length})</h4><button type="button" onClick={() => setUseCatalogPrice(!useCatalogPrice)} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase transition-all border-2 ${useCatalogPrice ? "bg-[#0047AB] text-white shadow-md shadow-blue-100" : "text-slate-400"}`}>{useCatalogPrice ? "Gunakan Harga Katalog" : "Gunakan Harga Manual"}</button></div>
           <div className="space-y-4">
             {manualForm.items.map((item: any, index: number) => (

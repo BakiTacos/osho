@@ -1,6 +1,7 @@
 import { db } from "../firebase";
 import { doc, updateDoc, increment, collection, addDoc, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
 import { calculateMarketplaceFee } from "../calculations";
+import { REGION_MAP, LOGISTICS_RATES } from "../constants/sales";
 
 export class SalesService {
   constructor(
@@ -10,9 +11,9 @@ export class SalesService {
     private activeFees: any
   ) {}
 
-  public calculateNetProfitEntry(totalRevenue: number, totalHpp: number, marketplace: string) {
+  public calculateNetProfitEntry(totalRevenue: number, totalHpp: number, marketplace: string, logisticsFee: number = 0) {
     if (!this.activeFees) {
-      return totalRevenue - totalHpp - (totalRevenue * 0.16) - 1250;
+      return totalRevenue - totalHpp - (totalRevenue * 0.16) - 1250 - logisticsFee;
     }
     const feeKeys = Object.keys(this.activeFees);
     const matchedKey = feeKeys.find(key => key.toLowerCase() === marketplace.toLowerCase().trim());
@@ -20,10 +21,29 @@ export class SalesService {
     
     if (!mpSettings) {
       console.warn(`⚠️ Settings untuk marketplace '${marketplace}' tidak ditemukan!`);
-      return totalRevenue - totalHpp;
+      return totalRevenue - totalHpp - logisticsFee;
     }
     const adminFees = calculateMarketplaceFee(totalRevenue, mpSettings);
-    return totalRevenue - totalHpp - adminFees;
+    
+    // Profit dipotong HPP, Admin Fee, dan Biaya Logistik Baru
+    return totalRevenue - totalHpp - adminFees - logisticsFee;
+  }
+
+  public calculateTikTokLogistics(type: string, province: string, weight: number): number {
+    const normalizedType = type.toUpperCase().includes("STANDARD") ? "STANDARD" : 
+                           type.toUpperCase().includes("ECONOMY") ? "ECONOMY" : "CARGO";
+    const region = REGION_MAP[province?.toUpperCase().trim()] || "OUT_JAVA";
+    
+    let tier = 0;
+    if (weight <= 1.0) tier = 0;
+    else if (weight <= 2.0) tier = 1;
+    else if (weight <= 3.0) tier = 2;
+    else if (weight <= 4.0) tier = 3;
+    else if (weight <= 5.0) tier = 4;
+    else tier = 5;
+
+    const rates = LOGISTICS_RATES[normalizedType]?.[region];
+    return rates ? rates[tier] : 0;
   }
 
   public async updateProductStock(skuInput: string, change: number, resiInput?: string) {
@@ -58,6 +78,21 @@ export class SalesService {
 
   public async processMultiProductManual(manualForm: any, useCatalogPrice: boolean) {
     const orderId = manualForm.orderId.trim() || `MAN-${Date.now()}`;
+    
+    // 1. HITUNG BIAYA LOGISTIK TIKTOK JIKA SUMBERNYA TIKTOK
+    let totalLogisticsFee = 0;
+    if (manualForm.source.toLowerCase() === 'tiktok') {
+      totalLogisticsFee = this.calculateTikTokLogistics(
+        manualForm.tiktokType || 'Standard', 
+        manualForm.tiktokProvince || '', 
+        Number(manualForm.tiktokWeight) || 1
+      );
+    }
+    
+    // 2. BAGI BIAYA LOGISTIK SECARA MERATA AGAR TIDAK DOUBLE POTONGAN PADA MULTI-ITEM
+    const itemsCount = manualForm.items.length;
+    const logisticsFeePerItem = itemsCount > 0 ? totalLogisticsFee / itemsCount : 0;
+
     for (const item of manualForm.items) {
       const sku = item.sku.replace(/\s+/g, '').toUpperCase();
       const qty = Number(item.qty);
@@ -80,11 +115,22 @@ export class SalesService {
 
       const totalRevenue = unitPrice * qty;
       const totalHpp = (unitCost * multiplier) * qty;
-      const netProfit = this.calculateNetProfitEntry(totalRevenue, totalHpp, manualForm.source);
+      
+      // 3. MASUKKAN LOGISTICS FEE KE DALAM PERHITUNGAN PROFIT
+      const netProfit = this.calculateNetProfitEntry(totalRevenue, totalHpp, manualForm.source, logisticsFeePerItem);
 
       await addDoc(collection(db, `users/${this.currentUser.uid}/sales`), {
-        orderId, sku, product: productName, total: totalRevenue, hpp: totalHpp,
-        qty, profit: netProfit, marketplace: manualForm.source, status: manualForm.status, createdAt: serverTimestamp()
+        orderId, 
+        sku, 
+        product: productName, 
+        total: totalRevenue, 
+        hpp: totalHpp,
+        qty, 
+        profit: netProfit, 
+        logisticsFee: logisticsFeePerItem, // Simpan ke database
+        marketplace: manualForm.source, 
+        status: manualForm.status, 
+        createdAt: serverTimestamp()
       });
       await this.updateProductStock(sku, -qty, orderId);
     }

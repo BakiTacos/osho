@@ -38,7 +38,13 @@ export default function PenjualanPage() {
   const itemsPerPage = 20;
 
   const [manualForm, setManualForm] = useState({
-    orderId: '', source: 'Shopee', status: 'Proses', items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }]
+    orderId: '', 
+    source: 'Shopee', 
+    status: 'Proses', 
+    tiktokProvince: '', 
+    tiktokWeight: 1, 
+    tiktokType: 'Standard',
+    items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }]
   });
 
   // Derived Data (Filters & Stats)
@@ -90,6 +96,19 @@ export default function PenjualanPage() {
           const finalId = resiValue || orderIdLama;
           if (!finalId || existingOrderIds.has(finalId)) continue;
 
+          // --- LOGIKA BIAYA LOGISTIK TIKTOK (MENGGUNAKAN CONFIG) ---
+          let logisticsFee = 0;
+          if (selectedMarketplace === 'tiktok') {
+            // Ambil data menggunakan Index dari MARKETPLACE_CONFIG
+            const shippingType = String(row[config.cols.shippingType] || "Standard"); 
+            const destinationProvince = String(row[config.cols.province] || "");  
+            const parcelWeight = Number(row[config.cols.weight]) || 0;          
+            
+            // Panggil Service OOP
+            logisticsFee = salesService.calculateTikTokLogistics(shippingType, destinationProvince, parcelWeight);
+          }
+          // ------------------------------------
+
           let rawSku = String(row[finalSkuIdx] || "").trim();
           if (selectedMarketplace === 'shopee' && !rawSku) rawSku = String(row[12] || "").trim(); 
           const sku = rawSku.replace(/\s+/g, '').toUpperCase();
@@ -109,16 +128,20 @@ export default function PenjualanPage() {
 
           const totalRevenue = unitPrice * qty;
           const totalHpp = (unitCost * multiplier) * qty;
-          const netProfit = salesService.calculateNetProfitEntry(totalRevenue, totalHpp, selectedMarketplace);
+          
+          // Masukkan logisticsFee ke dalam kalkulator Net Profit
+          const netProfit = salesService.calculateNetProfitEntry(totalRevenue, totalHpp, selectedMarketplace, logisticsFee);
 
+          // Simpan juga logisticsFee ke Firestore untuk transparansi data
           await addDoc(collection(db, `users/${currentUser.uid}/sales`), {
-            orderId: finalId, sku, product: productName, total: totalRevenue, hpp: totalHpp, qty, profit: netProfit, marketplace: config.name, status: 'Proses', createdAt: serverTimestamp()
+            orderId: finalId, sku, product: productName, total: totalRevenue, hpp: totalHpp, qty, 
+            profit: netProfit, logisticsFee, marketplace: config.name, status: 'Proses', createdAt: serverTimestamp()
           });
           await salesService.updateProductStock(sku, -qty, finalId);
           addedCount++;
         }
-        alert(`Berhasil impor ${addedCount} data.`);
-      } catch (err) { alert("Gagal memproses file."); } 
+        alert(`Berhasil impor ${addedCount} data. Ekstraksi tarif Logistik TikTok aktif.`);
+      } catch (err) { alert("Gagal memproses file."); console.error(err); } 
       finally { setIsProcessing(false); e.target.value = ''; }
     };
     reader.readAsBinaryString(file);
@@ -131,7 +154,11 @@ export default function PenjualanPage() {
     try {
       await salesService.processMultiProductManual(manualForm, useCatalogPrice);
       setIsManualModalOpen(false);
-      setManualForm({ orderId: '', source: 'Shopee', status: 'Proses', items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }] });
+      setManualForm({ 
+        orderId: '', source: 'Shopee', status: 'Proses', 
+        tiktokProvince: '', tiktokWeight: 1, tiktokType: 'Standard', // Reset juga
+        items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }] 
+      });
       alert("Pesanan tersimpan!");
     } catch (err) { alert("Terjadi kesalahan."); } 
     finally { setIsProcessing(false); }
@@ -200,7 +227,58 @@ export default function PenjualanPage() {
                     <td className="px-8 py-5"><input type="checkbox" checked={selectedIds.includes(t.id)} onChange={() => setSelectedIds(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])} /></td>
                     <td className="px-4 py-5"><span className="text-sm font-black uppercase">{t.product}</span><br/><span className="text-[9px] text-[#0047AB]">#{t.orderId} • {t.sku}</span></td>
                     <td className="px-6 py-5 text-right text-xs">{t.qty}</td>
-                    <td className="px-6 py-5 text-right font-black text-emerald-600">Rp {t.profit.toLocaleString('id-ID')}</td>
+                    <td className="px-6 py-5 text-right relative group">
+  <div className="cursor-help inline-flex flex-col items-end">
+    <span className={`text-sm font-black ${t.status === 'Retur' ? 'text-slate-300 line-through' : 'text-emerald-600'}`}>
+      Rp {t.profit?.toLocaleString('id-ID')}
+    </span>
+    {/* Teks penanda agar user tahu bisa di-hover */}
+    <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest border-b border-dashed border-slate-300 mt-1 pb-0.5">
+      Rincian
+    </span>
+  </div>
+
+  {/* TOOLTIP BOX DENGAN KONDISI LOGISTIK */}
+  <div className="absolute right-full top-1/2 -translate-y-1/2 mr-4 hidden group-hover:flex flex-col w-56 bg-[#0F172A] text-white p-4 rounded-2xl shadow-2xl z-[100] text-[10px] pointer-events-none transition-all animate-in fade-in slide-in-from-right-2">
+    <p className="font-black border-b border-slate-700 pb-2 mb-3 text-slate-400 uppercase tracking-[0.2em] text-[9px] text-left">
+      Rincian Profit
+    </p>
+    
+    <div className="flex justify-between mb-2">
+      <span className="text-slate-300">Jual (Revenue):</span> 
+      <span className="font-bold text-emerald-400">Rp {t.total?.toLocaleString('id-ID')}</span>
+    </div>
+    
+    <div className="flex justify-between mb-2">
+      <span className="text-slate-300">HPP (Modal):</span> 
+      <span className="font-bold text-red-400">-Rp {t.hpp?.toLocaleString('id-ID')}</span>
+    </div>
+    
+    <div className="flex justify-between mb-2">
+      <span className="text-slate-300">Biaya Admin:</span> 
+      <span className="font-bold text-orange-400">
+        {/* Kalkulasi balik untuk mendapatkan angka potongan admin */}
+        -Rp {Math.round(t.total - t.hpp - (t.logisticsFee || 0) - t.profit).toLocaleString('id-ID')}
+      </span>
+    </div>
+    
+    {/* Tampilkan baris Logistik HANYA jika nilainya lebih dari 0 (Khusus TikTok) */}
+    {t.logisticsFee > 0 && (
+      <div className="flex justify-between mb-2">
+        <span className="text-slate-300">Biaya Logistik:</span> 
+        <span className="font-bold text-orange-400">-Rp {t.logisticsFee?.toLocaleString('id-ID')}</span>
+      </div>
+    )}
+    
+    <div className="flex justify-between mt-2 pt-3 border-t border-slate-700 font-black text-xs">
+      <span>NET PROFIT:</span> 
+      <span className="text-emerald-400">Rp {t.profit?.toLocaleString('id-ID')}</span>
+    </div>
+    
+    {/* Segitiga panah Tooltip yang mengarah ke kanan */}
+    <div className="absolute top-1/2 -right-1 -translate-y-1/2 w-3 h-3 bg-[#0F172A] rotate-45"></div>
+  </div>
+</td>
                     <td className="px-8 py-5 text-right flex justify-end gap-2"><button onClick={() => salesService.deleteTransaction(t)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16} /></button></td>
                   </tr>
                 ))}
