@@ -121,6 +121,14 @@ export default function PenjualanPage() {
         const headers = data[0];
         const finalSkuIdx = (config.cols.sku !== undefined) ? config.cols.sku : headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU"));
         const rawRows = data.slice(config.dataStartRow);
+
+        const TIKTOK_SHIPPING_MAP: Record<string, string> = {
+          "PENGIRIMAN STANDAR": "STANDARD",
+          "EKONOMI": "ECONOMY",
+          "KARGO": "CARGO", // Biasanya kargo mengikuti tarif standard atau punya tarif sendiri
+          "STANDARD": "STANDARD",
+          "SAVER": "SAVER"
+        };
         
         let addedCount = 0;
         for (const row of rawRows) {
@@ -133,12 +141,16 @@ export default function PenjualanPage() {
           let logisticsFee = 0;
           if (selectedMarketplace === 'tiktok') {
             // Ambil data menggunakan Index dari MARKETPLACE_CONFIG
-            const shippingType = String(row[config.cols.shippingType] || "Standard"); 
-            const destinationProvince = String(row[config.cols.province] || "");  
-            const parcelWeight = Number(row[config.cols.weight]) || 0;          
+            const rawShippingType = String(row[config.cols.shippingType] || "").trim().toUpperCase();
+            const rawProvince = String(row[config.cols.province] || "").trim().toUpperCase();
+            const parcelWeight = Number(row[config.cols.weight]) || 0;
+
+            // Terjemahkan tipe pengiriman (e.g., "PENGIRIMAN STANDAR" -> "STANDARD")
+            const finalShippingType = TIKTOK_SHIPPING_MAP[rawShippingType] || "STANDARD";
             
-            // Panggil Service OOP
-            logisticsFee = salesService.calculateTikTokLogistics(shippingType, destinationProvince, parcelWeight);
+            // Pastikan provinsi dikirim dalam keadaan bersih (Upper Case & Trim)
+            // Service kita (REGION_MAP) akan menangani "JAWA BARAT" -> "JAVA_NON_JKT"
+            logisticsFee = salesService.calculateTikTokLogistics(finalShippingType, rawProvince, parcelWeight);
           }
           // ------------------------------------
 
@@ -181,7 +193,7 @@ export default function PenjualanPage() {
             // Jika produk tidak ada di katalog, murni ambil dari Excel
             unitPrice = (Number(row[config.cols.total]) / qty) || 0;
           }
-          
+
           const totalRevenue = unitPrice * qty;
           const totalHpp = (unitCost * multiplier) * qty;
           

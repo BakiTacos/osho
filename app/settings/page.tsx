@@ -10,14 +10,33 @@ export default function SettingsPage() {
   const { currentUser } = useAuth();
   const [feeSettings, setFeeSettings] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [settings, setSettings] = useState<any>(null); // State untuk menyimpan config
+  const [fetching, setFetching] = useState(true);      // State untuk loading screen
 
   useEffect(() => {
-    if (!currentUser) return;
     const fetchSettings = async () => {
-      const snap = await getDoc(doc(db, `users/${currentUser.uid}/settings`, "admin_fees"));
-      if (snap.exists()) setFeeSettings(snap.data());
+      try {
+        const docRef = doc(db, `users/${currentUser.uid}/settings`, "marketplaceFees");
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          setSettings(docSnap.data());
+        } else {
+          // INISIALISASI DATA DEFAULT UNTUK USER BARU
+          const defaultSettings = {
+            shopee: { baseFee: 0, fixedFee: 0, enabled: true },
+            tiktok: { baseFee: 0, fixedFee: 0, enabled: true },
+            lazada: { baseFee: 0, fixedFee: 0, enabled: true }
+          };
+          setSettings(defaultSettings);
+        }
+      } catch (error) {
+        console.error("Gagal ambil settings:", error);
+      } finally {
+        setFetching(false); // Matikan loading spinner
+      }
     };
-    fetchSettings();
+    if (currentUser) fetchSettings();
   }, [currentUser]);
 
   const toggleProgram = (marketplace: string, index: number) => {
