@@ -29,7 +29,12 @@ export default function SettingsPage() {
         } else {
           // User Baru: Langsung set dan simpan skema lengkap
           setSettings(DEFAULT_MARKETPLACE_SETTINGS);
-          await setDoc(docRef, DEFAULT_MARKETPLACE_SETTINGS);
+          const initialData = {
+            ...DEFAULT_MARKETPLACE_SETTINGS,
+            updatedAt: serverTimestamp() 
+          };
+          await setDoc(docRef, initialData);
+          setSettings(initialData);
         }
       } catch (error) {
         console.error("Gagal inisialisasi settings:", error);

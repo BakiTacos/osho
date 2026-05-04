@@ -40,7 +40,8 @@ export const DEFAULT_MARKETPLACE_SETTINGS = {
       { cap: 0, enabled: true, name: "none", percent: 0 }
     ],
     enabled: true
-  }
+  },
+  updatedAt: null
 };
 
 export const tiktokRegions = [
