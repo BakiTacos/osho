@@ -20,7 +20,7 @@ export default function SettingsPage() {
       if (!currentUser?.uid) return;
 
       try {
-        const docRef = doc(db, `users/${currentUser.uid}/settings`, "marketplaceFees");
+        const docRef = doc(db, `users/${currentUser.uid}/settings`, "admin_fees");
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
