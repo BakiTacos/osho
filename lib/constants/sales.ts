@@ -6,6 +6,43 @@ export const MARKETPLACE_CONFIG: any = {
   lazada: { name: "Lazada", dataStartRow: 1, cols: { orderId: 0, sku: 6, name: 4, total: 15, qty: 9 } }
 };
 
+export const DEFAULT_MARKETPLACE_SETTINGS = {
+  shopee: {
+    baseFee: 10,
+    fixedFee: 1250,
+    programs: [
+      { cap: 60000, enabled: true, name: "Gratis Ongkir XTRA", percent: 9.5 },
+      { cap: 60000, enabled: false, name: "Promo XTRA", percent: 6 } // Sesuaikan jika ada nilai default lain
+    ],
+    enabled: true
+  },
+  tiktok: {
+    baseFee: 10,
+    fixedFee: 1250,
+    programs: [
+      { cap: 650000, enabled: true, name: "Komisi Dinamis", percent: 8 },
+      { cap: 0, enabled: false, name: "Program Growth Xtra", percent: 4 }
+    ],
+    enabled: true
+  },
+  lazada: {
+    baseFee: 10,
+    fixedFee: 1250,
+    programs: [
+      { cap: 20000, enabled: true, name: "Free Shipping Max", percent: 6 }
+    ],
+    enabled: true
+  },
+  offline: {
+    baseFee: 0,
+    fixedFee: 0,
+    programs: [
+      { cap: 0, enabled: true, name: "none", percent: 0 }
+    ],
+    enabled: true
+  }
+};
+
 export const tiktokRegions = [
   { id: "JAVA_JKT", label: "Jawa (Jakarta & Sekitarnya)" },
   { id: "JAVA_NON_JKT", label: "Jawa (Luar Jakarta)" },

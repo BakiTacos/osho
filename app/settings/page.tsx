@@ -5,20 +5,41 @@ import { db } from "../../lib/firebase";
 import { useAuth } from "../../context/AuthContext";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Save, Loader2, CheckSquare, Square, Settings2 } from "lucide-react";
+import { DEFAULT_MARKETPLACE_SETTINGS } from "../../lib/constants/sales"
 
 export default function SettingsPage() {
   const { currentUser } = useAuth();
   const [feeSettings, setFeeSettings] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [settings, setSettings] = useState<any>(null); // State untuk menyimpan config
+  const [fetching, setFetching] = useState(true);      // State untuk loading screen
+
   useEffect(() => {
-    if (!currentUser) return;
     const fetchSettings = async () => {
-      const snap = await getDoc(doc(db, `users/${currentUser.uid}/settings`, "admin_fees"));
-      if (snap.exists()) setFeeSettings(snap.data());
+      if (!currentUser?.uid) return;
+
+      try {
+        const docRef = doc(db, `users/${currentUser.uid}/settings`, "marketplaceFees");
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          // Gabungkan data dari DB dengan default untuk memastikan field baru (seperti programs) tetap ada
+          setSettings({ ...DEFAULT_MARKETPLACE_SETTINGS, ...docSnap.data() });
+        } else {
+          // User Baru: Langsung set dan simpan skema lengkap
+          setSettings(DEFAULT_MARKETPLACE_SETTINGS);
+          await setDoc(docRef, DEFAULT_MARKETPLACE_SETTINGS);
+        }
+      } catch (error) {
+        console.error("Gagal inisialisasi settings:", error);
+      } finally {
+        setFetching(false);
+      }
     };
+
     fetchSettings();
-  }, [currentUser]);
+  }, [currentUser?.uid]);
 
   const toggleProgram = (marketplace: string, index: number) => {
     const newData = { ...feeSettings };
