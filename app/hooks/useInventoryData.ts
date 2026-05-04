@@ -27,28 +27,23 @@ export interface Product {
 export function useInventoryData(currentUser: any) {
   const [products, setProducts] = useState<Product[]>([]);
   const [activeFees, setActiveFees] = useState<any>(null);
-  const [loadingSettings, setLoadingSettings] = useState(true);
 
-  // hooks/useInventoryData.ts
   useEffect(() => {
     if (!currentUser) return;
-
-    const settingsRef = doc(db, `users/${currentUser.uid}/settings`, "marketplaceFees");
     
-    const unsub = onSnapshot(settingsRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setActiveFees(docSnap.data());
-      } else {
-        // JIKA DATA TIDAK ADA, SET KE OBJEK KOSONG AGAR TIDAK LOADING TERUS
-        // Atau panggil fungsi inisialisasi default
-        setActiveFees({}); 
-        console.log("User baru terdeteksi: Menggunakan konfigurasi kosong.");
-      }
-      setLoadingSettings(false); // Pastikan state loading dimatikan
+    // 1. Listen Data Produk
+    const q = query(collection(db, `users/${currentUser.uid}/products`), orderBy("name", "asc"));
+    const unsubProd = onSnapshot(q, (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
     });
 
-    return () => unsub();
+    // 2. Listen Data Biaya Admin
+    const unsubFees = onSnapshot(doc(db, `users/${currentUser.uid}/settings`, "admin_fees"), (snap) => {
+      if (snap.exists()) setActiveFees(snap.data());
+    });
+
+    return () => { unsubProd(); unsubFees(); };
   }, [currentUser]);
-  
-  return { products, activeFees, loadingSettings }; // Kembalikan agar bisa dipakai di Page
+
+  return { products, activeFees };
 }
