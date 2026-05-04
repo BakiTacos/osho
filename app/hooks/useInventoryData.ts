@@ -14,6 +14,14 @@ export interface Product {
   isMapping?: boolean;
   linkedSku?: string;
   multiplier?: number;
+
+  useMarketplacePrices?: boolean; // Toggle aktif/tidak
+  priceShopee?: number;           // Harga khusus Shopee
+  priceTiktok?: number;           // Harga khusus Tiktok
+  priceLazada?: number;           // Harga khusus Lazada
+  
+  // Metadata tambahan (opsional)
+  updatedAt?: any;
 }
 
 export function useInventoryData(currentUser: any) {

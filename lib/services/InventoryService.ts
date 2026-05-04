@@ -1,9 +1,14 @@
 import { db } from "../firebase";
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import * as XLSX from 'xlsx';
+import { LOGISTICS_RATES } from "../../lib/constants/sales";
 
 export class InventoryService {
-  constructor(private currentUser: any, private activeFees: any) {}
+  constructor(
+    private currentUser: any, 
+    private activeFees: any, 
+    private catalog: any[] = [] 
+  ) {}
 
   private calculateFee(revenue: number, settings: any): number {
     if (!settings) return 0;
@@ -18,9 +23,66 @@ export class InventoryService {
     return baseCharge + programCharge + (Number(settings.fixedFee) || 0);
   }
 
-  public getMarketplaceEstimation(price: number, cost: number, multiplier: number = 1) {
+  public getTikTokRegionBreakdown(product: any) {
+    // 1. Validasi awal: pastikan activeFees ada
+    if (!this.activeFees) return [];
+
+    // 2. PERBAIKAN: Cari key TikTok secara Case-Insensitive (seperti di getMarketplaceEstimation)
+    const feeKeys = Object.keys(this.activeFees);
+    const matchedKey = feeKeys.find(key => key.toLowerCase() === "tiktok");
+    const settings = matchedKey ? this.activeFees[matchedKey] : null;
+
+    // Jika setting TikTok tidak ditemukan, jangan lanjut
+    if (!settings) return [];
+
+    // 3. Hitung HPP Sync (Sama seperti logika utama)
+    let actualCost = Number(product.costPrice) || 0;
+    if (product.isMapping && product.linkedSku) {
+      const parent = this.catalog.find(p => p.sku === product.linkedSku.toUpperCase());
+      if (parent) actualCost = Number(parent.costPrice) || 0;
+    }
+    const multiplier = product.isMapping ? (Number(product.multiplier) || 1) : 1;
+    const totalCost = actualCost * multiplier;
+
+    // 4. Tentukan Harga Jual (Marketplace Specific vs General)
+    const sellingPrice = (product.useMarketplacePrices && product.priceTiktok) 
+                         ? Number(product.priceTiktok) 
+                         : Number(product.price);
+
+    // 5. Iterasi Wilayah menggunakan LOGISTICS_RATES (Pastikan import benar)
+    const regions = ["JAVA_JKT", "JAVA_NON_JKT", "SUMATRA", "KALIMANTAN", "SULAWESI", "BALI", "NUSA_TENGGARA", "PAPUA_MALUKU"];
+    
+    return regions.map(reg => {
+      // Pastikan LOGISTICS_RATES sudah diimport di atas file
+      const logisticsFee = LOGISTICS_RATES["STANDARD"][reg][0] || 0;
+      const adminFee = this.calculateFee(sellingPrice, settings);
+      
+      const netProfit = sellingPrice - totalCost - adminFee - logisticsFee;
+      const margin = sellingPrice > 0 ? (netProfit / sellingPrice) * 100 : 0;
+
+      return {
+        regionName: reg.replace(/_/g, ' '),
+        logisticsFee,
+        netProfit,
+        margin
+      };
+    });
+  }
+
+  public getMarketplaceEstimation(product: any) {
     if (!this.activeFees) return null;
-    const totalCost = cost * multiplier;
+
+    // 1. LOGIKA AUTOMATED HPP SYNC
+    let actualCost = Number(product.costPrice) || 0;
+    if (product.isMapping && product.linkedSku) {
+      // Cari produk induk berdasarkan linkedSku
+      const parent = this.catalog.find(p => p.sku === product.linkedSku.toUpperCase());
+      if (parent) actualCost = Number(parent.costPrice) || 0;
+    }
+
+    const multiplier = product.isMapping ? (Number(product.multiplier) || 1) : 1;
+    const totalCost = actualCost * multiplier;
+    
     const results: any = {};
     const feeKeys = Object.keys(this.activeFees);
 
@@ -29,13 +91,26 @@ export class InventoryService {
       const settings = matchedKey ? this.activeFees[matchedKey] : null;
 
       if (settings) {
-        const adminFee = this.calculateFee(price, settings);
-        const netProfit = price - totalCost - adminFee;
-        const margin = price > 0 ? (netProfit / price) * 100 : 0;
-        results[mp] = { netProfit, margin };
+        // 2. LOGIKA MARKETPLACE-SPECIFIC PRICING (OPSIONAL)
+        let sellingPrice = Number(product.price);
+        
+        // Cek jika fitur harga berbeda aktif dan fieldnya tersedia
+        if (product.useMarketplacePrices) {
+          const mpPriceKey = `price${mp.charAt(0).toUpperCase() + mp.slice(1)}`; // priceShopee, priceTiktok, dst
+          if (product[mpPriceKey] && Number(product[mpPriceKey]) > 0) {
+            sellingPrice = Number(product[mpPriceKey]);
+          }
+        }
+
+        const adminFee = this.calculateFee(sellingPrice, settings);
+        const netProfit = sellingPrice - totalCost - adminFee;
+        const margin = sellingPrice > 0 ? (netProfit / sellingPrice) * 100 : 0;
+        
+        results[mp] = { netProfit, margin, usedPrice: sellingPrice };
       }
     });
-    return results;
+
+    return { results, actualCost, multiplier };
   }
 
   public async updateStock(id: string, newStock: number) {
