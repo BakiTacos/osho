@@ -10,13 +10,12 @@ import { DEFAULT_MARKETPLACE_SETTINGS } from "../../lib/constants/sales"
 export default function SettingsPage() {
   const { currentUser } = useAuth();
   const [feeSettings, setFeeSettings] = useState<any>(null);
+  const [fetching, setFetching] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-
-  const [settings, setSettings] = useState<any>(null); // State untuk menyimpan config
-  const [fetching, setFetching] = useState(true);      // State untuk loading screen
-
+  
   useEffect(() => {
     const fetchSettings = async () => {
+      // Pastikan UID tersedia sebelum melakukan fetch
       if (!currentUser?.uid) return;
 
       try {
@@ -24,17 +23,17 @@ export default function SettingsPage() {
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
-          // Gabungkan data dari DB dengan default untuk memastikan field baru (seperti programs) tetap ada
-          setSettings({ ...DEFAULT_MARKETPLACE_SETTINGS, ...docSnap.data() });
+          // PERBAIKAN: Gunakan setFeeSettings
+          setFeeSettings({ ...DEFAULT_MARKETPLACE_SETTINGS, ...docSnap.data() });
         } else {
-          // User Baru: Langsung set dan simpan skema lengkap
-          setSettings(DEFAULT_MARKETPLACE_SETTINGS);
+          // User Baru: Inisialisasi dengan DEFAULT
           const initialData = {
             ...DEFAULT_MARKETPLACE_SETTINGS,
             updatedAt: serverTimestamp() 
           };
           await setDoc(docRef, initialData);
-          setSettings(initialData);
+          // PERBAIKAN: Gunakan setFeeSettings
+          setFeeSettings(initialData);
         }
       } catch (error) {
         console.error("Gagal inisialisasi settings:", error);
