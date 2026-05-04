@@ -6,6 +6,17 @@ export const MARKETPLACE_CONFIG: any = {
   lazada: { name: "Lazada", dataStartRow: 1, cols: { orderId: 0, sku: 6, name: 4, total: 15, qty: 9 } }
 };
 
+export const tiktokRegions = [
+  { id: "JAVA_JKT", label: "Jawa (Jakarta & Sekitarnya)" },
+  { id: "JAVA_NON_JKT", label: "Jawa (Luar Jakarta)" },
+  { id: "SUMATRA", label: "Sumatra" },
+  { id: "KALIMANTAN", label: "Kalimantan" },
+  { id: "SULAWESI", label: "Sulawesi" },
+  { id: "BALI", label: "Bali" },
+  { id: "NUSA_TENGGARA", label: "Nusa Tenggara (NTB/NTT)" },
+  { id: "PAPUA_MALUKU", label: "Papua & Maluku" },
+];
+
 export const REGION_MAP: Record<string, string> = {
   "ACEH": "SUMATRA", "D.I. ACEH": "SUMATRA", "DI ACEH": "SUMATRA",
   "SUMATERA UTARA": "SUMATRA", "SUMATERA BARAT": "SUMATRA", "RIAU": "SUMATRA", 

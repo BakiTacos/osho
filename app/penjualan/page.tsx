@@ -151,14 +151,37 @@ export default function PenjualanPage() {
           let unitPrice = 0, unitCost = 0, multiplier = 1, productName = "Produk Luar Katalog";
           if (matched) {
             productName = matched.name;
-            unitPrice = Number(matched.price) || (Number(row[config.cols.total]) / qty);
+
+            // --- 1. LOGIKA HARGA JUAL (PRIORITAS MARKETPLACE) ---
+            let catalogPrice = Number(matched.price) || 0;
+
+            // Jika sedang impor TikTok dan fitur harga khusus aktif di katalog
+            if (selectedMarketplace === 'tiktok' && matched.useMarketplacePrices) {
+              catalogPrice = (matched.priceTiktok && Number(matched.priceTiktok) > 0) 
+                             ? Number(matched.priceTiktok) 
+                             : catalogPrice;
+            }
+
+            // Gunakan harga dari katalog (yang sudah disesuaikan), 
+            // jika di katalog 0, baru ambil fallback dari perhitungan Excel.
+            const excelPrice = (Number(row[config.cols.total]) / qty) || 0;
+            unitPrice = catalogPrice > 0 ? catalogPrice : excelPrice;
+
+            // --- 2. LOGIKA HPP SYNC (MODAL) ---
             if (matched.isMapping && matched.linkedSku) {
+              // Cari SKU Induk untuk sinkronisasi modal otomatis
               const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
               unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
               multiplier = Number(matched.multiplier) || 1;
-            } else { unitCost = Number(matched.costPrice) || 0; }
-          } else { unitPrice = (Number(row[config.cols.total]) / qty || 0); }
+            } else { 
+              unitCost = Number(matched.costPrice) || 0; 
+            }
 
+          } else {
+            // Jika produk tidak ada di katalog, murni ambil dari Excel
+            unitPrice = (Number(row[config.cols.total]) / qty) || 0;
+          }
+          
           const totalRevenue = unitPrice * qty;
           const totalHpp = (unitCost * multiplier) * qty;
           

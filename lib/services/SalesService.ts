@@ -30,20 +30,38 @@ export class SalesService {
   }
 
   public calculateTikTokLogistics(type: string, province: string, weight: number): number {
-    const normalizedType = type.toUpperCase().includes("STANDARD") ? "STANDARD" : 
-                           type.toUpperCase().includes("ECONOMY") ? "ECONOMY" : "CARGO";
-    const region = REGION_MAP[province?.toUpperCase().trim()] || "OUT_JAVA";
-    
-    let tier = 0;
-    if (weight <= 1.0) tier = 0;
-    else if (weight <= 2.0) tier = 1;
-    else if (weight <= 3.0) tier = 2;
-    else if (weight <= 4.0) tier = 3;
-    else if (weight <= 5.0) tier = 4;
-    else tier = 5;
+    if (!province) return 0;
 
-    const rates = LOGISTICS_RATES[normalizedType]?.[region];
-    return rates ? rates[tier] : 0;
+    // PERBAIKAN DI SINI:
+    // Jika 'province' adalah "DKI JAKARTA" -> jadi "JAVA_JKT"
+    // Jika 'province' sudah "JAVA_JKT" (dari dropdown) -> tetap "JAVA_JKT"
+    const regionId = REGION_MAP[province.toUpperCase()] || province.toUpperCase();
+
+    const serviceType = type.toUpperCase(); // STANDARD atau SAVER
+    
+    try {
+      const rateTable = LOGISTICS_RATES[serviceType];
+      if (!rateTable || !rateTable[regionId]) {
+        console.warn(`Tarif tidak ditemukan untuk: ${serviceType} - ${regionId}`);
+        return 0;
+      }
+
+      const rates = rateTable[regionId];
+      const itemWeight = Math.max(0.1, weight);
+
+      // Logika perhitungan berat (sama seperti sebelumnya)
+      if (itemWeight <= 0.5) return rates[0];
+      if (itemWeight <= 1.0) return rates[1];
+      
+      const baseRate = rates[1];
+      const extraWeight = Math.ceil(itemWeight - 1);
+      const extraCharge = extraWeight * rates[2];
+      
+      return baseRate + extraCharge;
+    } catch (error) {
+      console.error("Error calculating TikTok logistics:", error);
+      return 0;
+    }
   }
 
   public async updateProductStock(skuInput: string, change: number, resiInput?: string) {
@@ -78,10 +96,11 @@ export class SalesService {
 
   public async processMultiProductManual(manualForm: any, useCatalogPrice: boolean) {
     const orderId = manualForm.orderId.trim() || `MAN-${Date.now()}`;
+    const marketplace = manualForm.source.toLowerCase();
     
-    // 1. HITUNG BIAYA LOGISTIK TIKTOK JIKA SUMBERNYA TIKTOK
+    // 1. Hitung total biaya logistik TikTok (seperti sebelumnya)
     let totalLogisticsFee = 0;
-    if (manualForm.source.toLowerCase() === 'tiktok') {
+    if (marketplace === 'tiktok') {
       totalLogisticsFee = this.calculateTikTokLogistics(
         manualForm.tiktokType || 'Standard', 
         manualForm.tiktokProvince || '', 
@@ -89,7 +108,6 @@ export class SalesService {
       );
     }
     
-    // 2. BAGI BIAYA LOGISTIK SECARA MERATA AGAR TIDAK DOUBLE POTONGAN PADA MULTI-ITEM
     const itemsCount = manualForm.items.length;
     const logisticsFeePerItem = itemsCount > 0 ? totalLogisticsFee / itemsCount : 0;
 
@@ -102,12 +120,31 @@ export class SalesService {
 
       if (matched) {
         productName = matched.name;
-        unitPrice = useCatalogPrice ? Number(matched.price) : Number(item.manualPrice);
+        
+        // --- LOGIKA HARGA SPESIFIK MARKETPLACE ---
+        if (useCatalogPrice) {
+          // Ambil harga umum dulu
+          unitPrice = Number(matched.price);
+          
+          // Jika marketplace adalah TikTok dan fitur harga khusus aktif
+          if (marketplace === 'tiktok' && matched.useMarketplacePrices) {
+            // Gunakan priceTiktok jika ada (lebih besar dari 0), jika tidak balik ke price umum
+            unitPrice = (matched.priceTiktok && Number(matched.priceTiktok) > 0) 
+                        ? Number(matched.priceTiktok) 
+                        : Number(matched.price);
+          }
+        } else {
+          unitPrice = Number(item.manualPrice);
+        }
+        // ------------------------------------------
+
         if (matched.isMapping && matched.linkedSku) {
           const main = this.catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
           unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
           multiplier = Number(matched.multiplier) || 1;
-        } else { unitCost = Number(matched.costPrice) || 0; }
+        } else { 
+          unitCost = Number(matched.costPrice) || 0; 
+        }
       } else {
         unitPrice = Number(item.manualPrice) || 0;
         unitCost = Number(item.manualCost) || 0;
@@ -115,22 +152,12 @@ export class SalesService {
 
       const totalRevenue = unitPrice * qty;
       const totalHpp = (unitCost * multiplier) * qty;
-      
-      // 3. MASUKKAN LOGISTICS FEE KE DALAM PERHITUNGAN PROFIT
       const netProfit = this.calculateNetProfitEntry(totalRevenue, totalHpp, manualForm.source, logisticsFeePerItem);
 
       await addDoc(collection(db, `users/${this.currentUser.uid}/sales`), {
-        orderId, 
-        sku, 
-        product: productName, 
-        total: totalRevenue, 
-        hpp: totalHpp,
-        qty, 
-        profit: netProfit, 
-        logisticsFee: logisticsFeePerItem, // Simpan ke database
-        marketplace: manualForm.source, 
-        status: manualForm.status, 
-        createdAt: serverTimestamp()
+        orderId, sku, product: productName, total: totalRevenue, hpp: totalHpp,
+        qty, profit: netProfit, logisticsFee: logisticsFeePerItem,
+        marketplace: manualForm.source, status: manualForm.status, createdAt: serverTimestamp()
       });
       await this.updateProductStock(sku, -qty, orderId);
     }
