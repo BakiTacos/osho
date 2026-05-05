@@ -24,10 +24,48 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
       <div className="bg-white w-full max-w-md rounded-[32px] p-8 animate-in zoom-in duration-200">
         <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black tracking-tighter text-orange-500">Input Opex</h2><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><X/></button></div>
         <form onSubmit={onSubmit} className="space-y-4">
-          <select className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" value={form.category} onChange={e => setForm({...form, category: e.target.value})}><option>Listrik/Air</option><option>Gaji Karyawan</option><option>Iklan/Ads</option><option>Sewa Tempat</option><option>Packaging</option><option>Lainnya</option></select>
-          <input required className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" placeholder="Deskripsi" onChange={e => setForm({...form, description: e.target.value})} />
-          <input type="number" required placeholder="Jumlah Rp" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" onChange={e => setForm({...form, amount: e.target.value})} />
-          <button type="submit" className="w-full mt-4 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg">Simpan Pengeluaran</button>
+          {/* FIELD DIBAYAR OLEH */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Dibayar Oleh</label>
+            <select 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" 
+              value={form.paidBy} 
+              onChange={e => setForm({...form, paidBy: e.target.value})}
+            >
+              <option value="KEVIN">KEVIN</option>
+              <option value="VALENT">VALENT</option>
+            </select>
+          </div>
+
+          {/* FIELD KATEGORI (TERMASUK MAKAN) */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Kategori Biaya</label>
+            <select 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" 
+              value={form.category} 
+              onChange={e => setForm({...form, category: e.target.value})}
+            >
+              <option>MAKAN</option>
+              <option>Listrik/Air</option>
+              <option>Gaji Karyawan</option>
+              <option>Iklan/Ads</option>
+              <option>Sewa Tempat</option>
+              <option>Packaging</option>
+              <option>Lainnya</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Keterangan</label>
+             <input required className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" placeholder="Deskripsi pengeluaran..." value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Total Nominal</label>
+            <input type="number" required placeholder="Rp 0" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} />
+          </div>
+
+          <button type="submit" className="w-full mt-4 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg hover:scale-[1.02] active:scale-95 transition-all">Simpan Pengeluaran</button>
         </form>
       </div>
     </div>

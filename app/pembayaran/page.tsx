@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from "../../context/AuthContext";
-import { Wallet, PlusCircle, MoreVertical, Trash2, Edit3, TrendingDown, Receipt, History } from "lucide-react";
+import { Wallet, PlusCircle, MoreVertical, Trash2, Edit3, TrendingDown, Receipt, History, Users } from "lucide-react";
 
 // IMPORT CLEAN ARCHITECTURE
 import { usePaymentData } from "../hooks/usePaymentData";
@@ -28,9 +28,15 @@ export default function PembayaranPage() {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  // Form States
+  // Form States (Ditambahkan paidBy: 'KEVIN' sebagai default)
   const [withdrawForm, setWithdrawForm] = useState({ platform: 'Shopee', amount: '' });
-  const [expenseForm, setExpenseForm] = useState({ category: 'Listrik/Air', description: '', amount: '', date: new Date().toISOString().split('T')[0] });
+  const [expenseForm, setExpenseForm] = useState({ 
+    category: 'MAKAN', 
+    description: '', 
+    amount: '', 
+    paidBy: 'KEVIN', // New field based on request
+    date: new Date().toISOString().split('T')[0] 
+  });
   const [invoiceForm, setInvoiceForm] = useState({ noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' });
   const [invoiceItems, setInvoiceItems] = useState([{ sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }]);
 
@@ -42,10 +48,22 @@ export default function PembayaranPage() {
   const filteredWithdrawals = paymentService.filterByTime(withdrawals, timeFilter, selectedMonth, selectedYear);
   const filteredExpenses = paymentService.filterByTime(expenses, timeFilter, selectedMonth, selectedYear);
   
-  const { platformStats, totalWithdrawal, totalPaidInvoices, totalUnpaidInvoices, totalOpex } = paymentService.calculateStats(filteredWithdrawals, filteredInvoices, filteredExpenses);
+  // Destructure payerStats dari service
+  const { 
+    platformStats, 
+    payerStats, // New: Ambil data siapa bayar berapa
+    totalWithdrawal, 
+    totalPaidInvoices, 
+    totalUnpaidInvoices, 
+    totalOpex 
+  } = paymentService.calculateStats(filteredWithdrawals, filteredInvoices, filteredExpenses);
 
   // Handlers
-  const resetInvoice = () => { setIsInvoiceModalOpen(false); setInvoiceForm({ noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' }); setInvoiceItems([{ sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }]); };
+  const resetInvoice = () => { 
+    setIsInvoiceModalOpen(false); 
+    setInvoiceForm({ noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' }); 
+    setInvoiceItems([{ sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }]); 
+  };
 
   if (!currentUser) return <div className="flex items-center justify-center min-h-screen bg-[#F8F9FB]"><p className="font-black text-[#0047AB] animate-pulse">MEMUAT DATA ANALISIS...</p></div>;
 
@@ -72,8 +90,24 @@ export default function PembayaranPage() {
       <div className="px-4 sm:px-10 mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         <div className="bg-white p-6 rounded-[28px] border shadow-sm border-l-4 border-l-emerald-500"><p className="text-[9px] font-black text-emerald-600 uppercase mb-3">Total Nota Dibayar</p><h3 className="text-xl font-black text-emerald-600">Rp {totalPaidInvoices.toLocaleString('id-ID')}</h3><p className="text-[9px] font-bold text-slate-300 mt-2">Arus Kas Keluar Lunas</p></div>
         <div className="bg-white p-6 rounded-[28px] border shadow-sm border-l-4 border-l-red-500"><p className="text-[9px] font-black text-red-500 uppercase mb-3">Nota Belum Bayar</p><h3 className="text-xl font-black text-red-600">Rp {totalUnpaidInvoices.toLocaleString('id-ID')}</h3><p className="text-[9px] font-bold text-slate-300 mt-2">Kewajiban Mendatang</p></div>
+        
+        {/* WITHDRAWAL STATS */}
         <div className="bg-white p-6 rounded-[28px] border shadow-sm relative group"><button onClick={() => setIsHistoryModalOpen(true)} className="absolute top-4 right-4 p-2 bg-slate-50 text-slate-400 rounded-lg hover:text-[#0047AB]"><History size={16} /></button><p className="text-[9px] font-black text-[#94A3B8] uppercase mb-3">Saldo Ditarik</p><h3 className="text-xl font-black">Rp {totalWithdrawal.toLocaleString('id-ID')}</h3><div className="mt-3 space-y-1">{Object.keys(platformStats).map(p => <div key={p} className="flex justify-between text-[9px] font-bold text-slate-400"><span>{p}</span><span className="text-[#0047AB]">Rp {platformStats[p].toLocaleString('id-ID')}</span></div>)}</div></div>
-        <div className="bg-white p-6 rounded-[28px] border shadow-sm border-l-4 border-l-orange-500"><p className="text-[9px] font-black text-orange-400 uppercase mb-3">Biaya Opex</p><h3 className="text-xl font-black text-orange-600">Rp {totalOpex.toLocaleString('id-ID')}</h3><p className="text-[9px] font-bold text-slate-300 mt-2">Operasional Usaha</p></div>
+        
+        {/* OPEX STATS (Updated with Payer Breakdown) */}
+        <div className="bg-white p-6 rounded-[28px] border shadow-sm border-l-4 border-l-orange-500">
+          <p className="text-[9px] font-black text-orange-400 uppercase mb-3">Biaya Opex</p>
+          <h3 className="text-xl font-black text-orange-600">Rp {totalOpex.toLocaleString('id-ID')}</h3>
+          <div className="mt-3 space-y-1 border-t pt-2">
+            {Object.entries(payerStats).map(([payer, amount]) => (
+              <div key={payer} className="flex justify-between text-[9px] font-bold text-slate-400 uppercase">
+                <span>{payer}</span>
+                <span className="text-[#0F172A]">Rp {amount.toLocaleString('id-ID')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="flex flex-col gap-2">
           <button onClick={() => setIsWithdrawModalOpen(true)} className="flex-1 bg-white border-2 border-slate-50 text-[#0047AB] rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase hover:bg-blue-50"><Wallet size={14} /> Tarik Saldo</button>
           <button onClick={() => setIsInvoiceModalOpen(true)} className="flex-1 bg-[#0047AB] text-white rounded-2xl flex items-center justify-center gap-2 font-black text-[10px] uppercase shadow-lg shadow-blue-100 hover:scale-[1.02]"><PlusCircle size={14} /> Nota Baru</button>
@@ -110,21 +144,38 @@ export default function PembayaranPage() {
           </div>
         </div>
 
+        {/* OPEX LIST (Updated with Payer Badge) */}
         <div className="bg-white rounded-[32px] border shadow-sm p-6">
           <h4 className="text-xs font-black uppercase tracking-widest text-[#94A3B8] mb-6 flex items-center gap-2"><TrendingDown size={14}/> Biaya Opex</h4>
           <div className="space-y-3">
             {filteredExpenses.map((exp) => (
               <div key={exp.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all">
-                <div className="flex items-center gap-3"><div className="p-2 bg-white rounded-xl text-orange-500 shadow-sm"><Receipt size={16}/></div><div><p className="text-[11px] font-black text-[#0F172A] leading-tight">{exp.category}</p><p className="text-[9px] font-bold text-slate-400 uppercase">{exp.description}</p></div></div>
-                <div className="flex items-center gap-2"><p className="text-xs font-black text-red-500">-Rp {exp.amount.toLocaleString('id-ID')}</p><button onClick={async () => { if(confirm("Hapus?")) await paymentService.deleteDocument("expenses", exp.id); }} className="p-1.5 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"><Trash2 size={12}/></button></div>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-xl text-orange-500 shadow-sm"><Receipt size={16}/></div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[11px] font-black text-[#0F172A] leading-tight">{exp.category}</p>
+                      {/* Payer Badge */}
+                      <span className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[7px] font-black text-slate-400 uppercase tracking-tighter">
+                        {exp.paidBy || 'KEVIN'}
+                      </span>
+                    </div>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">{exp.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-black text-red-500">-Rp {exp.amount.toLocaleString('id-ID')}</p>
+                  <button onClick={async () => { if(confirm("Hapus?")) await paymentService.deleteDocument("expenses", exp.id); }} className="p-1.5 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"><Trash2 size={12}/></button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
+      {/* MODALS */}
       <WithdrawModal isOpen={isWithdrawModalOpen} onClose={() => setIsWithdrawModalOpen(false)} form={withdrawForm} setForm={setWithdrawForm} onSubmit={async (e: any) => { e.preventDefault(); try { await paymentService.saveWithdraw(withdrawForm); setIsWithdrawModalOpen(false); setWithdrawForm({ platform: 'Shopee', amount: '' }); } catch (err: any) { alert(err.message); } }} />
-      <ExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} form={expenseForm} setForm={setExpenseForm} onSubmit={async (e: any) => { e.preventDefault(); try { await paymentService.saveExpense(expenseForm); setIsExpenseModalOpen(false); setExpenseForm({ category: 'Listrik/Air', description: '', amount: '', date: new Date().toISOString().split('T')[0] }); } catch (err: any) { alert(err.message); } }} />
+      <ExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} form={expenseForm} setForm={setExpenseForm} onSubmit={async (e: any) => { e.preventDefault(); try { await paymentService.saveExpense(expenseForm); setIsExpenseModalOpen(false); setExpenseForm({ category: 'MAKAN', description: '', amount: '', paidBy: 'KEVIN', date: new Date().toISOString().split('T')[0] }); } catch (err: any) { alert(err.message); } }} />
       <InvoiceModal isOpen={isInvoiceModalOpen} onClose={resetInvoice} form={invoiceForm} setForm={setInvoiceForm} items={invoiceItems} setItems={setInvoiceItems} products={products} onSubmit={async (e: any) => { e.preventDefault(); try { await paymentService.saveInvoice(invoiceForm, invoiceItems); resetInvoice(); } catch (err: any) { alert(err.message); } }} />
       <HistoryModal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} withdrawals={withdrawals} onDelete={async (id: string) => { if(confirm("Hapus?")) await paymentService.deleteDocument("withdrawals", id); }} onEdit={(w: any) => { if (w.editCount >= 1) return alert("Sudah diubah."); setWithdrawForm({ platform: w.platform, amount: w.amount.toString() }); setIsWithdrawModalOpen(true); setIsHistoryModalOpen(false); }} />
 

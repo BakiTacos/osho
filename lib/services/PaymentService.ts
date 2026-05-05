@@ -20,8 +20,16 @@ export class PaymentService {
   }
 
   public calculateStats(filteredWithdrawals: any[], filteredInvoices: any[], filteredExpenses: any[]) {
+    // 1. Statistik Berdasarkan Platform (Withdrawal)
     const platformStats: Record<string, number> = filteredWithdrawals.reduce((acc: any, curr) => {
       acc[curr.platform] = (acc[curr.platform] || 0) + curr.amount;
+      return acc;
+    }, {});
+
+    // 2. Statistik Berdasarkan Pembayar (OPEX / Expenses) - NEW
+    const payerStats: Record<string, number> = filteredExpenses.reduce((acc: any, curr) => {
+      const payer = curr.paidBy || "TIDAK TERSET";
+      acc[payer] = (acc[payer] || 0) + Number(curr.amount);
       return acc;
     }, {});
 
@@ -30,18 +38,39 @@ export class PaymentService {
     const totalUnpaidInvoices = filteredInvoices.filter(inv => inv.status === 'BELUM BAYAR').reduce((acc, curr) => acc + curr.amount, 0);
     const totalOpex = filteredExpenses.reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-    return { platformStats, totalWithdrawal, totalPaidInvoices, totalUnpaidInvoices, totalOpex };
+    return { 
+      platformStats, 
+      payerStats, // Data baru untuk tracking Kevin vs Valent
+      totalWithdrawal, 
+      totalPaidInvoices, 
+      totalUnpaidInvoices, 
+      totalOpex 
+    };
   }
 
   // --- FIRESTORE ACTIONS ---
   public async saveWithdraw(form: any) {
     if (Number(form.amount) <= 0) throw new Error("Jumlah harus > 0");
-    await addDoc(collection(db, `users/${this.currentUser.uid}/withdrawals`), { ...form, amount: Number(form.amount), status: 'Berhasil', editCount: 0, createdAt: serverTimestamp() });
+    await addDoc(collection(db, `users/${this.currentUser.uid}/withdrawals`), { 
+      ...form, 
+      amount: Number(form.amount), 
+      status: 'Berhasil', 
+      editCount: 0, 
+      createdAt: serverTimestamp() 
+    });
   }
 
+  /**
+   * Menyimpan biaya operasional (OPEX)
+   * Form harus menyertakan category (termasuk 'MAKAN') dan paidBy ('KEVIN' | 'VALENT')
+   */
   public async saveExpense(form: any) {
     if (Number(form.amount) <= 0) throw new Error("Jumlah harus > 0");
-    await addDoc(collection(db, `users/${this.currentUser.uid}/expenses`), { ...form, amount: Number(form.amount), createdAt: serverTimestamp() });
+    await addDoc(collection(db, `users/${this.currentUser.uid}/expenses`), { 
+      ...form, 
+      amount: Number(form.amount), 
+      createdAt: serverTimestamp() 
+    });
   }
 
   public async saveInvoice(form: any, items: any[]) {
