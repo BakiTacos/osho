@@ -3,41 +3,112 @@ import { StatCard } from './StatCard';
 import { Wallet, TrendingUp, TrendingDown, Banknote, PackageMinus, PackagePlus, BadgeDollarSign, AlertTriangle, Trophy, Package } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-export const FinanceView = ({ summary, chartData }: any) => (
-  <div className="px-4 sm:px-10 mt-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <StatCard title="TOTAL OMSET" value={`IDR ${summary.totalOmset.toLocaleString('id-ID')}`} icon={<Wallet size={20}/>} color="blue" trend="12.5%" isUp={true} />
-      <StatCard title="TOTAL KERUGIAN" value={`IDR ${summary.totalKerugian.toLocaleString('id-ID')}`} icon={<TrendingDown size={20}/>} color="red" trend="2.1%" isUp={false} />
-      <StatCard title="PROFIT BERSIH" value={`IDR ${summary.netProfit.toLocaleString('id-ID')}`} icon={<TrendingUp size={20}/>} color="emerald" trend="8.2%" isUp={true} subtitle="Laba - Opex" />
-      <StatCard title="PROFIT FINAL" value={`IDR ${summary.profitFinal.toLocaleString('id-ID')}`} icon={<Banknote size={20}/>} color="emerald" trend="5.4%" isUp={summary.profitFinal > 0} subtitle="Cuan Bersih Akhir" highlight={true} />
-    </div>
+export const FinanceView = ({ summary, chartData }: any) => {
+  // Safe Fallback calculation jika properti belum terhitung di backend
+  const grossProfit = summary.grossProfit || (summary.totalOmset - (summary.totalHpp || 0));
+  const totalOpex = summary.totalOpex || summary.opex || 0;
+  const netProfit = summary.netProfit || summary.profitFinal || 0;
 
-    <div className="mt-8 bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h3 className="text-lg font-black tracking-tight text-[#0F172A]">Tren Laba Rugi</h3>
-          <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-[0.15em]">Performa Pemasukan vs Laba Bersih</p>
+  return (
+    <div className="px-4 sm:px-10 mt-6 sm:mt-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* STAT CARDS - 2 COLUMNS ON MOBILE, 4 COLUMNS ON DESKTOP */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        
+        {/* Card 1: TOTAL OMSET */}
+        <StatCard 
+          title="TOTAL OMSET" 
+          value={`IDR ${summary.totalOmset.toLocaleString('id-ID')}`} 
+          icon={<Wallet size={20}/>} 
+          color="blue" 
+          trend="12.5%" 
+          isUp={true} 
+          subtitle="Pendapatan Kotor"
+        />
+
+        {/* Card 2: PROFIT KOTOR (NEW) */}
+        <StatCard 
+          title="PROFIT KOTOR" 
+          value={`IDR ${grossProfit.toLocaleString('id-ID')}`} 
+          icon={<TrendingUp size={20}/>} 
+          color="blue" 
+          trend="10.2%" 
+          isUp={true} 
+          subtitle="Omset - HPP" 
+        />
+
+        {/* Card 3: BIAYA OPERASIONAL (NEW) */}
+        <StatCard 
+          title="BIAYA OPEX" 
+          value={`IDR ${totalOpex.toLocaleString('id-ID')}`} 
+          icon={<TrendingDown size={20}/>} 
+          color="orange" // Menggunakan warna jingga untuk beban biaya
+          trend="4.5%" 
+          isUp={false} 
+          subtitle="Beban Operasional" 
+        />
+
+        {/* Card 4: PROFIT BERSIH (HIGHLIGHTED) */}
+        <StatCard 
+          title="PROFIT BERSIH" 
+          value={`IDR ${netProfit.toLocaleString('id-ID')}`} 
+          icon={<Banknote size={20}/>} 
+          color="emerald" 
+          trend="8.2%" 
+          isUp={netProfit > 0} 
+          subtitle="Cuan Bersih Akhir" 
+          highlight={true} 
+        />
+
+      </div>
+
+      {/* CHART SECTION */}
+      <div className="mt-6 sm:mt-8 bg-white p-4 sm:p-8 rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <h3 className="text-base sm:text-lg font-black tracking-tight text-[#0F172A]">Tren Laba Rugi</h3>
+            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-[0.15em]">
+              Performa Pemasukan vs Laba Bersih
+            </p>
+          </div>
+          <div className="flex gap-4">
+            <div className="flex items-center gap-2 text-[8px] sm:text-[9px] font-black uppercase text-slate-400">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#0047AB]"></div> Pemasukan
+            </div>
+            <div className="flex items-center gap-2 text-[8px] sm:text-[9px] font-black uppercase text-slate-400">
+              <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-[#10B981]"></div> Laba Bersih
+            </div>
+          </div>
         </div>
-        <div className="flex gap-4">
-          <div className="flex items-center gap-2 text-[9px] font-black uppercase text-slate-400"><div className="w-3 h-3 rounded-full bg-[#0047AB]"></div> Pemasukan</div>
-          <div className="flex items-center gap-2 text-[9px] font-black uppercase text-slate-400"><div className="w-3 h-3 rounded-full bg-[#10B981]"></div> Laba Bersih</div>
+
+        {/* CHART CONTAINER */}
+        <div className="h-[280px] sm:h-[350px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fontSize: 9, fontWeight: 800, fill: '#94A3B8'}} 
+                dy={10} 
+              />
+              <YAxis hide />
+              <Tooltip 
+                cursor={{fill: '#F8F9FB'}} 
+                contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} 
+                itemStyle={{fontSize: '10px', fontWeight: 900, textTransform: 'uppercase'}} 
+              />
+              <Bar dataKey="pemasukan" fill="#0047AB" radius={[4, 4, 0, 0]} barSize={24} />
+              <Bar dataKey="laba" fill="#10B981" radius={[4, 4, 0, 0]} barSize={24} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
-      <div className="h-[350px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#94A3B8'}} dy={10} />
-            <YAxis hide />
-            <Tooltip cursor={{fill: '#F8F9FB'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}} itemStyle={{fontSize: '11px', fontWeight: 900, textTransform: 'uppercase'}} />
-            <Bar dataKey="pemasukan" fill="#0047AB" radius={[4, 4, 0, 0]} barSize={32} />
-            <Bar dataKey="laba" fill="#10B981" radius={[4, 4, 0, 0]} barSize={32} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+
     </div>
-  </div>
-);
+  );
+};
 
 export const StockView = ({ stockStats, financials, currentMonthName }: any) => (
   <div className="px-4 sm:px-10 mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
