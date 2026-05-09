@@ -119,7 +119,7 @@ export const StockView = ({ stockStats, financials, currentMonthName }: any) => 
       <StatCard title="VALUASI MASUK" value={`Rp ${stockStats.valuationIn.toLocaleString('id-ID')}`} icon={<Banknote size={20}/>} color="blue" trend="Modal Belanja" isUp={true} />
       <StatCard title={`VALUASI ASET`} value={`Rp ${financials.totalValuation.toLocaleString('id-ID')}`} icon={<Wallet size={20}/>} color="blue" trend={currentMonthName} isUp={true} subtitle="Posisi Modal" />
       <StatCard title={`POTENSI CUAN`} value={`Rp ${financials.totalEstProfit.toLocaleString('id-ID')}`} icon={<TrendingUp size={20}/>} color="emerald" trend={currentMonthName} isUp={true} highlight={true} subtitle="Sisa Margin" />
-      <StatCard title="MARGIN < 10%" value={`${financials.lowMarginCount} Produk`} icon={<AlertTriangle size={20}/>} color="red" trend="Evaluasi" isUp={false} subtitle="Profit Tipis" />
+      <StatCard title="MARGIN < 10%" value={`${stockStats.lowMarginCount} Produk`} icon={<AlertTriangle size={20}/>} color="red" trend="Evaluasi" isUp={false} subtitle="Profit Tipis" />
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-10">
