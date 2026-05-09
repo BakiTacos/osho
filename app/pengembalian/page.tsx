@@ -72,8 +72,6 @@ export default function PengembalianPage() {
           await updateDoc(doc(db, `users/${currentUser?.uid}/products`, targetId), {
             stock: increment(qtyToReturn)
           });
-                
-          
         }
         
         await updateDoc(orderRef, { penanganan: newStatus, profit: 0, returFinal: true });
@@ -104,105 +102,119 @@ export default function PengembalianPage() {
     item.product?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-    if (!currentUser) {
+  if (!currentUser) {
     return (
-        <div className="flex items-center justify-center min-h-screen bg-[#F8F9FB]">
+      <div className="flex items-center justify-center min-h-screen bg-[#F8F9FB]">
         <p className="font-black text-[#0047AB] animate-pulse">MEMUAT DATA ANALISIS...</p>
-        </div>
+      </div>
     );
-    }
+  }
 
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-20">
       
-      {/* HEADER */}
-      <div className="px-4 sm:px-10 pt-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* HEADER & SEARCH BAR - RESPONSIVE STACK ON MOBILE */}
+      <div className="px-4 sm:px-10 pt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tighter text-[#0F172A]">Manajemen Retur</h1>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Otomatisasi Stok & Akuntansi Kerugian</p>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-[#0F172A] leading-tight">Manajemen Retur</h1>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Otomatisasi Stok & Akuntansi Kerugian</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-none">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
               type="text" 
               placeholder="Cari No. Pesanan..." 
-              className="bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-4 text-xs font-bold outline-none focus:ring-2 focus:ring-[#0047AB]"
+              className="w-full sm:w-64 bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs font-bold outline-none focus:ring-2 focus:ring-[#0047AB] transition-all"
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="w-10 h-10 rounded-xl bg-[#0047AB] text-white flex items-center justify-center font-black shadow-lg">K</div>
+          <div className="w-10 h-10 rounded-xl bg-[#0047AB] text-white flex items-center justify-center font-black shadow-lg shrink-0">K</div>
         </div>
       </div>
 
-      {/* STATS CARDS */}
-      <div className="px-4 sm:px-10 mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card: Kerugian Dialami */}
-        <div className="bg-white p-6 rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-red-500">
-          <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mb-3 flex items-center">
-            <TrendingDown size={12} className="mr-1"/> Kerugian Realita
-          </p>
-          <h3 className="text-xl font-black text-[#0F172A]">Rp {totalLoss.toLocaleString('id-ID')}</h3>
-          <p className="text-[10px] font-bold text-slate-300 mt-2">Dari Barang Rusak/Hilang</p>
+      {/* STATS CARDS - 2 COLUMNS ON MOBILE */}
+      <div className="px-4 sm:px-10 mt-6 sm:mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        
+        {/* Card 1: Kerugian Dialami */}
+        <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-red-500 flex flex-col justify-between">
+          <div>
+            <p className="text-[8px] sm:text-[9px] font-black text-red-500 uppercase tracking-widest mb-1 sm:mb-3 flex items-center">
+              <TrendingDown size={12} className="mr-1 shrink-0"/> Kerugian Realita
+            </p>
+            <h3 className="text-sm sm:text-lg xl:text-xl font-black text-[#0F172A] truncate">Rp {totalLoss.toLocaleString('id-ID')}</h3>
+          </div>
+          <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Dari Barang Rusak/Hilang</p>
         </div>
 
-        <div className="bg-white p-6 rounded-[28px] border border-[#F1F5F9] shadow-sm">
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 text-blue-600">Total Kasus Retur</p>
-          <h3 className="text-xl font-black text-[#0F172A]">{returOrders.length} Kasus</h3>
-          <p className="text-[10px] font-bold text-slate-300 mt-2">Masuk ke Sistem</p>
+        {/* Card 2: Total Kasus */}
+        <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm flex flex-col justify-between">
+          <div>
+            <p className="text-[8px] sm:text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1 sm:mb-3">Total Kasus Retur</p>
+            <h3 className="text-sm sm:text-lg xl:text-xl font-black text-[#0F172A]">{returOrders.length} Kasus</h3>
+          </div>
+          <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Masuk ke Sistem</p>
         </div>
 
-        <div className="bg-white p-6 rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-orange-400">
-          <p className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-3">Masih Proses</p>
-          <h3 className="text-xl font-black text-[#0F172A]">{returOrders.filter(o => !o.returFinal).length} Pesanan</h3>
-          <p className="text-[10px] font-bold text-slate-300 mt-2">Menunggu Keputusan</p>
+        {/* Card 3: Masih Proses */}
+        <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-orange-400 flex flex-col justify-between">
+          <div>
+            <p className="text-[8px] sm:text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1 sm:mb-3">Masih Proses</p>
+            <h3 className="text-sm sm:text-lg xl:text-xl font-black text-[#0F172A]">{returOrders.filter(o => !o.returFinal).length} Pesanan</h3>
+          </div>
+          <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Menunggu Keputusan</p>
         </div>
 
-        <div className="bg-white p-6 rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-emerald-500">
-          <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-3">Selesai/Final</p>
-          <h3 className="text-xl font-black text-[#0F172A]">{returOrders.filter(o => o.returFinal).length} Pesanan</h3>
-          <p className="text-[10px] font-bold text-slate-300 mt-2">Data Ter-update</p>
+        {/* Card 4: Selesai/Final */}
+        <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-emerald-500 flex flex-col justify-between">
+          <div>
+            <p className="text-[8px] sm:text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1 sm:mb-3">Selesai/Final</p>
+            <h3 className="text-sm sm:text-lg xl:text-xl font-black text-[#0F172A]">{returOrders.filter(o => o.returFinal).length} Pesanan</h3>
+          </div>
+          <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Data Ter-update</p>
         </div>
       </div>
 
-      {/* MAIN TABLE */}
-      <div className="px-4 sm:px-10 mt-10">
-        <div className="bg-white rounded-[32px] border border-[#F1F5F9] shadow-sm overflow-hidden min-h-[400px]">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
+      {/* MAIN TABLE SECTION */}
+      <div className="px-4 sm:px-10 mt-8 sm:mt-10">
+        <div className="bg-white rounded-[24px] sm:rounded-[32px] border border-[#F1F5F9] shadow-sm overflow-hidden min-h-[350px] sm:min-h-[400px]">
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left min-w-[650px] lg:min-w-0">
               <thead className="bg-[#F8F9FB] border-b border-[#F1F5F9]">
-                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  <th className="px-8 py-5">Pesanan & Produk</th>
-                  <th className="px-6 py-5">Marketplace</th>
-                  <th className="px-6 py-5 text-center">Penanganan Retur</th>
-                  <th className="px-8 py-5 text-right">HPP (Modal)</th>
+                <tr className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <th className="px-5 py-4 sm:px-8 sm:py-5">Pesanan & Produk</th>
+                  <th className="px-4 py-4 sm:px-6 sm:py-5">Marketplace</th>
+                  <th className="px-4 py-4 sm:px-6 sm:py-5 text-center">Penanganan Retur</th>
+                  <th className="px-5 py-4 sm:px-8 sm:py-5 text-right">HPP (Modal)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredData.map((order) => (
-                  <tr key={order.id} className="group hover:bg-slate-50/50 transition-all">
-                    <td className="px-8 py-6">
+                  <tr key={order.id} className="group hover:bg-slate-50/50 transition-all text-xs sm:text-sm font-bold">
+                    <td className="px-5 py-4 sm:px-8 sm:py-6">
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-[#0047AB] mb-1">#{order.orderId}</span>
-                        <span className="text-sm font-bold text-[#0F172A] uppercase leading-tight">{order.product}</span>
-                        <span className="text-[10px] font-bold text-slate-400 mt-1">SKU: {order.sku} • Qty: {order.qty}</span>
+                        <span className="text-xs font-black text-[#0047AB] mb-0.5 sm:mb-1">#{order.orderId}</span>
+                        <span className="text-xs sm:text-sm font-bold text-[#0F172A] uppercase leading-tight truncate max-w-[200px] sm:max-w-[300px]" title={order.product}>
+                          {order.product}
+                        </span>
+                        <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase">SKU: {order.sku} • Qty: {order.qty}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-6">
-                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${
+                    <td className="px-4 py-4 sm:px-6 sm:py-6">
+                      <span className={`px-2.5 py-1 rounded-lg text-[8px] sm:text-[9px] font-black uppercase ${
                         order.marketplace === 'Shopee' ? 'bg-orange-50 text-orange-600' :
                         order.marketplace === 'Tiktok' ? 'bg-slate-900 text-white' : 'bg-blue-50 text-blue-600'
                       }`}>
                         {order.marketplace}
                       </span>
                     </td>
-                    <td className="px-6 py-6">
+                    <td className="px-4 py-4 sm:px-6 sm:py-6">
                       <div className="flex justify-center">
                         <select 
                           disabled={order.returFinal}
                           value={order.penanganan || "Proses"}
                           onChange={(e) => handleStatusChange(order, e.target.value)}
-                          className={`text-[10px] font-black uppercase px-4 py-2.5 rounded-xl border-2 outline-none cursor-pointer transition-all ${
+                          className={`text-[8px] sm:text-[10px] font-black uppercase px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl border-2 outline-none cursor-pointer transition-all ${
                             order.penanganan === 'Selesai' ? "border-emerald-100 bg-emerald-50 text-emerald-600" :
                             (order.penanganan === 'Rusak' || order.penanganan === 'Tidak Kembali') ? "border-red-100 bg-red-50 text-red-600" :
                             "border-blue-100 bg-blue-50 text-blue-600 shadow-sm"
@@ -216,7 +228,9 @@ export default function PengembalianPage() {
                         </select>
                       </div>
                     </td>
-                    <td className={`px-8 py-6 text-right font-black text-sm ${order.penanganan === 'Rusak' || order.penanganan === 'Tidak Kembali' ? 'text-red-500' : 'text-slate-400'}`}>
+                    <td className={`px-5 py-4 sm:px-8 sm:py-6 text-right font-black text-xs sm:text-sm ${
+                      order.penanganan === 'Rusak' || order.penanganan === 'Tidak Kembali' ? 'text-red-500' : 'text-slate-400'
+                    }`}>
                       Rp {(order.hpp || 0).toLocaleString('id-ID')}
                     </td>
                   </tr>
@@ -225,8 +239,8 @@ export default function PengembalianPage() {
             </table>
 
             {filteredData.length === 0 && (
-              <div className="py-32 flex flex-col items-center justify-center text-slate-300 uppercase text-[10px] font-black tracking-widest opacity-40">
-                <Package size={48} className="mb-4" />
+              <div className="py-24 sm:py-32 flex flex-col items-center justify-center text-slate-300 uppercase text-[8px] sm:text-[10px] font-black tracking-widest opacity-40">
+                <Package size={40} className="mb-4 animate-pulse" />
                 Belum ada data retur
               </div>
             )}

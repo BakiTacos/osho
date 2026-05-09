@@ -75,53 +75,138 @@ export default function GudangShopeePage() {
 
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] pb-20 transition-all duration-300">
-      <div className="px-4 sm:px-10 pt-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      
+      {/* HEADER & ACTIONS SECTION - RESPONSIVE STACK ON MOBILE */}
+      <div className="px-4 sm:px-10 pt-8 flex flex-col xl:flex-row xl:items-center justify-between gap-4 sm:gap-6">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter text-[#0F172A]">Shopee Fulfillment</h1>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2 flex items-center gap-2"><Truck size={12} className="text-[#0047AB]"/> Gudang & Pengiriman Kilat (Advance)</p>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tighter text-[#0F172A] leading-tight">Shopee Fulfillment</h1>
+          <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1 sm:mt-2 flex items-center gap-1.5"><Truck size={12} className="text-[#0047AB] shrink-0"/> Gudang & Pengiriman Kilat (Advance)</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="bg-[#0047AB] text-white px-6 py-4 rounded-[24px] font-black text-xs shadow-xl shadow-blue-100 flex items-center gap-3"><Plus size={18} strokeWidth={3}/> INPUT RESI KILAT</button>
-        <button onClick={handleCleanupDuplicates} disabled={isProcessing || items.length === 0} className="bg-white text-orange-500 border-2 border-orange-500 px-5 py-3 rounded-[24px] font-black text-xs hover:bg-orange-50 flex items-center gap-2">{isProcessing ? <Loader2 size={16} className="animate-spin" /> : <AlertCircle size={16} />}<span>BERSIHKAN DUPLIKAT</span></button>
-        <div className="relative group">
-          <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" disabled={isProcessing} />
-          <button className="bg-emerald-600 text-white px-6 py-4 rounded-[24px] font-black text-xs shadow-xl shadow-emerald-100 flex items-center gap-2">{isProcessing ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18}/>}<span>{isProcessing ? "MEMPROSES..." : "IMPOR MASSAL SHOPEE"}</span></button>
+        
+        {/* ACTION BUTTONS GROUP */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full xl:w-auto">
+          <button 
+            onClick={() => setIsModalOpen(true)} 
+            className="flex-1 sm:flex-none justify-center bg-[#0047AB] text-white px-5 py-3.5 sm:px-6 sm:py-4 rounded-[18px] sm:rounded-[24px] font-black text-xs shadow-md shadow-blue-100 flex items-center gap-2 hover:scale-[1.01] active:scale-95 transition-all"
+          >
+            <Plus size={16} strokeWidth={3}/> 
+            <span>INPUT RESI KILAT</span>
+          </button>
+          
+          <button 
+            onClick={handleCleanupDuplicates} 
+            disabled={isProcessing || items.length === 0} 
+            className="flex-1 sm:flex-none justify-center bg-white text-orange-500 border-2 border-orange-500 px-4 py-3 sm:px-5 sm:py-3.5 rounded-[18px] sm:rounded-[24px] font-black text-xs hover:bg-orange-50 flex items-center gap-2 transition-all disabled:opacity-40"
+          >
+            {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <AlertCircle size={14} />}
+            <span>BERSIHKAN DUPLIKAT</span>
+          </button>
+          
+          <div className="relative group flex-1 sm:flex-none">
+            <input 
+              type="file" 
+              accept=".xlsx, .xls" 
+              onChange={handleFileUpload} 
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+              disabled={isProcessing} 
+            />
+            <button 
+              className="w-full sm:w-auto justify-center bg-emerald-600 text-white px-5 py-3.5 sm:px-6 sm:py-4 rounded-[18px] sm:rounded-[24px] font-black text-xs shadow-md shadow-emerald-100 flex items-center gap-2 hover:scale-[1.01] active:scale-95 transition-all"
+            >
+              {isProcessing ? <Loader2 className="animate-spin" size={16}/> : <Upload size={16}/>}
+              <span>{isProcessing ? "MEMPROSES..." : "IMPOR MASSAL"}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="px-4 sm:px-10 mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Resi Terdata</p><h3 className="text-3xl font-black text-[#0F172A]">{stats.total}</h3></div>
-        <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm"><p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-2">Menunggu Matching</p><h3 className="text-3xl font-black text-[#0F172A]">{stats.pending}</h3></div>
-        <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm border-l-4 border-l-emerald-500"><p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Berhasil Terpakai</p><h3 className="text-3xl font-black text-[#0F172A]">{stats.used}</h3></div>
+      {/* STAT CARDS - RESPONSIVE 2 COLUMNS ON MOBILE */}
+      <div className="px-4 sm:px-10 mt-6 sm:mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+        <div className="bg-white p-4 sm:p-8 rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm col-span-2 lg:col-span-1 flex flex-col justify-between">
+          <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] sm:tracking-widest mb-1 sm:mb-2">Total Resi Terdata</p>
+          <h3 className="text-xl sm:text-3xl font-black text-[#0F172A]">{stats.total}</h3>
+        </div>
+        <div className="bg-white p-4 sm:p-8 rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm col-span-1 flex flex-col justify-between">
+          <p className="text-[8px] sm:text-[10px] font-black text-orange-400 uppercase tracking-[0.15em] sm:tracking-widest mb-1 sm:mb-2">Menunggu Matching</p>
+          <h3 className="text-xl sm:text-3xl font-black text-[#0F172A]">{stats.pending}</h3>
+        </div>
+        <div className="bg-white p-4 sm:p-8 rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm border-l-4 border-l-emerald-500 col-span-1 flex flex-col justify-between">
+          <p className="text-[8px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-[0.15em] sm:tracking-widest mb-1 sm:mb-2">Berhasil Terpakai</p>
+          <h3 className="text-xl sm:text-3xl font-black text-[#0F172A]">{stats.used}</h3>
+        </div>
       </div>
 
-      <div className="px-4 sm:px-10 mt-10">
+      {/* SEARCH SECTION */}
+      <div className="px-4 sm:px-10 mt-6 sm:mt-8">
         <div className="relative max-w-md group">
-          <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#0047AB]" size={20} />
-          <input type="text" placeholder="Cari Resi atau SKU..." className="w-full bg-white border rounded-[22px] py-4 pl-14 pr-6 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-50 focus:border-[#0047AB]" onChange={(e) => setSearchTerm(e.target.value)} />
+          <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-[#0047AB] transition-colors" size={18} />
+          <input 
+            type="text" 
+            placeholder="Cari Resi atau SKU..." 
+            className="w-full bg-white border border-slate-200 rounded-[18px] sm:rounded-[22px] py-3 sm:py-4 pl-12 sm:pl-14 pr-6 text-xs sm:text-sm font-bold outline-none focus:ring-4 focus:ring-blue-50 focus:border-[#0047AB] transition-all" 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+          />
         </div>
       </div>
 
-      <div className="px-4 sm:px-10 mt-8">
-        <div className="bg-white rounded-[32px] border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
-                <tr><th className="px-8 py-6">Informasi Resi</th><th className="px-6 py-6">Produk & SKU Utama</th><th className="px-6 py-6 text-center">Qty</th><th className="px-6 py-6">Status</th><th className="px-8 py-6 text-right">Aksi</th></tr>
+      {/* TABLE DATA LIST */}
+      <div className="px-4 sm:px-10 mt-6 sm:mt-8">
+        <div className="bg-white rounded-[24px] sm:rounded-[32px] border shadow-sm overflow-hidden">
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left min-w-[650px] lg:min-w-0">
+              <thead className="bg-slate-50/50 text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
+                <tr>
+                  <th className="px-5 py-4 sm:px-8 sm:py-6">Informasi Resi</th>
+                  <th className="px-4 py-4 sm:px-6 sm:py-6">Produk & SKU Utama</th>
+                  <th className="px-4 py-4 sm:px-6 sm:py-6 text-center">Qty</th>
+                  <th className="px-4 py-4 sm:px-6 sm:py-6">Status</th>
+                  <th className="px-5 py-4 sm:px-8 sm:py-6 text-right">Aksi</th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/30 group">
-                    <td className="px-8 py-6"><div className="flex flex-col"><span className="text-sm font-black text-[#0047AB]">#{item.resi}</span><span className="text-[10px] font-bold text-slate-400 mt-1 uppercase italic">{item.note}</span></div></td>
-                    <td className="px-6 py-6"><p className="text-sm font-black text-[#0F172A] uppercase">{item.productName}</p><p className="text-[10px] font-bold text-[#0047AB] mt-1 uppercase">{item.sku}</p></td>
-                    <td className="px-6 py-6 text-center"><span className="bg-slate-100 px-3 py-1 rounded-lg text-xs font-black text-slate-600">{item.qty}</span></td>
-                    <td className="px-6 py-6"><div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[9px] font-black uppercase ${item.isUsed ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"}`}>{item.isUsed ? <CheckCircle2 size={12}/> : <Timer size={12}/>}{item.isUsed ? "Sudah Terpakai" : "Menunggu Order"}</div></td>
-                    <td className="px-8 py-6 text-right">{!item.isUsed && <button disabled={isProcessing} onClick={() => handleDeleteWarehouseItem(item)} className="p-2 text-slate-300 hover:text-red-500 rounded-xl disabled:opacity-30">{isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18}/>}</button>}</td>
+                  <tr key={item.id} className="hover:bg-slate-50/30 group transition-all text-xs sm:text-sm font-bold">
+                    <td className="px-5 py-4 sm:px-8 sm:py-6">
+                      <div className="flex flex-col">
+                        <span className="text-xs sm:text-sm font-black text-[#0047AB]">#{item.resi}</span>
+                        <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase italic truncate max-w-[150px]">{item.note}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 sm:px-6 sm:py-6">
+                      <p className="text-xs sm:text-sm font-black text-[#0F172A] uppercase truncate max-w-[180px]">{item.productName}</p>
+                      <p className="text-[8px] sm:text-[10px] font-bold text-[#0047AB] mt-0.5 uppercase">{item.sku}</p>
+                    </td>
+                    <td className="px-4 py-4 sm:px-6 sm:py-6 text-center">
+                      <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black text-slate-600">{item.qty}</span>
+                    </td>
+                    <td className="px-4 py-4 sm:px-6 sm:py-6">
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-tight ${item.isUsed ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"}`}>
+                        {item.isUsed ? <CheckCircle2 size={10}/> : <Timer size={10}/>}
+                        {item.isUsed ? "Sudah Terpakai" : "Menunggu Order"}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 sm:px-8 sm:py-6 text-right">
+                      {!item.isUsed && (
+                        <button 
+                          disabled={isProcessing} 
+                          onClick={() => handleDeleteWarehouseItem(item)} 
+                          className="p-1.5 sm:p-2 text-slate-300 hover:text-red-500 rounded-xl disabled:opacity-30 transition-colors"
+                        >
+                          {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16}/>}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {filteredItems.length === 0 && <div className="py-24 text-center"><PackageCheck size={48} className="mx-auto text-slate-100 mb-4" /><p className="text-[10px] font-black text-slate-300 uppercase">Belum ada data resi kilat</p></div>}
+          {filteredItems.length === 0 && (
+            <div className="py-16 sm:py-24 text-center">
+              <PackageCheck size={40} className="mx-auto text-slate-200 mb-4 animate-pulse" />
+              <p className="text-[9px] sm:text-[10px] font-black text-slate-300 uppercase tracking-widest">Belum ada data resi kilat</p>
+            </div>
+          )}
         </div>
       </div>
 
