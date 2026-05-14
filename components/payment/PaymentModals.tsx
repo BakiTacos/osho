@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Plus, Trash2, Landmark, Pencil } from 'lucide-react';
 
 export const WithdrawModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) => {
@@ -18,30 +18,82 @@ export const WithdrawModal = ({ isOpen, onClose, form, setForm, onSubmit }: any)
 };
 
 export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) => {
+  // State lokal untuk mengatur apakah user sedang memilih dari daftar atau mengetik nama baru
+  const [isCustomPayer, setIsCustomPayer] = useState(false);
+
+  // Daftar nama default yang sering digunakan
+  const defaultPayers = ["KEVIN", "VALENT"];
+
   if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-[32px] p-8 animate-in zoom-in duration-200">
-        <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black tracking-tighter text-orange-500">Input Operasional</h2><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><X/></button></div>
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-black tracking-tighter text-orange-500">Input Operasional</h2>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-all">
+            <X/>
+          </button>
+        </div>
+
         <form onSubmit={onSubmit} className="space-y-4">
-          {/* FIELD DIBAYAR OLEH */}
+          
+          {/* FIELD TANGGAL (NEW) */}
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Dibayar Oleh</label>
-            <select 
-              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" 
-              value={form.paidBy} 
-              onChange={e => setForm({...form, paidBy: e.target.value})}
-            >
-              <option value="KEVIN">KEVIN</option>
-              <option value="VALENT">VALENT</option>
-            </select>
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Tanggal Pengeluaran</label>
+            <input 
+              type="date" 
+              required 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm text-[#0F172A] cursor-pointer" 
+              value={form.date || new Date().toISOString().split('T')[0]} 
+              onChange={e => setForm({...form, date: e.target.value})} 
+            />
           </div>
 
-          {/* FIELD KATEGORI (TERMASUK MAKAN) */}
+          {/* FIELD DIBAYAR OLEH (CUSTOMIZABLE) */}
+          <div className="space-y-1">
+            <div className="flex justify-between items-center ml-2 mr-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dibayar Oleh</label>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setIsCustomPayer(!isCustomPayer);
+                  // Reset form payer ke kosong jika pindah ke mode custom, atau ke default jika balik ke select
+                  setForm({...form, paidBy: !isCustomPayer ? "" : defaultPayers[0]});
+                }} 
+                className="text-[9px] font-black text-[#0047AB] uppercase hover:underline"
+              >
+                {isCustomPayer ? "Pilih dari Daftar" : "Ketik Manual"}
+              </button>
+            </div>
+            
+            {isCustomPayer ? (
+              <input 
+                type="text" 
+                required 
+                placeholder="Masukkan Nama Pembayar..." 
+                className="w-full bg-white border-2 border-orange-100 focus:border-orange-500 focus:ring-0 rounded-2xl py-4 px-6 font-black text-sm uppercase transition-all" 
+                value={form.paidBy} 
+                onChange={e => setForm({...form, paidBy: e.target.value.toUpperCase()})}
+              />
+            ) : (
+              <select 
+                className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm cursor-pointer" 
+                value={form.paidBy} 
+                onChange={e => setForm({...form, paidBy: e.target.value})}
+              >
+                {defaultPayers.map(payer => (
+                  <option key={payer} value={payer}>{payer}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* FIELD KATEGORI */}
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Kategori Biaya</label>
             <select 
-              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm cursor-pointer" 
               value={form.category} 
               onChange={e => setForm({...form, category: e.target.value})}
             >
@@ -55,17 +107,34 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
             </select>
           </div>
 
+          {/* FIELD KETERANGAN */}
           <div className="space-y-1">
              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Keterangan</label>
-             <input required className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" placeholder="Deskripsi pengeluaran..." value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
+             <input 
+              required 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" 
+              placeholder="Deskripsi pengeluaran..." 
+              value={form.description} 
+              onChange={e => setForm({...form, description: e.target.value})} 
+            />
           </div>
 
+          {/* FIELD NOMINAL */}
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Total Nominal</label>
-            <input type="number" required placeholder="Rp 0" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} />
+            <input 
+              type="number" 
+              required 
+              placeholder="Rp 0" 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-black text-xl text-orange-600 focus:ring-2 focus:ring-orange-200" 
+              value={form.amount} 
+              onChange={e => setForm({...form, amount: e.target.value})} 
+            />
           </div>
 
-          <button type="submit" className="w-full mt-4 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg hover:scale-[1.02] active:scale-95 transition-all">Simpan Pengeluaran</button>
+          <button type="submit" className="w-full mt-4 py-4 bg-orange-500 text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-orange-200 hover:bg-orange-600 hover:scale-[1.02] active:scale-95 transition-all">
+            Simpan Pengeluaran
+          </button>
         </form>
       </div>
     </div>

@@ -218,29 +218,69 @@ export default function PembayaranPage() {
             <TrendingDown size={14}/> Biaya Operasional
           </h4>
           <div className="space-y-2.5 max-h-[380px] overflow-y-auto no-scrollbar pr-1">
-            {filteredExpenses.map((exp) => (
-              <div key={exp.id} className="flex justify-between items-center p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="p-2 bg-white rounded-xl text-orange-500 shadow-sm shrink-0"><Receipt size={14}/></div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-[10px] sm:text-[11px] font-black text-[#0F172A] leading-tight truncate">{exp.category}</p>
-                      {/* Payer Badge */}
-                      <span className="px-1 py-0.5 bg-white border border-slate-200 rounded text-[6px] font-black text-slate-400 uppercase tracking-tighter shrink-0">
-                        {exp.paidBy || 'KEVIN'}
-                      </span>
+            {filteredExpenses.map((exp) => {
+              // Format tanggal: Jika ada exp.date pakai itu, jika tidak fallback ke createdAt, jika tidak ada juga kosongkan
+              let displayDate = "";
+              if (exp.date) {
+                // Mengubah format YYYY-MM-DD ke format yang lebih enak dibaca (contoh: 14 Mei 26)
+                const d = new Date(exp.date);
+                if (!isNaN(d.getTime())) {
+                  displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
+                }
+              } else if (exp.createdAt) {
+                // Fallback untuk data lama yang mungkin belum punya field .date tapi ada createdAt dari Firebase
+                const d = exp.createdAt.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt);
+                if (!isNaN(d.getTime())) {
+                  displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
+                }
+              }
+
+              return (
+                <div key={exp.id} className="flex justify-between items-center p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 group transition-all">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-2 bg-white rounded-xl text-orange-500 shadow-sm shrink-0">
+                      <Receipt size={14}/>
                     </div>
-                    <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase mt-0.5 truncate">{exp.description}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-[10px] sm:text-[11px] font-black text-[#0F172A] leading-tight truncate">
+                          {exp.category}
+                        </p>
+                        {/* Payer Badge */}
+                        <span className="px-1 py-0.5 bg-white border border-slate-200 rounded text-[6px] font-black text-slate-400 uppercase tracking-tighter shrink-0">
+                          {exp.paidBy || 'KEVIN'}
+                        </span>
+                        {/* Date Badge (NEW) */}
+                        {displayDate && (
+                          <span className="text-[7px] font-bold text-slate-300 uppercase tracking-widest">
+                            • {displayDate}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase mt-0.5 truncate">
+                        {exp.description}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col items-end shrink-0 ml-2">
+                    <p className="text-xs sm:text-sm font-black text-red-500">-Rp {exp.amount.toLocaleString('id-ID')}</p>
+                    
+                    {/* Tombol hapus digeser ke bawah nominal di Mobile agar tidak numpuk */}
+                    <button onClick={async () => { if(confirm("Hapus catatan opex ini?")) await paymentService.deleteDocument("expenses", exp.id); }} 
+                      className="mt-1 p-1 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all flex items-center gap-1">
+                      <Trash2 size={10}/> <span className="text-[7px] font-black uppercase hidden sm:block">Hapus</span>
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <p className="text-xs font-black text-red-500">-Rp {exp.amount.toLocaleString('id-ID')}</p>
-                  <button onClick={async () => { if(confirm("Hapus?")) await paymentService.deleteDocument("expenses", exp.id); }} className="p-1 sm:p-1.5 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all">
-                    <Trash2 size={12}/>
-                  </button>
-                </div>
+              );
+            })}
+            
+            {filteredExpenses.length === 0 && (
+              <div className="py-10 text-center text-slate-300">
+                <p className="text-[9px] font-black uppercase tracking-widest">Belum Ada Pengeluaran</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
