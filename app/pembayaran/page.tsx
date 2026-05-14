@@ -13,13 +13,15 @@ export default function PembayaranPage() {
   const { currentUser } = useAuth();
   
   // Custom Hook & Service
-  const { withdrawals, invoices, expenses, products } = usePaymentData(currentUser);
-  const paymentService = new PaymentService(currentUser, products);
 
   // States for Filtering
   const [timeFilter, setTimeFilter] = useState("Bulan"); 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Panggil hook dengan parameter waktu
+  const { withdrawals, invoices, expenses, products } = usePaymentData(currentUser, selectedMonth, selectedYear);
+  const paymentService = new PaymentService(currentUser, products);
 
   // Modal & Menus States
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);

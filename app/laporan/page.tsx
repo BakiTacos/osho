@@ -13,13 +13,16 @@ export default function LaporanPage() {
   const { currentUser } = useAuth();
   
   // Custom Hook for Realtime Data
-  const { sales, expenses, products, invoices } = useReportData(currentUser);
+ 
 
   // States for Filtering
   const [activeTab, setActiveTab] = useState("Keuangan");
   const [timeRange, setTimeRange] = useState("Bulan + Tahun");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Panggil hook dengan parameter baru
+  const { sales, expenses, products, invoices } = useReportData(currentUser, selectedMonth, selectedYear);
 
   const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   const years = [2024, 2025, 2026];
