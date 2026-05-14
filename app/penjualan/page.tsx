@@ -31,7 +31,12 @@ export default function PenjualanPage() {
   const [searchSales, setSearchSales] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const { catalog, transactions, shopeeWarehouse, activeFees } = useSalesData(currentUser);
+  const { catalog, transactions, shopeeWarehouse, activeFees } = useSalesData(
+    currentUser, 
+    timeFilter, 
+    selectedMonth, 
+    selectedYear
+  );
   const salesService = new SalesService(currentUser, catalog, shopeeWarehouse, activeFees);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [manualForm, setManualForm] = useState({
