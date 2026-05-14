@@ -53,9 +53,13 @@ export default function PenjualanPage() {
     let statusMatch = statusTab === "Semua" ? true : 
                       statusTab === "Pending" ? t.product === "Produk Luar Katalog" : t.status === statusTab;
 
-    const searchMatch = t.orderId.toLowerCase().includes(searchSales.toLowerCase()) ||
-                        t.product.toLowerCase().includes(searchSales.toLowerCase());
-
+    const searchTerm = searchSales.toLowerCase();
+    const searchMatch = 
+      (t.orderId && t.orderId.toLowerCase().includes(searchTerm)) ||
+      (t.product && t.product.toLowerCase().includes(searchTerm)) ||
+      (t.sku && t.sku.toLowerCase().includes(searchTerm)) ||
+      (t.marketplace && t.marketplace.toLowerCase().includes(searchTerm));
+      
     return timeMatch && statusMatch && searchMatch;
   });
 

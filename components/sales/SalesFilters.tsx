@@ -59,15 +59,11 @@ export default function SalesFilters({
 
       {/* STATUS TABS */}
       <div className="flex gap-6 border-b border-slate-200 overflow-x-auto no-scrollbar">
-        {["Semua", "Pending", "Proses", "Selesai", "Retur"].map((tab) => (
+        {["Semua", "Proses", "Selesai", "Retur"].map((tab) => (
           <button key={tab} onClick={() => setStatusTab(tab)}
             className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all relative whitespace-nowrap ${statusTab === tab ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"}`}>
             {tab} 
-            {tab === "Pending" && pendingCount > 0 && (
-              <span className="ml-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
-                {pendingCount}
-              </span>
-            )}
+            
             {statusTab === tab && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#0047AB]"></div>}
           </button>
         ))}
