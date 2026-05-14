@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from "../../../context/AuthContext";
-import { PackageCheck, Search, Plus, Trash2, Truck, AlertCircle, Loader2, CheckCircle2, Timer, Upload } from "lucide-react";
+import { PackageCheck, Search, Plus, Trash2, Truck, AlertCircle, Loader2, CheckCircle2, Timer, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 
 // IMPORT CLEAN ARCHITECTURE
 import { useAdvancedFulfillmentData } from "../../hooks/useAdvancedFulfillmentData";
@@ -21,6 +21,15 @@ export default function GudangShopeePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [form, setForm] = useState({ resi: '', sku: '', qty: 1, note: 'Pengiriman Kilat Shopee' });
+
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  // Reset pagination ke halaman 1 setiap kali user melakukan pencarian
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   // Handlers
   const handleAddWarehouse = async (e: React.FormEvent) => {
@@ -69,9 +78,12 @@ export default function GudangShopeePage() {
     finally { setIsProcessing(false); e.target.value = ''; }
   };
 
-  // Derived Data
+  // Derived Data & Pagination Logic
   const filteredItems = items.filter(i => i.resi.toLowerCase().includes(searchTerm.toLowerCase()) || i.sku.toLowerCase().includes(searchTerm.toLowerCase()));
   const stats = { total: items.length, pending: items.filter(i => !i.isUsed).length, used: items.filter(i => i.isUsed).length };
+
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const currentItems = filteredItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] pb-20 transition-all duration-300">
@@ -144,15 +156,16 @@ export default function GudangShopeePage() {
             type="text" 
             placeholder="Cari Resi atau SKU..." 
             className="w-full bg-white border border-slate-200 rounded-[18px] sm:rounded-[22px] py-3 sm:py-4 pl-12 sm:pl-14 pr-6 text-xs sm:text-sm font-bold outline-none focus:ring-4 focus:ring-blue-50 focus:border-[#0047AB] transition-all" 
+            value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)} 
           />
         </div>
       </div>
 
-      {/* TABLE DATA LIST */}
+      {/* TABLE DATA LIST WITH PAGINATION */}
       <div className="px-4 sm:px-10 mt-6 sm:mt-8">
-        <div className="bg-white rounded-[24px] sm:rounded-[32px] border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto no-scrollbar">
+        <div className="bg-white rounded-[24px] sm:rounded-[32px] border shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+          <div className="overflow-x-auto no-scrollbar flex-1">
             <table className="w-full text-left min-w-[650px] lg:min-w-0">
               <thead className="bg-slate-50/50 text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
                 <tr>
@@ -164,7 +177,7 @@ export default function GudangShopeePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredItems.map((item) => (
+                {currentItems.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/30 group transition-all text-xs sm:text-sm font-bold">
                     <td className="px-5 py-4 sm:px-8 sm:py-6">
                       <div className="flex flex-col">
@@ -200,13 +213,46 @@ export default function GudangShopeePage() {
                 ))}
               </tbody>
             </table>
+            
+            {filteredItems.length === 0 && (
+              <div className="py-16 sm:py-24 text-center">
+                <PackageCheck size={40} className="mx-auto text-slate-200 mb-4 animate-pulse" />
+                <p className="text-[9px] sm:text-[10px] font-black text-slate-300 uppercase tracking-widest">Belum ada data resi kilat</p>
+              </div>
+            )}
           </div>
-          {filteredItems.length === 0 && (
-            <div className="py-16 sm:py-24 text-center">
-              <PackageCheck size={40} className="mx-auto text-slate-200 mb-4 animate-pulse" />
-              <p className="text-[9px] sm:text-[10px] font-black text-slate-300 uppercase tracking-widest">Belum ada data resi kilat</p>
+
+          {/* PAGINATION NAVIGATION */}
+          {filteredItems.length > 0 && (
+            <div className="p-4 sm:p-6 border-t border-[#F1F5F9] flex items-center justify-between bg-white mt-auto">
+              <span className="text-[9px] sm:text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
+                Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredItems.length)} dari {filteredItems.length} Resi
+              </span>
+              
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setCurrentPage(p => p - 1)} 
+                  disabled={currentPage === 1} 
+                  className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all cursor-pointer flex items-center justify-center"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                
+                <div className="px-4 py-2 border border-[#E2E8F0] rounded-lg text-[9px] sm:text-[10px] font-black text-[#0F172A] flex items-center justify-center bg-slate-50">
+                  Page {currentPage} of {totalPages || 1}
+                </div>
+
+                <button 
+                  onClick={() => setCurrentPage(p => p + 1)} 
+                  disabled={currentPage === totalPages || totalPages === 0} 
+                  className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all cursor-pointer flex items-center justify-center"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
             </div>
           )}
+
         </div>
       </div>
 
