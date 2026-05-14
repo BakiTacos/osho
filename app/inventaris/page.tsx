@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from "../../context/AuthContext";
 import Link from "next/link";
-import { Search, Bell, Plus, MoreVertical, Edit2, Trash2, Check, ArrowUpDown, Download, Loader2, Info, ArrowLeftRight, Package, CheckCircle2 } from "lucide-react";
+import { Search, Bell, Plus, MoreVertical, Edit2, Trash2, Check, ArrowUpDown, Download, Loader2, Info, ArrowLeftRight, Package, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 
 // IMPORT CLEAN ARCHITECTURE
 import { useInventoryData, Product } from "../hooks/useInventoryData";
@@ -26,8 +26,17 @@ export default function InventarisPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [tempStock, setTempStock] = useState<number>(0);
+  
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const categories = ["Semua", "Dapur", "Kamar Mandi", "Kebersihan", "Penyimpanan", "Ruang Tamu", "Kamar Tidur", "Lainnya"];
+
+  // Reset pagination ke halaman 1 jika filter berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCategory, sortBy, sortOrder]);
 
   // Handlers
   const handleMassImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,6 +53,18 @@ export default function InventarisPage() {
   const handleUpdateStock = async (id: string) => {
     await inventoryService.updateStock(id, Number(tempStock));
     setEditingStockId(null);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Apakah Kakak yakin ingin menghapus produk ini dari inventaris? Data yang dihapus tidak bisa dikembalikan.")) {
+      try {
+        await inventoryService.deleteProduct(id);
+        setActiveMenuId(null); 
+      } catch (error) {
+        console.error("Gagal menghapus produk:", error);
+        alert("Oops! Terjadi kesalahan saat mencoba menghapus produk.");
+      }
+    }
   };
 
   // Logic Filtering & Sorting
@@ -63,21 +84,15 @@ export default function InventarisPage() {
       return sortOrder === "asc" ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
     });
 
+  // Pagination Logic
+  const totalPages = Math.ceil(processedProducts.length / itemsPerPage);
+  const currentItems = processedProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Stats Logic
   const lowStockCount = products.filter(p => p.stock > 0 && p.stock <= 10).length;
   const outOfStockCount = products.filter(p => p.stock === 0).length;
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Apakah Kakak yakin ingin menghapus produk ini dari inventaris? Data yang dihapus tidak bisa dikembalikan.")) {
-      try {
-        await inventoryService.deleteProduct(id);
-        setActiveMenuId(null); // Tutup menu dropdown setelah hapus
-        // Opsional: Kakak bisa tambahkan toast/notif sukses di sini
-      } catch (error) {
-        console.error("Gagal menghapus produk:", error);
-        alert("Oops! Terjadi kesalahan saat mencoba menghapus produk.");
-      }
-    }
-  };
+  if (!currentUser) return <div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-[#0047AB]" /></div>;
 
   return (
   <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-10">
@@ -98,7 +113,7 @@ export default function InventarisPage() {
         <Bell size={20} className="hidden sm:block cursor-pointer text-[#64748B] hover:text-[#0047AB]" />
         <div className="flex items-center space-x-3 border-l pl-6">
           <div className="text-right hidden md:block">
-            <p className="text-xs font-black text-[#0F172A] leading-none uppercase">Kia</p>
+            <p className="text-xs font-black text-[#0F172A] leading-none uppercase">Kevin</p>
             <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Administrator</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-[#0047AB] text-white flex items-center justify-center text-xs font-black">K</div>
@@ -158,11 +173,11 @@ export default function InventarisPage() {
       </div>
     </div>
 
-    {/* 5. DATA TABLE */}
+    {/* 5. DATA TABLE WITH PAGINATION */}
     <div className="px-4 sm:px-10 py-8">
-      <div className="bg-white rounded-[28px] border border-[#F1F5F9] shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-[28px] border border-[#F1F5F9] shadow-sm overflow-hidden flex flex-col min-h-[600px]">
+        <div className="overflow-x-auto no-scrollbar flex-1">
+          <table className="w-full text-left border-collapse min-w-[1000px]">
             <thead className="bg-[#F8F9FB] border-b border-[#F1F5F9]">
               <tr className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
                 <th className="px-8 py-5">Produk & Status</th>
@@ -177,7 +192,7 @@ export default function InventarisPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F8F9FB]">
-              {processedProducts.map((p) => {
+              {currentItems.map((p) => {
                 const estData = inventoryService.getMarketplaceEstimation(p);
                 if (!estData) return null;
 
@@ -230,7 +245,7 @@ export default function InventarisPage() {
                                 {isTiktok && <Info size={10} className="text-slate-300 group-hover/tk:text-[#0047AB]" />}
                               </div>
 
-                              {/* TIKTOK REGION TOOLTIP (HANYA UNTUK TIKTOK) */}
+                              {/* TIKTOK REGION TOOLTIP */}
                               {isTiktok && (
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/tk:block w-64 bg-[#0F172A] text-white p-5 rounded-2xl shadow-2xl z-[120] animate-in fade-in zoom-in-95 duration-200 pointer-events-none">
                                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 border-b border-slate-700 pb-2 flex justify-between">
@@ -257,7 +272,6 @@ export default function InventarisPage() {
                                 </div>
                               )}
                               
-                              {/* CUSTOM PRICE INDICATOR TOOLTIP */}
                               {p.useMarketplacePrices && !isTiktok && (
                                 <div className="hidden group-hover:block absolute -top-10 bg-slate-800 text-white text-[9px] font-black px-2 py-1 rounded shadow-lg z-50 whitespace-nowrap">
                                   Harga Khusus: Rp {mpData.usedPrice.toLocaleString('id-ID')}
@@ -308,6 +322,7 @@ export default function InventarisPage() {
               })}
             </tbody>
           </table>
+          
           {processedProducts.length === 0 && (
             <div className="py-24 text-center">
               <Package size={48} className="mx-auto text-slate-100 mb-4" />
@@ -315,6 +330,38 @@ export default function InventarisPage() {
             </div>
           )}
         </div>
+
+        {/* PAGINATION NAVIGATION */}
+        {processedProducts.length > 0 && (
+          <div className="p-6 border-t border-[#F1F5F9] flex items-center justify-between mt-auto bg-white">
+            <span className="text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
+              Menampilkan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, processedProducts.length)} dari {processedProducts.length} Produk
+            </span>
+            
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setCurrentPage(p => p - 1)} 
+                disabled={currentPage === 1} 
+                className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all cursor-pointer flex items-center justify-center"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              <div className="px-4 py-2 border border-[#E2E8F0] rounded-lg text-[10px] font-black text-[#0F172A] flex items-center justify-center bg-slate-50">
+                Page {currentPage} of {totalPages || 1}
+              </div>
+
+              <button 
+                onClick={() => setCurrentPage(p => p + 1)} 
+                disabled={currentPage === totalPages || totalPages === 0} 
+                className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all cursor-pointer flex items-center justify-center"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
     </div>

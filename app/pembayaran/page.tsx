@@ -187,7 +187,7 @@ export default function PembayaranPage() {
             <PlusCircle size={14} className="shrink-0" /> <span className="text-center">Nota Baru</span>
           </button>
           <button onClick={() => { setExpenseForm({ id: null, category: '', description: '', amount: '', paidBy: '', date: new Date().toISOString().split('T')[0] }); setIsExpenseModalOpen(true); }} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-orange-500 text-white rounded-2xl font-black text-[8px] sm:text-[10px] uppercase shadow-md shadow-orange-100 hover:scale-[1.01] transition-all">
-            <TrendingDown size={14} className="shrink-0" /> <span className="text-center">Input Opex</span>
+            <TrendingDown size={14} className="shrink-0" /> <span className="text-center">Input Operasional</span>
           </button>
         </div>
       </div>

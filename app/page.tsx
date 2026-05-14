@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect  } from 'react';
 import { db } from "../lib/firebase"; 
 import { useAuth } from "../context/AuthContext";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
 import { 
   Search, Bell, HelpCircle, ShoppingBag, 
   Wallet, Box, TrendingUp, AlertCircle
@@ -24,44 +24,57 @@ export default function Home() {
 
   useEffect(() => {
     if (!currentUser) return;
+    setLoading(true);
 
-    // 1. Ambil Data Produk (Stok Kritis)
-    const qProd = query(collection(db, `users/${currentUser.uid}/products`));
+    // ==========================================
+    // OPTIMASI 1: STOK KRITIS (HEMAT BIAYA READ)
+    // ==========================================
+    // Server Firebase hanya akan mengirim produk yang stoknya <= 10.
+    // Pastikan field 'stock' di Firebase Kakak tersimpan sebagai tipe data Number, bukan String.
+    const qProd = query(
+      collection(db, `users/${currentUser.uid}/products`),
+      where("stock", "<=", 10)
+    );
+    
     const unsubProd = onSnapshot(qProd, (snapshot) => {
-      const products = snapshot.docs.map(doc => doc.data());
-      const kritis = products.filter(p => (Number(p.stock) || 0) <= 10).length;
-      setStats(prev => ({ ...prev, stokKritis: kritis }));
+      // Kita cukup menghitung jumlah dokumen yang dikirim Firebase
+      setStats(prev => ({ ...prev, stokKritis: snapshot.docs.length }));
     });
 
-    // 2. Ambil Data Penjualan (Omset & Modal)
-    const qSales = query(collection(db, `users/${currentUser.uid}/sales`), orderBy("createdAt", "desc"));
-    // Di dalam useEffect -> unsubSales
-    const unsubSales = onSnapshot(qSales, (snapshot) => {
-      const sales = snapshot.docs.map(doc => doc.data());
-      
-      const filteredSales = sales.filter(s => {
-        if (!s.createdAt) return false;
-        const date = s.createdAt.toDate();
-        const monthName = date.toLocaleString('id-ID', { month: 'long' });
-        const yearName = date.getFullYear().toString();
-        return monthName === selectedMonth && yearName === selectedYear && s.status !== 'Retur';
-      });
+    // ==========================================
+    // OPTIMASI 2: PENJUALAN BULANAN (HEMAT BIAYA READ)
+    // ==========================================
+    // Kita ubah string Bulan & Tahun menjadi rentang Waktu (Date)
+    const monthIndex = months.indexOf(selectedMonth);
+    const startDate = new Date(Number(selectedYear), monthIndex, 1); // Tanggal 1 bulan ini
+    const endDate = new Date(Number(selectedYear), monthIndex + 1, 1); // Tanggal 1 bulan depan
 
+    // Server Firebase hanya akan mengirim data yang terjadi di dalam rentang waktu bulan ini.
+    const qSales = query(
+      collection(db, `users/${currentUser.uid}/sales`),
+      where("createdAt", ">=", startDate),
+      where("createdAt", "<", endDate)
+    );
+
+    const unsubSales = onSnapshot(qSales, (snapshot) => {
       let totalOmset = 0;
       let totalModal = 0;
-      let totalGrossProfit = 0; // Inisialisasi variabel baru
+      let totalGrossProfit = 0;
       let mpCounts: any = { Shopee: 0, Tiktok: 0, Lazada: 0, Offline: 0 };
 
-      filteredSales.forEach(s => {
-        totalOmset += Number(s.total) || 0;
-        totalModal += Number(s.hpp) || 0;
+      snapshot.docs.forEach(doc => {
+        const s = doc.data();
         
-        // AMBIL PROFIT REAL (yang sudah dipotong admin & logistik di PenjualanPage)
-        totalGrossProfit += Number(s.profit) || 0; 
-        
-        const source = s.marketplace || 'Offline';
-        if (mpCounts[source] !== undefined) {
-          mpCounts[source] += Number(s.total) || 0;
+        // Kita hanya perlu filter status Retur di sini karena tanggal sudah difilter oleh Firebase
+        if (s.status !== 'Retur') {
+          totalOmset += Number(s.total) || 0;
+          totalModal += Number(s.hpp) || 0;
+          totalGrossProfit += Number(s.profit) || 0; 
+          
+          const source = s.marketplace || 'Offline';
+          if (mpCounts[source] !== undefined) {
+            mpCounts[source] += Number(s.total) || 0;
+          }
         }
       });
 
@@ -69,15 +82,19 @@ export default function Home() {
         ...prev, 
         omset: totalOmset, 
         modal: totalModal, 
-        grossProfit: totalGrossProfit, // Masukkan ke state
-        profit: totalOmset - totalModal // Tetap simpan Markup jika perlu
+        grossProfit: totalGrossProfit,
+        profit: totalOmset - totalModal
       }));
       
       setMarketplaceData(mpCounts);
       setLoading(false);
     });
 
-    return () => { unsubProd(); unsubSales(); };
+    // Membersihkan listener saat pindah halaman atau ganti bulan
+    return () => { 
+      unsubProd(); 
+      unsubSales(); 
+    };
   }, [currentUser, selectedMonth, selectedYear]);
 
   // Hitung persentase untuk Donut Chart sederhana

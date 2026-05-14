@@ -19,19 +19,20 @@ import { ManualInputModal } from "../../components/sales/SalesModals";
 
 export default function PenjualanPage() {
   const { currentUser } = useAuth();
-  const { catalog, transactions, shopeeWarehouse, activeFees } = useSalesData(currentUser);
-  const salesService = new SalesService(currentUser, catalog, shopeeWarehouse, activeFees);
+  
 
   // States
   const [isProcessing, setIsProcessing] = useState(false);
   const [useCatalogPrice, setUseCatalogPrice] = useState(true);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [selectedMarketplace, setSelectedMarketplace] = useState("shopee");
-  const [timeFilter, setTimeFilter] = useState("Bulan");
+  const [timeFilter, setTimeFilter] = useState("Hari Ini");
   const [statusTab, setStatusTab] = useState("Semua");
   const [searchSales, setSearchSales] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const { catalog, transactions, shopeeWarehouse, activeFees } = useSalesData(currentUser);
+  const salesService = new SalesService(currentUser, catalog, shopeeWarehouse, activeFees);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [manualForm, setManualForm] = useState({
     orderId: '', source: 'Shopee', status: 'Proses', tiktokProvince: '', 
