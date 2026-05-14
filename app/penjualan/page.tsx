@@ -28,7 +28,7 @@ export default function PenjualanPage() {
   const [selectedMarketplace, setSelectedMarketplace] = useState("shopee");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
-  const [timeFilter, setTimeFilter] = useState("Hari Ini");
+  const [timeFilter, setTimeFilter] = useState("Bulan");
   const [currentPage, setCurrentPage] = useState(1);
   const [activeView, setActiveView] = useState("Semua"); 
   const [useCatalogPrice, setUseCatalogPrice] = useState(true);
@@ -70,12 +70,12 @@ export default function PenjualanPage() {
 
     // 1. Logika Switch untuk Filter Waktu
     if (timeFilter === "Hari Ini") {
-      timeMatch = txDate.toDateString() === now.toDateString();
+  timeMatch = txDate.toDateString() === now.toDateString();
     } else if (timeFilter === "3 Hari") {
-      // Kurang dari atau sama dengan 3 hari dari sekarang
       timeMatch = diffInDays <= 3;
+    } else if (timeFilter === "Bulan") { // Lebih eksplisit
+      timeMatch = txDate.getMonth() === selectedMonth && txDate.getFullYear() === selectedYear;
     } else {
-      // Mode "1 Bulan" atau Pilihan Dropdown Bulan/Tahun
       timeMatch = txDate.getMonth() === selectedMonth && txDate.getFullYear() === selectedYear;
     }
 
