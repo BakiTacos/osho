@@ -6,11 +6,56 @@ export const WithdrawModal = ({ isOpen, onClose, form, setForm, onSubmit }: any)
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-[32px] p-8 animate-in zoom-in duration-200">
-        <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black tracking-tighter">Tarik Saldo</h2><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full"><X/></button></div>
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-black tracking-tighter">Tarik Saldo</h2>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full">
+            <X/>
+          </button>
+        </div>
         <form onSubmit={onSubmit} className="space-y-4">
-          <select className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" value={form.platform} onChange={e => setForm({...form, platform: e.target.value})}><option>Shopee</option><option>TikTok Shop</option><option>Lazada</option><option>Offline</option></select>
-          <input type="number" required placeholder="Nominal Rp" className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} />
-          <button type="submit" className="w-full py-4 bg-[#0047AB] text-white rounded-2xl font-black text-[10px] uppercase shadow-lg">Konfirmasi Penarikan</button>
+          
+          {/* FIELD TANGGAL (NEW) */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Tanggal Penarikan</label>
+            <input 
+              type="date" 
+              required 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm text-[#0F172A] cursor-pointer focus:ring-2 focus:ring-blue-100" 
+              value={form.date || new Date().toISOString().split('T')[0]} 
+              onChange={e => setForm({...form, date: e.target.value})} 
+            />
+          </div>
+
+          <div className="space-y-1">
+             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Sumber Saldo</label>
+             <select 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" 
+              value={form.platform} 
+              onChange={e => setForm({...form, platform: e.target.value})}
+             >
+               <option>Shopee</option>
+               <option>TikTok Shop</option>
+               <option>Lazada</option>
+               <option>Rekening Toko</option>
+               <option>Offline</option>
+             </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nominal Tarik</label>
+            <input 
+              type="number" 
+              required 
+              placeholder="Nominal Rp" 
+              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-black text-xl text-[#0047AB] focus:ring-2 focus:ring-blue-100" 
+              value={form.amount || ""} 
+              onChange={e => setForm({...form, amount: e.target.value})} 
+            />
+          </div>
+
+          <button type="submit" className="w-full mt-6 py-4 bg-[#0047AB] text-white rounded-2xl font-black text-[10px] uppercase shadow-lg shadow-blue-100 hover:bg-blue-800 hover:scale-[1.02] transition-all">
+            Konfirmasi Penarikan
+          </button>
         </form>
       </div>
     </div>
@@ -187,14 +232,55 @@ export const HistoryModal = ({ isOpen, onClose, withdrawals, onDelete, onEdit }:
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-[32px] p-8 animate-in zoom-in duration-200">
-        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-black tracking-tighter">Riwayat Penarikan</h2><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-all"><X/></button></div>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-black tracking-tighter">Riwayat Penarikan</h2>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-all">
+            <X/>
+          </button>
+        </div>
         <div className="space-y-3 max-h-[400px] overflow-y-auto no-scrollbar">
-          {withdrawals.map((w: any) => (
-            <div key={w.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl group transition-all">
-              <div className="flex items-center gap-4"><div className="p-2 bg-white rounded-lg text-[#0047AB] shadow-sm"><Landmark size={16}/></div><div><p className="text-[11px] font-black">{w.platform}</p><p className="text-[9px] text-slate-400 font-bold uppercase">{w.createdAt?.toDate().toLocaleDateString('id-ID', {day:'numeric', month:'short'})}</p></div></div>
-              <div className="flex items-center gap-2"><p className="text-sm font-black text-[#0F172A]">Rp {w.amount.toLocaleString('id-ID')}</p><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => onEdit(w)} className="p-1.5 text-slate-400 hover:text-[#0047AB] bg-white rounded-lg shadow-sm"><Pencil size={12}/></button><button onClick={() => onDelete(w.id)} className="p-1.5 text-slate-400 hover:text-red-500 bg-white rounded-lg shadow-sm"><Trash2 size={12}/></button></div></div>
+          {withdrawals.map((w: any) => {
+            // Logika Format Tanggal Pintar
+            let displayDate = "Tidak ada tanggal";
+            if (w.date) {
+               const d = new Date(w.date);
+               if (!isNaN(d.getTime())) {
+                 displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
+               }
+            } else if (w.createdAt) {
+               const d = w.createdAt.toDate ? w.createdAt.toDate() : new Date(w.createdAt);
+               if (!isNaN(d.getTime())) {
+                 displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
+               }
+            }
+
+            return (
+              <div key={w.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl group transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-white rounded-lg text-[#0047AB] shadow-sm"><Landmark size={16}/></div>
+                  <div>
+                    <p className="text-[11px] font-black text-[#0F172A]">{w.platform}</p>
+                    {/* TANGGAL DITAMPILKAN DI SINI */}
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{displayDate}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-black text-[#0047AB]">Rp {w.amount.toLocaleString('id-ID')}</p>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onClick={() => onEdit(w)} className="p-1.5 text-slate-400 hover:text-[#0047AB] bg-white rounded-lg shadow-sm"><Pencil size={12}/></button>
+                    <button onClick={() => onDelete(w.id)} className="p-1.5 text-slate-400 hover:text-red-500 bg-white rounded-lg shadow-sm"><Trash2 size={12}/></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          
+          {withdrawals.length === 0 && (
+            <div className="py-10 text-center text-slate-300">
+               <p className="text-[9px] font-black uppercase tracking-widest">Belum Ada Penarikan</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>

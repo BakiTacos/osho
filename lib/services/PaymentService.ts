@@ -51,13 +51,28 @@ export class PaymentService {
   // --- FIRESTORE ACTIONS ---
   public async saveWithdraw(form: any) {
     if (Number(form.amount) <= 0) throw new Error("Jumlah harus > 0");
-    await addDoc(collection(db, `users/${this.currentUser.uid}/withdrawals`), { 
-      ...form, 
-      amount: Number(form.amount), 
-      status: 'Berhasil', 
-      editCount: 0, 
-      createdAt: serverTimestamp() 
-    });
+    
+    // Pisahkan 'id' dari form agar tidak ikut tersimpan sebagai field data
+    const { id, ...dataToSave } = form;
+
+    if (id) {
+      // MODE EDIT: Update dokumen yang sudah ada
+      const docRef = doc(db, `users/${this.currentUser.uid}/withdrawals`, id);
+      await updateDoc(docRef, { 
+        ...dataToSave, 
+        amount: Number(dataToSave.amount),
+        updatedAt: serverTimestamp() 
+      });
+    } else {
+      // MODE TAMBAH BARU
+      await addDoc(collection(db, `users/${this.currentUser.uid}/withdrawals`), { 
+        ...dataToSave, 
+        amount: Number(dataToSave.amount), 
+        status: 'Berhasil', 
+        editCount: 0, 
+        createdAt: serverTimestamp() 
+      });
+    }
   }
 
   /**
@@ -66,11 +81,25 @@ export class PaymentService {
    */
   public async saveExpense(form: any) {
     if (Number(form.amount) <= 0) throw new Error("Jumlah harus > 0");
-    await addDoc(collection(db, `users/${this.currentUser.uid}/expenses`), { 
-      ...form, 
-      amount: Number(form.amount), 
-      createdAt: serverTimestamp() 
-    });
+    
+    const { id, ...dataToSave } = form;
+
+    if (id) {
+      // MODE EDIT
+      const docRef = doc(db, `users/${this.currentUser.uid}/expenses`, id);
+      await updateDoc(docRef, { 
+        ...dataToSave, 
+        amount: Number(dataToSave.amount),
+        updatedAt: serverTimestamp() 
+      });
+    } else {
+      // MODE TAMBAH BARU
+      await addDoc(collection(db, `users/${this.currentUser.uid}/expenses`), { 
+        ...dataToSave, 
+        amount: Number(dataToSave.amount), 
+        createdAt: serverTimestamp() 
+      });
+    }
   }
 
   public async saveInvoice(form: any, items: any[]) {
@@ -78,13 +107,35 @@ export class PaymentService {
     if (hasInvalid) throw new Error("Qty dan Harga harus lebih besar dari 0");
 
     const total = items.reduce((a, b) => a + (b.qty * b.price), 0);
-    await addDoc(collection(db, `users/${this.currentUser.uid}/supplier_invoices`), { ...form, items, amount: total, createdAt: serverTimestamp() });
-    
-    for (const item of items) {
-      const matched = this.products.find(p => p.sku === item.sku.toUpperCase());
-      if (matched) {
-        const qtyToInc = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
-        await updateDoc(doc(db, `users/${this.currentUser.uid}/products`, matched.id), { stock: increment(qtyToInc) });
+    const { id, ...dataToSave } = form;
+
+    if (id) {
+      // MODE EDIT NOTA
+      const docRef = doc(db, `users/${this.currentUser.uid}/supplier_invoices`, id);
+      await updateDoc(docRef, { 
+        ...dataToSave, 
+        items, 
+        amount: total, 
+        updatedAt: serverTimestamp() 
+      });
+      // CATATAN AMAN: Saya TIDAK menjalankan fungsi increment() stok di sini. 
+      // Karena jika dijalankan, stok akan nambah terus setiap kali Kakak edit nama supplier.
+    } else {
+      // MODE BIKIN NOTA BARU
+      await addDoc(collection(db, `users/${this.currentUser.uid}/supplier_invoices`), { 
+        ...dataToSave, 
+        items, 
+        amount: total, 
+        createdAt: serverTimestamp() 
+      });
+      
+      // LOGIKA STOK: Hanya berjalan jika ini adalah NOTA BARU
+      for (const item of items) {
+        const matched = this.products.find(p => p.sku === item.sku.toUpperCase());
+        if (matched) {
+          const qtyToInc = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
+          await updateDoc(doc(db, `users/${this.currentUser.uid}/products`, matched.id), { stock: increment(qtyToInc) });
+        }
       }
     }
   }
