@@ -59,8 +59,7 @@ export function useSalesData(
     // Ini tetap pakai limit(300) karena hanya untuk mencocokkan resi terbaru
     const qWarehouse = query(
       collection(db, `users/${currentUser.uid}/shopee_warehouse`),
-      orderBy("createdAt", "desc"),
-      limit(300)
+      where("isUsed", "==", false) 
     );
     const unsubWarehouse = onSnapshot(qWarehouse, (snap) => {
       setShopeeWarehouse(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
