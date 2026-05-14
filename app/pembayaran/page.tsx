@@ -17,7 +17,7 @@ export default function PembayaranPage() {
   const paymentService = new PaymentService(currentUser, products);
 
   // States for Filtering
-  const [timeFilter, setTimeFilter] = useState("Hari Ini"); 
+  const [timeFilter, setTimeFilter] = useState("Bulan"); 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
@@ -130,7 +130,7 @@ export default function PembayaranPage() {
         {/* Card 4: OPEX STATS */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-slate-100 shadow-sm border-l-4 border-l-orange-500 flex flex-col justify-between">
           <div>
-            <p className="text-[8px] sm:text-[9px] font-black text-orange-400 uppercase mb-1 sm:mb-3">Biaya Opex</p>
+            <p className="text-[8px] sm:text-[9px] font-black text-orange-400 uppercase mb-1 sm:mb-3">Biaya Operasional</p>
             <h3 className="text-sm sm:text-lg xl:text-xl font-black text-orange-600 truncate">Rp {totalOpex.toLocaleString('id-ID')}</h3>
           </div>
           <div className="mt-2 sm:mt-4 space-y-0.5 max-h-[36px] overflow-y-auto no-scrollbar border-t pt-1.5">
@@ -155,7 +155,7 @@ export default function PembayaranPage() {
           </button>
           <button onClick={() => setIsExpenseModalOpen(true)} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-orange-500 text-white rounded-2xl font-black text-[8px] sm:text-[10px] uppercase shadow-md shadow-orange-100 hover:scale-[1.01] transition-all">
             <TrendingDown size={14} className="shrink-0" /> 
-            <span className="text-center">Input Opex</span>
+            <span className="text-center">Input Operasional</span>
           </button>
         </div>
 
@@ -215,7 +215,7 @@ export default function PembayaranPage() {
         {/* RIGHT COMPONENT: BIAYA OPEX LIST */}
         <div className="bg-white rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm p-5 sm:p-6">
           <h4 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#94A3B8] mb-4 sm:mb-6 flex items-center gap-2">
-            <TrendingDown size={14}/> Biaya Opex
+            <TrendingDown size={14}/> Biaya Operasional
           </h4>
           <div className="space-y-2.5 max-h-[380px] overflow-y-auto no-scrollbar pr-1">
             {filteredExpenses.map((exp) => (
