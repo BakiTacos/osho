@@ -18,10 +18,9 @@ export const WithdrawModal = ({ isOpen, onClose, form, setForm, onSubmit }: any)
 };
 
 export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) => {
-  // State lokal untuk mengatur apakah user sedang memilih dari daftar atau mengetik nama baru
   const [isCustomPayer, setIsCustomPayer] = useState(false);
 
-  // Daftar nama default yang sering digunakan
+  // Daftar nama default di database/bisnis
   const defaultPayers = ["KEVIN", "VALENT"];
 
   if (!isOpen) return null;
@@ -38,7 +37,7 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
 
         <form onSubmit={onSubmit} className="space-y-4">
           
-          {/* FIELD TANGGAL (NEW) */}
+          {/* FIELD TANGGAL */}
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Tanggal Pengeluaran</label>
             <input 
@@ -50,7 +49,7 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
             />
           </div>
 
-          {/* FIELD DIBAYAR OLEH (CUSTOMIZABLE) */}
+          {/* FIELD DIBAYAR OLEH (DENGAN VALIDASI) */}
           <div className="space-y-1">
             <div className="flex justify-between items-center ml-2 mr-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dibayar Oleh</label>
@@ -58,8 +57,8 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
                 type="button" 
                 onClick={() => {
                   setIsCustomPayer(!isCustomPayer);
-                  // Reset form payer ke kosong jika pindah ke mode custom, atau ke default jika balik ke select
-                  setForm({...form, paidBy: !isCustomPayer ? "" : defaultPayers[0]});
+                  // Kosongkan form.paidBy setiap ganti mode agar user wajib input ulang
+                  setForm({...form, paidBy: ""}); 
                 }} 
                 className="text-[9px] font-black text-[#0047AB] uppercase hover:underline"
               >
@@ -71,17 +70,20 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
               <input 
                 type="text" 
                 required 
-                placeholder="Masukkan Nama Pembayar..." 
+                placeholder="Ketik Nama Pembayar..." 
                 className="w-full bg-white border-2 border-orange-100 focus:border-orange-500 focus:ring-0 rounded-2xl py-4 px-6 font-black text-sm uppercase transition-all" 
-                value={form.paidBy} 
+                value={form.paidBy || ""} 
                 onChange={e => setForm({...form, paidBy: e.target.value.toUpperCase()})}
               />
             ) : (
               <select 
-                className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm cursor-pointer" 
-                value={form.paidBy} 
+                required // Paksa HTML5 untuk memvalidasi select ini
+                className={`w-full border-none rounded-2xl py-4 px-6 font-bold text-sm cursor-pointer transition-colors ${!form.paidBy ? 'bg-orange-50 text-orange-400' : 'bg-slate-50 text-[#0F172A]'}`} 
+                value={form.paidBy || ""} 
                 onChange={e => setForm({...form, paidBy: e.target.value})}
               >
+                {/* Opsi default yang ditaruh paling atas, tidak bernilai (value=""), dan disembunyikan saat dropdown dibuka (hidden) */}
+                <option value="" disabled hidden>-- Pilih Pembayar --</option>
                 {defaultPayers.map(payer => (
                   <option key={payer} value={payer}>{payer}</option>
                 ))}
@@ -93,17 +95,19 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Kategori Biaya</label>
             <select 
-              className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm cursor-pointer" 
-              value={form.category} 
+              required
+              className={`w-full border-none rounded-2xl py-4 px-6 font-bold text-sm cursor-pointer transition-colors ${!form.category ? 'bg-orange-50 text-orange-400' : 'bg-slate-50 text-[#0F172A]'}`} 
+              value={form.category || ""} 
               onChange={e => setForm({...form, category: e.target.value})}
             >
-              <option>MAKAN</option>
-              <option>Listrik/Air</option>
-              <option>Gaji Karyawan</option>
-              <option>Iklan/Ads</option>
-              <option>Sewa Tempat</option>
-              <option>Packaging</option>
-              <option>Lainnya</option>
+              <option value="" disabled hidden>-- Pilih Kategori --</option>
+              <option value="MAKAN">MAKAN</option>
+              <option value="Listrik/Air">Listrik/Air</option>
+              <option value="Gaji Karyawan">Gaji Karyawan</option>
+              <option value="Iklan/Ads">Iklan/Ads</option>
+              <option value="Sewa Tempat">Sewa Tempat</option>
+              <option value="Packaging">Packaging</option>
+              <option value="Lainnya">Lainnya</option>
             </select>
           </div>
 
@@ -114,7 +118,7 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
               required 
               className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-bold text-sm" 
               placeholder="Deskripsi pengeluaran..." 
-              value={form.description} 
+              value={form.description || ""} 
               onChange={e => setForm({...form, description: e.target.value})} 
             />
           </div>
@@ -127,7 +131,7 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
               required 
               placeholder="Rp 0" 
               className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 font-black text-xl text-orange-600 focus:ring-2 focus:ring-orange-200" 
-              value={form.amount} 
+              value={form.amount || ""} 
               onChange={e => setForm({...form, amount: e.target.value})} 
             />
           </div>
