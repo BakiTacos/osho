@@ -34,7 +34,7 @@ export default function PembayaranPage() {
     category: 'MAKAN', 
     description: '', 
     amount: '', 
-    paidBy: 'KEVIN', 
+    paidBy: '', 
     date: new Date().toISOString().split('T')[0] 
   });
   const [invoiceForm, setInvoiceForm] = useState({ noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' });

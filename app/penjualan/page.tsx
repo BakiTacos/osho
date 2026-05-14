@@ -308,7 +308,7 @@ export default function PenjualanPage() {
 
       {/* STATUS TABS */}
       <div className="flex gap-6 border-b border-slate-200 overflow-x-auto no-scrollbar">
-        {["Semua", "Pending", "Proses", "Selesai", "Retur"].map((tab) => (
+        {["Semua", "Proses", "Selesai", "Retur"].map((tab) => (
           <button key={tab} onClick={() => setStatusTab(tab)}
             className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all relative whitespace-nowrap ${statusTab === tab ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"}`}>
             {tab} 

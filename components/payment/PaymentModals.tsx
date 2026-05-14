@@ -22,7 +22,7 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-[32px] p-8 animate-in zoom-in duration-200">
-        <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black tracking-tighter text-orange-500">Input Opex</h2><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><X/></button></div>
+        <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black tracking-tighter text-orange-500">Input Operasional</h2><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"><X/></button></div>
         <form onSubmit={onSubmit} className="space-y-4">
           {/* FIELD DIBAYAR OLEH */}
           <div className="space-y-1">
