@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuth } from "../../context/AuthContext";
-import { Wallet, PlusCircle, MoreVertical, Trash2, Edit3, TrendingDown, Receipt, History } from "lucide-react";
+import { Wallet, PlusCircle, MoreVertical, Trash2, Edit3, TrendingDown, Receipt, History, Pencil } from "lucide-react";
 
 // IMPORT CLEAN ARCHITECTURE
 import { usePaymentData } from "../hooks/usePaymentData";
@@ -28,16 +28,30 @@ export default function PembayaranPage() {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  // Form States (Ditambahkan paidBy: 'KEVIN' sebagai default)
-  const [withdrawForm, setWithdrawForm] = useState({ platform: 'Shopee', amount: '' });
-  const [expenseForm, setExpenseForm] = useState({ 
-    category: 'MAKAN', 
+  // Form States (Dengan field 'id' dan 'date' yang tersusun rapi)
+  const [withdrawForm, setWithdrawForm] = useState<any>({ 
+    id: null, 
+    platform: 'Shopee', 
+    amount: '', 
+    date: new Date().toISOString().split('T')[0] 
+  });
+  
+  const [expenseForm, setExpenseForm] = useState<any>({ 
+    id: null,
+    category: '', 
     description: '', 
     amount: '', 
     paidBy: '', 
     date: new Date().toISOString().split('T')[0] 
   });
-  const [invoiceForm, setInvoiceForm] = useState({ noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' });
+  
+  const [invoiceForm, setInvoiceForm] = useState<any>({ 
+    id: null, 
+    noNota: '', 
+    supplier: '', 
+    dueDate: '', 
+    status: 'BELUM BAYAR' 
+  });
   const [invoiceItems, setInvoiceItems] = useState([{ sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }]);
 
   const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -48,7 +62,6 @@ export default function PembayaranPage() {
   const filteredWithdrawals = paymentService.filterByTime(withdrawals, timeFilter, selectedMonth, selectedYear);
   const filteredExpenses = paymentService.filterByTime(expenses, timeFilter, selectedMonth, selectedYear);
   
-  // Destructure payerStats dari service
   const { 
     platformStats, 
     payerStats, 
@@ -58,10 +71,37 @@ export default function PembayaranPage() {
     totalOpex 
   } = paymentService.calculateStats(filteredWithdrawals, filteredInvoices, filteredExpenses);
 
-  // Handlers
+  // --- SUBMIT HANDLERS (CLEAN ARCHITECTURE) ---
+  
+  const handleWithdrawSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await paymentService.saveWithdraw(withdrawForm);
+      setIsWithdrawModalOpen(false);
+      setWithdrawForm({ id: null, platform: 'Shopee', amount: '', date: new Date().toISOString().split('T')[0] }); 
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await paymentService.saveExpense(expenseForm);
+      setIsExpenseModalOpen(false);
+      setExpenseForm({ id: null, category: '', description: '', amount: '', paidBy: '', date: new Date().toISOString().split('T')[0] }); 
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const handleInvoiceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await paymentService.saveInvoice(invoiceForm, invoiceItems);
+      resetInvoice(); 
+    } catch (err: any) { alert(err.message); }
+  };
+
   const resetInvoice = () => { 
     setIsInvoiceModalOpen(false); 
-    setInvoiceForm({ noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' }); 
+    setInvoiceForm({ id: null, noNota: '', supplier: '', dueDate: '', status: 'BELUM BAYAR' }); 
     setInvoiceItems([{ sku: '', name: '', qty: 1, price: 0, unit: 'lusin' }]); 
   };
 
@@ -89,10 +129,9 @@ export default function PembayaranPage() {
         </div>
       </div>
 
-      {/* STAT CARDS - RESPONSIVE 2 COLUMNS ON MOBILE */}
+      {/* STAT CARDS - RESPONSIVE */}
       <div className="px-4 sm:px-10 mt-6 sm:mt-10 grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
         
-        {/* Card 1: TOTAL NOTA DIBAYAR */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-slate-100 shadow-sm border-l-4 border-l-emerald-500 flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-emerald-600 uppercase mb-1 sm:mb-3">Total Nota Dibayar</p>
@@ -101,7 +140,6 @@ export default function PembayaranPage() {
           <p className="text-[8px] sm:text-[9px] font-bold text-slate-300 mt-2 sm:mt-4">Arus Kas Keluar Lunas</p>
         </div>
 
-        {/* Card 2: NOTA BELUM BAYAR */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-slate-100 shadow-sm border-l-4 border-l-red-500 flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-red-500 uppercase mb-1 sm:mb-3">Nota Belum Bayar</p>
@@ -110,7 +148,6 @@ export default function PembayaranPage() {
           <p className="text-[8px] sm:text-[9px] font-bold text-slate-300 mt-2 sm:mt-4">Kewajiban Mendatang</p>
         </div>
         
-        {/* Card 3: WITHDRAWAL STATS */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-slate-100 shadow-sm relative group flex flex-col justify-between">
           <button onClick={() => setIsHistoryModalOpen(true)} className="absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 bg-slate-50 text-slate-400 rounded-lg hover:text-[#0047AB] transition-colors"><History size={14} /></button>
           <div>
@@ -127,7 +164,6 @@ export default function PembayaranPage() {
           </div>
         </div>
         
-        {/* Card 4: OPEX STATS */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-slate-100 shadow-sm border-l-4 border-l-orange-500 flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-orange-400 uppercase mb-1 sm:mb-3">Biaya Operasional</p>
@@ -137,40 +173,33 @@ export default function PembayaranPage() {
             {Object.entries(payerStats).map(([payer, amount]) => (
               <div key={payer} className="flex justify-between text-[7px] sm:text-[9px] font-bold text-slate-400 uppercase">
                 <span className="truncate mr-1">{payer}</span>
-                <span className="text-[#0F172A] shrink-0">Rp {amount.toLocaleString('id-ID')}</span>
+                <span className="text-[#0F172A] shrink-0">Rp {(amount as number).toLocaleString('id-ID')}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Card 5: ACTION BUTTONS - GRID 3 COLUMNS ON MOBILE */}
         <div className="col-span-2 lg:col-span-4 xl:col-span-1 grid grid-cols-3 xl:grid-cols-1 gap-2 w-full">
-          <button onClick={() => setIsWithdrawModalOpen(true)} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-white border border-slate-150 text-[#0047AB] rounded-2xl font-black text-[8px] sm:text-[10px] uppercase hover:bg-blue-50 transition-all">
-            <Wallet size={14} className="shrink-0" /> 
-            <span className="text-center">Tarik Saldo</span>
+          <button onClick={() => { setWithdrawForm({ id: null, platform: 'Shopee', amount: '', date: new Date().toISOString().split('T')[0] }); setIsWithdrawModalOpen(true); }} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-white border border-slate-150 text-[#0047AB] rounded-2xl font-black text-[8px] sm:text-[10px] uppercase hover:bg-blue-50 transition-all">
+            <Wallet size={14} className="shrink-0" /> <span className="text-center">Tarik Saldo</span>
           </button>
-          <button onClick={() => setIsInvoiceModalOpen(true)} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-[#0047AB] text-white rounded-2xl font-black text-[8px] sm:text-[10px] uppercase shadow-md shadow-blue-100 hover:scale-[1.01] transition-all">
-            <PlusCircle size={14} className="shrink-0" /> 
-            <span className="text-center">Nota Baru</span>
+          <button onClick={() => { resetInvoice(); setIsInvoiceModalOpen(true); }} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-[#0047AB] text-white rounded-2xl font-black text-[8px] sm:text-[10px] uppercase shadow-md shadow-blue-100 hover:scale-[1.01] transition-all">
+            <PlusCircle size={14} className="shrink-0" /> <span className="text-center">Nota Baru</span>
           </button>
-          <button onClick={() => setIsExpenseModalOpen(true)} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-orange-500 text-white rounded-2xl font-black text-[8px] sm:text-[10px] uppercase shadow-md shadow-orange-100 hover:scale-[1.01] transition-all">
-            <TrendingDown size={14} className="shrink-0" /> 
-            <span className="text-center">Input Operasional</span>
+          <button onClick={() => { setExpenseForm({ id: null, category: '', description: '', amount: '', paidBy: '', date: new Date().toISOString().split('T')[0] }); setIsExpenseModalOpen(true); }} className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 xl:py-0 bg-orange-500 text-white rounded-2xl font-black text-[8px] sm:text-[10px] uppercase shadow-md shadow-orange-100 hover:scale-[1.01] transition-all">
+            <TrendingDown size={14} className="shrink-0" /> <span className="text-center">Input Opex</span>
           </button>
         </div>
-
       </div>
 
       {/* TABLES SECTION */}
       <div className="px-4 sm:px-10 mt-8 sm:mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         
-        {/* LEFT COMPONENT: TAGIHAN SUPPLIER (RESPONSIVE TABLE CONTAINER) */}
+        {/* INVOICE TABLE */}
         <div className="lg:col-span-2 bg-white rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm overflow-hidden min-h-[350px] sm:min-h-[400px]">
           <div className="p-5 sm:p-6 border-b border-slate-50 flex justify-between items-center text-[10px] sm:text-xs font-black uppercase text-[#94A3B8] tracking-widest">
             Riwayat Tagihan Supplier
           </div>
-          
-          {/* horizontal scroll wrap to prevent squishing on mobile */}
           <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-left min-w-[500px] sm:min-w-0">
               <thead className="bg-[#F8F9FB] text-[8px] sm:text-[9px] font-black text-[#94A3B8] uppercase">
@@ -200,7 +229,13 @@ export default function PembayaranPage() {
                       </button>
                       {activeMenuId === inv.id && (
                         <div className="absolute right-8 top-10 w-32 bg-white border rounded-xl shadow-xl z-20 py-1 overflow-hidden">
-                          <button onClick={() => { setInvoiceForm({ noNota: inv.noNota, supplier: inv.supplier, dueDate: inv.dueDate || '', status: inv.status }); setInvoiceItems(inv.items); setIsInvoiceModalOpen(true); setActiveMenuId(null); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[9px] sm:text-[10px] font-black text-slate-600 hover:bg-slate-50"><Edit3 size={12}/> EDIT</button>
+                          <button onClick={() => { 
+                            // EDIT NOTA - BAWA ID
+                            setInvoiceForm({ id: inv.id, noNota: inv.noNota, supplier: inv.supplier, dueDate: inv.dueDate || '', status: inv.status }); 
+                            setInvoiceItems(inv.items); 
+                            setIsInvoiceModalOpen(true); 
+                            setActiveMenuId(null); 
+                          }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[9px] sm:text-[10px] font-black text-slate-600 hover:bg-slate-50"><Edit3 size={12}/> EDIT</button>
                           <button onClick={async () => { if(confirm("Hapus nota? Stok akan dikurangi.")) { await paymentService.deleteInvoice(inv); setActiveMenuId(null); } }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[9px] sm:text-[10px] font-black text-red-500 hover:bg-red-50"><Trash2 size={12}/> HAPUS</button>
                         </div>
                       )}
@@ -212,27 +247,20 @@ export default function PembayaranPage() {
           </div>
         </div>
 
-        {/* RIGHT COMPONENT: BIAYA OPEX LIST */}
+        {/* OPEX LIST */}
         <div className="bg-white rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm p-5 sm:p-6">
           <h4 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#94A3B8] mb-4 sm:mb-6 flex items-center gap-2">
             <TrendingDown size={14}/> Biaya Operasional
           </h4>
           <div className="space-y-2.5 max-h-[380px] overflow-y-auto no-scrollbar pr-1">
             {filteredExpenses.map((exp) => {
-              // Format tanggal: Jika ada exp.date pakai itu, jika tidak fallback ke createdAt, jika tidak ada juga kosongkan
               let displayDate = "";
               if (exp.date) {
-                // Mengubah format YYYY-MM-DD ke format yang lebih enak dibaca (contoh: 14 Mei 26)
                 const d = new Date(exp.date);
-                if (!isNaN(d.getTime())) {
-                  displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
-                }
+                if (!isNaN(d.getTime())) displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
               } else if (exp.createdAt) {
-                // Fallback untuk data lama yang mungkin belum punya field .date tapi ada createdAt dari Firebase
                 const d = exp.createdAt.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt);
-                if (!isNaN(d.getTime())) {
-                  displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
-                }
+                if (!isNaN(d.getTime())) displayDate = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' });
               }
 
               return (
@@ -246,16 +274,10 @@ export default function PembayaranPage() {
                         <p className="text-[10px] sm:text-[11px] font-black text-[#0F172A] leading-tight truncate">
                           {exp.category}
                         </p>
-                        {/* Payer Badge */}
                         <span className="px-1 py-0.5 bg-white border border-slate-200 rounded text-[6px] font-black text-slate-400 uppercase tracking-tighter shrink-0">
                           {exp.paidBy || 'KEVIN'}
                         </span>
-                        {/* Date Badge (NEW) */}
-                        {displayDate && (
-                          <span className="text-[7px] font-bold text-slate-300 uppercase tracking-widest">
-                            • {displayDate}
-                          </span>
-                        )}
+                        {displayDate && <span className="text-[7px] font-bold text-slate-300 uppercase tracking-widest">• {displayDate}</span>}
                       </div>
                       <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase mt-0.5 truncate">
                         {exp.description}
@@ -265,31 +287,58 @@ export default function PembayaranPage() {
                   
                   <div className="flex flex-col items-end shrink-0 ml-2">
                     <p className="text-xs sm:text-sm font-black text-red-500">-Rp {exp.amount.toLocaleString('id-ID')}</p>
-                    
-                    {/* Tombol hapus digeser ke bawah nominal di Mobile agar tidak numpuk */}
-                    <button onClick={async () => { if(confirm("Hapus catatan opex ini?")) await paymentService.deleteDocument("expenses", exp.id); }} 
-                      className="mt-1 p-1 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all flex items-center gap-1">
-                      <Trash2 size={10}/> <span className="text-[7px] font-black uppercase hidden sm:block">Hapus</span>
-                    </button>
+                    <div className="flex items-center mt-1 gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                      {/* EDIT OPEX BUTTON */}
+                      <button onClick={() => {
+                        setExpenseForm({
+                          id: exp.id,
+                          category: exp.category,
+                          description: exp.description,
+                          amount: exp.amount.toString(),
+                          paidBy: exp.paidBy || '',
+                          date: exp.date || (exp.createdAt?.toDate ? exp.createdAt.toDate().toISOString().split('T')[0] : new Date().toISOString().split('T')[0])
+                        });
+                        setIsExpenseModalOpen(true);
+                      }} className="p-1 text-slate-300 hover:text-[#0047AB] flex items-center gap-1">
+                        <Pencil size={10}/> <span className="text-[7px] font-black uppercase hidden sm:block">Edit</span>
+                      </button>
+                      {/* DELETE OPEX BUTTON */}
+                      <button onClick={async () => { if(confirm("Hapus catatan opex ini?")) await paymentService.deleteDocument("expenses", exp.id); }} className="p-1 text-slate-300 hover:text-red-500 flex items-center gap-1">
+                        <Trash2 size={10}/> <span className="text-[7px] font-black uppercase hidden sm:block">Hapus</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
-            
-            {filteredExpenses.length === 0 && (
-              <div className="py-10 text-center text-slate-300">
-                <p className="text-[9px] font-black uppercase tracking-widest">Belum Ada Pengeluaran</p>
-              </div>
-            )}
+            {filteredExpenses.length === 0 && <div className="py-10 text-center text-slate-300"><p className="text-[9px] font-black uppercase tracking-widest">Belum Ada Pengeluaran</p></div>}
           </div>
         </div>
       </div>
 
       {/* MODALS */}
-      <WithdrawModal isOpen={isWithdrawModalOpen} onClose={() => setIsWithdrawModalOpen(false)} form={withdrawForm} setForm={setWithdrawForm} onSubmit={async (e: any) => { e.preventDefault(); try { await paymentService.saveWithdraw(withdrawForm); setIsWithdrawModalOpen(false); setWithdrawForm({ platform: 'Shopee', amount: '' }); } catch (err: any) { alert(err.message); } }} />
-      <ExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} form={expenseForm} setForm={setExpenseForm} onSubmit={async (e: any) => { e.preventDefault(); try { await paymentService.saveExpense(expenseForm); setIsExpenseModalOpen(false); setExpenseForm({ category: 'MAKAN', description: '', amount: '', paidBy: 'KEVIN', date: new Date().toISOString().split('T')[0] }); } catch (err: any) { alert(err.message); } }} />
-      <InvoiceModal isOpen={isInvoiceModalOpen} onClose={resetInvoice} form={invoiceForm} setForm={setInvoiceForm} items={invoiceItems} setItems={setInvoiceItems} products={products} onSubmit={async (e: any) => { e.preventDefault(); try { await paymentService.saveInvoice(invoiceForm, invoiceItems); resetInvoice(); } catch (err: any) { alert(err.message); } }} />
-      <HistoryModal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} withdrawals={withdrawals} onDelete={async (id: string) => { if(confirm("Hapus?")) await paymentService.deleteDocument("withdrawals", id); }} onEdit={(w: any) => { if (w.editCount >= 1) return alert("Sudah diubah."); setWithdrawForm({ platform: w.platform, amount: w.amount.toString() }); setIsWithdrawModalOpen(true); setIsHistoryModalOpen(false); }} />
+      <WithdrawModal isOpen={isWithdrawModalOpen} onClose={() => setIsWithdrawModalOpen(false)} form={withdrawForm} setForm={setWithdrawForm} onSubmit={handleWithdrawSubmit} />
+      <ExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} form={expenseForm} setForm={setExpenseForm} onSubmit={handleExpenseSubmit} />
+      <InvoiceModal isOpen={isInvoiceModalOpen} onClose={resetInvoice} form={invoiceForm} setForm={setInvoiceForm} items={invoiceItems} setItems={setInvoiceItems} products={products} onSubmit={handleInvoiceSubmit} />
+      
+      <HistoryModal 
+        isOpen={isHistoryModalOpen} 
+        onClose={() => setIsHistoryModalOpen(false)} 
+        withdrawals={withdrawals} 
+        onDelete={async (id: string) => { if(confirm("Hapus penarikan ini?")) await paymentService.deleteDocument("withdrawals", id); }} 
+        onEdit={(w: any) => { 
+          // EDIT WITHDRAWAL - BAWA ID & TANGGAL
+          if (w.editCount >= 1) return alert("Hanya dapat diedit 1 kali."); 
+          setWithdrawForm({ 
+            id: w.id, 
+            date: w.date || (w.createdAt?.toDate ? w.createdAt.toDate().toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+            platform: w.platform, 
+            amount: w.amount.toString() 
+          }); 
+          setIsWithdrawModalOpen(true); 
+          setIsHistoryModalOpen(false); 
+        }} 
+      />
 
     </div>
   );
