@@ -15,7 +15,7 @@ export default function Home() {
   const [selectedYear, setSelectedYear] = useState("2026");
 
   // State Data Real-time
-  const [stats, setStats] = useState({ omset: 0, modal: 0, profit: 0, stokKritis: 0 });
+  const [stats, setStats] = useState({ omset: 0, modal: 0, profit: 0, grossProfit: 0, stokKritis: 0 });
   const [marketplaceData, setMarketplaceData] = useState({ Shopee: 0, Tiktok: 0, Lazada: 0, Offline: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -35,10 +35,10 @@ export default function Home() {
 
     // 2. Ambil Data Penjualan (Omset & Modal)
     const qSales = query(collection(db, `users/${currentUser.uid}/sales`), orderBy("createdAt", "desc"));
+    // Di dalam useEffect -> unsubSales
     const unsubSales = onSnapshot(qSales, (snapshot) => {
       const sales = snapshot.docs.map(doc => doc.data());
       
-      // Filter berdasarkan bulan & tahun terpilih
       const filteredSales = sales.filter(s => {
         if (!s.createdAt) return false;
         const date = s.createdAt.toDate();
@@ -47,23 +47,32 @@ export default function Home() {
         return monthName === selectedMonth && yearName === selectedYear && s.status !== 'Retur';
       });
 
-      // Kalkulasi Ringkasan
       let totalOmset = 0;
       let totalModal = 0;
+      let totalGrossProfit = 0; // Inisialisasi variabel baru
       let mpCounts: any = { Shopee: 0, Tiktok: 0, Lazada: 0, Offline: 0 };
 
       filteredSales.forEach(s => {
         totalOmset += Number(s.total) || 0;
         totalModal += Number(s.hpp) || 0;
         
-        // Hitung proporsi marketplace
+        // AMBIL PROFIT REAL (yang sudah dipotong admin & logistik di PenjualanPage)
+        totalGrossProfit += Number(s.profit) || 0; 
+        
         const source = s.marketplace || 'Offline';
         if (mpCounts[source] !== undefined) {
           mpCounts[source] += Number(s.total) || 0;
         }
       });
 
-      setStats(prev => ({ ...prev, omset: totalOmset, modal: totalModal, profit: totalOmset - totalModal }));
+      setStats(prev => ({ 
+        ...prev, 
+        omset: totalOmset, 
+        modal: totalModal, 
+        grossProfit: totalGrossProfit, // Masukkan ke state
+        profit: totalOmset - totalModal // Tetap simpan Markup jika perlu
+      }));
+      
       setMarketplaceData(mpCounts);
       setLoading(false);
     });
@@ -182,25 +191,57 @@ export default function Home() {
             </div>
           </div>
           
+          
           <div className="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-6 sm:gap-8 h-auto sm:h-48">
-             {/* Simple bar visualizer */}
-             <div className="w-full sm:w-1/3 flex flex-col justify-end gap-1.5 h-36 sm:h-full">
-                <div style={{ height: '100%' }} className="w-full bg-[#0047AB] rounded-t-xl shadow-md shadow-blue-100/50 flex-1 min-h-[10px]"></div>
-                <div style={{ height: stats.omset > 0 ? `${(stats.modal/stats.omset)*100}%` : '0%' }} className="w-full bg-slate-100 rounded-t-md min-h-[10px]"></div>
-                <span className="text-[9px] sm:text-[10px] font-black text-[#0F172A] mt-2 uppercase text-center w-full block">Akumulasi</span>
-             </div>
-             {/* Explanatory text */}
-             <div className="flex-1 bg-slate-50 rounded-2xl sm:rounded-3xl p-5 sm:p-6 flex flex-col justify-center min-h-[120px]">
-                <p className="text-xs sm:text-sm font-bold text-[#64748B] leading-relaxed">
-                  Berdasarkan data {selectedMonth}, Anda menghasilkan profit bersih sebesar 
-                  <span className="text-[#0047AB] mx-1 font-black whitespace-nowrap">Rp {stats.profit.toLocaleString('id-ID')}</span>.
-                </p>
-                <div className="mt-4 flex items-center text-emerald-500 font-black text-lg sm:text-xl">
-                   <TrendingUp size={18} className="mr-1.5 shrink-0"/> 
-                   {stats.omset > 0 ? ((stats.profit / stats.omset) * 100).toFixed(1) : 0}% 
-                   <span className="text-[8px] sm:text-[10px] text-slate-400 ml-2 uppercase">Margin</span>
+            {/* Bar Visualizer: Omset vs Profit Kotor */}
+            <div className="w-full sm:w-1/3 flex flex-col justify-end gap-1.5 h-36 sm:h-full">
+              <div className="flex items-end gap-3 h-full">
+                {/* Bar Omset (100%) */}
+                <div className="flex-1 flex flex-col justify-end h-full">
+                  <div className="w-full bg-[#0047AB]/10 rounded-t-xl h-full relative group">
+                    <div className="absolute inset-0 bg-[#0047AB] rounded-t-xl shadow-lg shadow-blue-100/50"></div>
+                  </div>
                 </div>
-             </div>
+                
+                {/* Bar Profit Kotor (Percentage) */}
+                <div className="flex-1 flex flex-col justify-end h-full">
+                  <div className="w-full bg-slate-100 rounded-t-xl h-full relative">
+                    <div 
+                      style={{ height: stats.omset > 0 ? `${(stats.grossProfit / stats.omset) * 100}%` : '0%' }} 
+                      className="absolute bottom-0 left-0 w-full bg-emerald-500 rounded-t-xl shadow-lg shadow-emerald-100/50 transition-all duration-1000"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-between text-[9px] font-black text-[#0F172A] mt-2 uppercase">
+                <span className="flex-1 text-center">Omset</span>
+                <span className="flex-1 text-center">Gross</span>
+              </div>
+            </div>
+
+            {/* Explanatory Text */}
+            <div className="flex-[2] bg-slate-50 rounded-3xl p-5 sm:p-6 flex flex-col justify-center">
+              <p className="text-xs sm:text-sm font-bold text-[#64748B] leading-relaxed">
+                Bulan {selectedMonth} telah menghasilkan profit kotor (setelah potong admin & logistik) sebesar 
+                <span className="text-emerald-600 ml-1 font-black whitespace-nowrap">
+                  Rp {stats.grossProfit.toLocaleString('id-ID')}
+                </span>.
+              </p>
+              
+              <div className="mt-4 flex items-center justify-between">
+                <div className="flex items-center text-emerald-600 font-black text-lg sm:text-xl">
+                  <TrendingUp size={20} className="mr-1.5 shrink-0"/> 
+                  {stats.omset > 0 ? ((stats.grossProfit / stats.omset) * 100).toFixed(1) : 0}% 
+                  <span className="text-[10px] text-slate-400 ml-2 uppercase tracking-widest">Real Margin</span>
+                </div>
+                
+                {/* Info tambahan HPP */}
+                <div className="text-right">
+                  <p className="text-[8px] font-black text-slate-300 uppercase">Estimasi HPP</p>
+                  <p className="text-[10px] font-bold text-slate-500">Rp {stats.modal.toLocaleString('id-ID')}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
