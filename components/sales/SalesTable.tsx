@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Trash2, ChevronLeft, ChevronRight, ShoppingBag, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Trash2, ChevronLeft, ChevronRight, ShoppingBag, Info, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 
-export default function SalesTable({ items, selectedIds, setSelectedIds, onDeleteBulk, onDeleteSingle, onStatusUpdate }: any) {
+export default function SalesTable({ items, selectedIds, setSelectedIds, onDeleteBulk, onDeleteSingle, onStatusUpdate, onEdit }: any) {
   const [currentPage, setCurrentPage] = useState(1);
   // STATE BARU: Untuk melacak baris mana yang rincian adminnya sedang dibuka di Mobile
   const [expandedRow, setExpandedRow] = useState<string | null>(null); 
@@ -32,7 +32,6 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
         {/* 💻 DESKTOP VIEW (TRADITIONAL TABLE)       */}
         {/* ========================================= */}
         <div className="hidden lg:block overflow-x-auto no-scrollbar">
-          {/* ... (KODE DESKTOP SAMA SEPERTI SEBELUMNYA, TIDAK DIUBAH) ... */}
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead className="bg-[#F8F9FB] border-b border-[#F1F5F9] text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">
               <tr>
@@ -97,7 +96,18 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
                         <option value="Proses">Proses</option><option value="Selesai">Selesai</option><option value="Retur">Retur</option>
                       </select>
                     </td>
-                    <td className="px-6 py-5 text-right"><button onClick={() => onDeleteSingle(t)} className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition-all"><Trash2 size={16} /></button></td>
+                    <td className="px-6 py-5 text-right whitespace-nowrap">
+                      {/* 🛠️ ACTION BUTTON DESKTOP: TOMBOL EDIT PETAKAN SKU */}
+                      {t.product === "Produk Luar Katalog" && (
+                        <button 
+                          onClick={() => onEdit && onEdit(t)} 
+                          className="bg-blue-50 hover:bg-blue-100 text-[#0047AB] px-2.5 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-wider mr-2 inline-flex items-center gap-1 transition-all"
+                        >
+                          <Pencil size={10} /> Petakan SKU
+                        </button>
+                      )}
+                      <button onClick={() => onDeleteSingle(t)} className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition-all inline-flex items-center justify-center"><Trash2 size={16} /></button>
+                    </td>
                   </tr>
                 );
               })}
@@ -142,7 +152,20 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => onDeleteSingle(t)} className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg shrink-0"><Trash2 size={16} /></button>
+                  
+                  {/* Container Tombol Aksi Kanan Atas Mobile */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* 🛠️ ACTION BUTTON MOBILE: TOMBOL EDIT PETAKAN SKU */}
+                    {t.product === "Produk Luar Katalog" && (
+                      <button 
+                        onClick={() => onEdit && onEdit(t)} 
+                        className="bg-blue-50 text-[#0047AB] rounded-lg text-[9px] font-black uppercase tracking-wider px-2 py-1.5 transition-all inline-flex items-center gap-1"
+                      >
+                        <Pencil size={10} /> Petakan
+                      </button>
+                    )}
+                    <button onClick={() => onDeleteSingle(t)} className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg shrink-0"><Trash2 size={16} /></button>
+                  </div>
                 </div>
 
                 {/* Info Profit & Aksi Accordion */}

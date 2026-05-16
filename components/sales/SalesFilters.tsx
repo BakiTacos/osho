@@ -59,15 +59,27 @@ export default function SalesFilters({
 
       {/* STATUS TABS */}
       <div className="flex gap-6 border-b border-slate-200 overflow-x-auto no-scrollbar">
-        {["Semua", "Proses", "Selesai", "Retur"].map((tab) => (
-          <button key={tab} onClick={() => setStatusTab(tab)}
-            className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all relative whitespace-nowrap ${statusTab === tab ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"}`}>
-            {tab} 
-            
-            {statusTab === tab && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#0047AB]"></div>}
-          </button>
-        ))}
-      </div>
+      {["Semua", "Proses", "Pending", "Selesai", "Retur"].map((tab) => (
+        <button 
+          key={tab} 
+          onClick={() => setStatusTab(tab)}
+          className={`pb-3 text-[11px] font-black uppercase tracking-widest transition-all relative whitespace-nowrap flex items-center ${
+            statusTab === tab ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          <span>{tab}</span>
+          
+          {/* 🔴 BADGE INDIKATOR: Muncul merah menyala jika ada data Produk Luar Katalog */}
+          {tab === "Pending" && pendingCount > 0 && (
+            <span className="ml-1.5 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full inline-flex items-center justify-center min-w-[16px] h-4 tracking-normal normal-case animate-pulse shadow-sm shadow-rose-100">
+              {pendingCount}
+            </span>
+          )}
+          
+          {statusTab === tab && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#0047AB]"></div>}
+        </button>
+      ))}
+    </div>
     </div>
   );
 }
