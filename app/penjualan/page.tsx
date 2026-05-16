@@ -19,7 +19,6 @@ import { ManualInputModal } from "../../components/sales/SalesModals";
 
 export default function PenjualanPage() {
   const { currentUser } = useAuth();
-  
 
   // States
   const [isProcessing, setIsProcessing] = useState(false);
@@ -31,12 +30,14 @@ export default function PenjualanPage() {
   const [searchSales, setSearchSales] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
   const { catalog, transactions, shopeeWarehouse, activeFees } = useSalesData(
     currentUser, 
     timeFilter, 
     selectedMonth, 
     selectedYear
   );
+  
   const salesService = new SalesService(currentUser, catalog, shopeeWarehouse, activeFees);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [manualForm, setManualForm] = useState({
@@ -45,7 +46,7 @@ export default function PenjualanPage() {
     items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }]
   });
 
-  // Logic Filter
+  // Logic Filter Tabel Utama
   const filteredTransactions = transactions.filter((t) => {
     if (!t.createdAt) return false;
     const txDate = t.createdAt.toDate();
@@ -71,13 +72,80 @@ export default function PenjualanPage() {
 
   // --- HANDLERS ---
 
+  // 🔥 PERBAIKAN TOTAL: Proteksi dan Pembersihan Kunci Duplikat secara Radikal
+  const handleDirectDatabaseCleanup = async () => {
+    if (transactions.length === 0) return alert("Tidak ada data transaksi yang termuat.");
+    setIsProcessing(true);
+
+    try {
+      const seenEntries = new Set<string>();
+      const duplicatesToDelete: any[] = [];
+
+      transactions.forEach((t) => {
+        // 🔒 SOLUSI: Hapus paksa karakter '#' di awal ID, bersihkan spasi, dan ubah ke lowercase
+        const cleanOrderId = String(t.orderId || "").trim().replace(/^#/, "").toLowerCase();
+        
+        // Bersihkan spasi pada SKU dan pastikan uppercase agar konsisten
+        const cleanSku = String(t.sku || "").replace(/\s+/g, "").toUpperCase();
+        
+        // Buat kombinasi kunci pencocokan baru yang super steril
+        const uniqueKey = `${cleanOrderId}_${cleanSku}`;
+
+        if (seenEntries.has(uniqueKey)) {
+          // Jika kunci steril ini sudah pernah dibaca, tandai baris ini sebagai DUPLIKAT REAL
+          duplicatesToDelete.push(t);
+        } else {
+          seenEntries.add(uniqueKey);
+        }
+      });
+
+      if (duplicatesToDelete.length === 0) {
+        alert("Sistem telah memindai ulang dengan pembersihan karakter khusus, namun tidak mendeteksi kunci kembar di database. Pastikan filter rentang waktu/bulan sudah sesuai dengan tanggal nota tersebut berada.");
+        setIsProcessing(false);
+        return;
+      }
+
+      const konfirmasi = window.confirm(
+        `⚠️ Duplikat Terdeteksi!\nSistem berhasil mendeteksi ${duplicatesToDelete.length} data transaksi kembar di database.\n\nSistem akan otomatis:\n1. Menghapus langsung data kembar tersebut dari Firestore.\n2. Mengembalikan STOK produk (+qty) ke katalog SNY & PARATA.\n\nKlik OK untuk eksekusi sekarang.`
+      );
+      
+      if (!konfirmasi) {
+        setIsProcessing(false);
+        return;
+      }
+
+      let successCleanedCount = 0;
+
+      // Eksekusi pembersihan aman
+      for (const tx of duplicatesToDelete) {
+        // 1. Hapus transaksi duplikat dari Firestore
+        await salesService.deleteTransaction(tx);
+
+        // 2. Pulihkan nilai kuantitas stok yang telanjur bocor (+qty)
+        const cleanSku = String(tx.sku || "").replace(/\s+/g, "").toUpperCase();
+        const restoreQty = Number(tx.qty) || 1;
+        
+        // Masukkan restoreQty bernilai POSITIF untuk menambah balik stok katalog
+        await salesService.updateProductStock(cleanSku, restoreQty, tx.orderId);
+        
+        successCleanedCount++;
+      }
+
+      alert(`✅ Berhasil! ${successCleanedCount} data duplikat dihapus langsung dari server, dan stok produk telah dikembalikan ke posisi aman.`);
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan teknis saat mencoba membersihkan database.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
     setIsProcessing(true);
     const reader = new FileReader();
     const config = MARKETPLACE_CONFIG[selectedMarketplace];
-    const existingOrderIds = new Set(transactions.map(t => String(t.orderId).trim()));
 
     reader.onload = async (evt) => {
       try {
@@ -97,7 +165,7 @@ export default function PenjualanPage() {
           const resiValue = String(row[config.cols.resi] || "").trim();
           const orderIdLama = String(row[config.cols.orderId] || "").trim();
           const finalId = resiValue || orderIdLama;
-          if (!finalId || existingOrderIds.has(finalId)) continue;
+          if (!finalId) continue;
 
           let logisticsFee = 0;
           if (selectedMarketplace === 'tiktok') {
@@ -146,7 +214,7 @@ export default function PenjualanPage() {
           await salesService.updateProductStock(sku, -qty, finalId);
           addedCount++;
         }
-        alert(`Berhasil impor ${addedCount} data. Ekstraksi tarif Logistik TikTok aktif.`);
+        alert(`Berhasil impor ${addedCount} data.`);
       } catch (err) { alert("Gagal memproses file."); console.error(err); } 
       finally { setIsProcessing(false); e.target.value = ''; }
     };
@@ -184,9 +252,26 @@ export default function PenjualanPage() {
         pendingCount={transactions.filter(t => t.product === "Produk Luar Katalog").length}
       />
 
+      {/* 🚨 BOX UTAMA: TOMBOL PERMANEN HAPUS DUPLIKASI & PULIHKAN STOK */}
+      <div className="mx-4 sm:mx-10 my-4 bg-rose-50 border border-rose-200 p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="text-center sm:text-left">
+          <h4 className="text-sm font-black text-rose-900 uppercase tracking-wider">Sistem Pembersihan Riwayat Transaksi Ganda</h4>
+          <p className="text-xs text-rose-700 mt-0.5">
+            Klik tombol di samping untuk memindai database, menghapus data kembar instan, dan mengembalikan kuantitas stok yang bocor.
+          </p>
+        </div>
+        <button
+          disabled={isProcessing}
+          onClick={handleDirectDatabaseCleanup}
+          className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 shrink-0"
+        >
+          {isProcessing ? "Sedang Memproses..." : "🔥 HAPUS DUPLIKASI & PULIHKAN STOK NOW"}
+        </button>
+      </div>
+
       <SalesStats transactions={filteredTransactions} label={timeFilter} />
 
-      <div className="px-4 sm:px-10 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="px-4 sm:px-10 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <ImportCard 
           selectedMarketplace={selectedMarketplace}
           setSelectedMarketplace={setSelectedMarketplace}
