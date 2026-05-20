@@ -17,7 +17,7 @@ export const FinanceView = ({ summary, chartData }: any) => {
         
         {/* Card 1: TOTAL OMSET */}
         <StatCard 
-          title="TOTAL OMSET" 
+          title="TOTAL PENJUALAN" 
           value={`IDR ${summary.totalOmset.toLocaleString('id-ID')}`} 
           icon={<Wallet size={20}/>} 
           color="blue" 

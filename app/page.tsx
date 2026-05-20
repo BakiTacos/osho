@@ -152,7 +152,7 @@ export default function Home() {
             <div className="text-[8px] sm:text-[10px] font-black text-emerald-500 bg-emerald-50 px-2 py-0.5 sm:py-1 rounded-md">LIVE</div>
           </div>
           <div>
-            <p className="text-[8px] sm:text-[10px] font-black text-[#94A3B8] uppercase tracking-[0.15em] mb-0.5 sm:mb-1">Total Omset</p>
+            <p className="text-[8px] sm:text-[10px] font-black text-[#94A3B8] uppercase tracking-[0.15em] mb-0.5 sm:mb-1">Total Penjualan</p>
             <h3 className="text-sm sm:text-xl xl:text-3xl font-black text-[#0F172A] tracking-tight truncate">Rp {stats.omset.toLocaleString('id-ID')}</h3>
           </div>
           <div className="absolute bottom-0 left-0 w-full h-[5px] bg-[#0047AB]"></div>

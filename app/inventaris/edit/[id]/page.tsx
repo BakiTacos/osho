@@ -244,14 +244,7 @@ export default function EditProdukPage() {
               </button>
             </div>
 
-            <div className="lg:col-span-4 space-y-6">
-              <div className="bg-white p-8 rounded-[28px] border border-[#F1F5F9] shadow-sm space-y-6">
-                <div className="w-full aspect-square rounded-2xl bg-[#F8F9FB] border-2 border-dashed border-[#E2E8F0] overflow-hidden flex items-center justify-center">
-                  {formData.imageUrl ? <img src={formData.imageUrl} className="w-full h-full object-cover" /> : <ImageIcon size={40} className="text-[#94A3B8]" />}
-                </div>
-                <input name="imageUrl" value={formData.imageUrl} onChange={handleChange} placeholder="URL Gambar..." className="w-full bg-[#F8F9FB] border-none rounded-xl py-3 px-4 text-[11px] font-bold focus:ring-2 focus:ring-[#0047AB]" />
-              </div>
-            </div>
+            
 
           </form>
         </div>
