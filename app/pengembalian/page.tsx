@@ -1,23 +1,29 @@
 "use client";
 
+
 import React, { useState, useEffect } from 'react';
 import { db } from "../../lib/firebase";
+
 import { useAuth } from "../../context/AuthContext";
 import { 
   collection, onSnapshot, query, where, 
-  doc, updateDoc, increment, orderBy 
+  doc, updateDoc, increment, orderBy,
+  writeBatch, getDocs, addDoc, serverTimestamp
 } from "firebase/firestore";
 import { 
-  Search, Package, CheckCircle2, 
-  AlertTriangle, XCircle, RefreshCcw, 
-  TrendingDown
+  Search, Package, TrendingDown, Upload
 } from "lucide-react";
+import * as XLSX from 'xlsx';
 
 export default function PengembalianPage() {
   const { currentUser } = useAuth();
   const [returOrders, setReturOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // 🚀 STATE BARU: Menentukan marketplace untuk acuan index excel
+  const [selectedMarketplace, setSelectedMarketplace] = useState<"shopee" | "tiktok">("shopee");
 
   useEffect(() => {
     if (!currentUser) return;
@@ -41,6 +47,71 @@ export default function PengembalianPage() {
     return () => { unsubProd(); unsubRetur(); };
   }, [currentUser]);
 
+  // --- LOGIKA IMPOR EXCEL BERDASARKAN PILIHAN MARKETPLACE ---
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser) return;
+    setIsProcessing(true);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
+        
+        // Menentukan baris awal data & index nomor pesanan berdasarkan pilihan marketplace
+        const targetIndex = selectedMarketplace === "shopee" ? 4 : 0;
+        const startRow = selectedMarketplace === "shopee" ? 1 : 1; // Sesuaikan jika ada baris kosong di awal file
+        
+        const rawRows = data.slice(startRow);
+        const batch = writeBatch(db);
+        let foundCount = 0;
+
+        for (const row of rawRows) {
+          // Ambil nilai berdasarkan index target platform
+          const orderId = String(row[targetIndex] || "").trim().replace(/^#/, "");
+          if (!orderId) continue;
+
+          // Query pencarian dokumen penjualan yang memiliki orderId sama
+          const qSales = query(
+            collection(db, `users/${currentUser.uid}/sales`), 
+            where("orderId", "==", orderId)
+          );
+          
+          const snapshot = await getDocs(qSales);
+
+          snapshot.forEach((docSnap) => {
+            const saleData = docSnap.data();
+            // Hanya update jika statusnya belum menjadi Retur
+            if (saleData.status !== "Retur") {
+              batch.update(docSnap.ref, { 
+                status: "Retur", 
+                penanganan: "Proses" 
+              });
+              foundCount++;
+            }
+          });
+        }
+
+        if (foundCount > 0) {
+          await batch.commit();
+          alert(`✅ Sukses! ${foundCount} pesanan ${selectedMarketplace.toUpperCase()} berhasil diubah ke status Retur.`);
+        } else {
+          alert(`Proses selesai. Tidak ada transaksi baru yang cocok untuk platform ${selectedMarketplace.toUpperCase()}.`);
+        }
+
+      } catch (err) { 
+        console.error(err);
+        alert("Gagal memproses file Excel. Pastikan format kolom marketplace yang dipilih sudah sesuai."); 
+      } finally { 
+        setIsProcessing(false); 
+        e.target.value = ''; 
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   // --- LOGIKA UPDATE STATUS & EFEK OTOMATIS ---
   const handleStatusChange = async (order: any, newStatus: string) => {
     if (order.returFinal) {
@@ -49,12 +120,13 @@ export default function PengembalianPage() {
     }
 
     const orderRef = doc(db, `users/${currentUser?.uid}/sales`, order.id);
-    
-    // 1. Cari produk awal berdasarkan SKU yang ada di pesanan
     const initialProd = products.find(p => p.sku === order.sku?.toUpperCase());
 
     try {
       if (newStatus === "Selesai") {
+        // 🚀 HITUNG PROFIT YANG HARUS DIKEMBALIKAN (Total Penjualan - Modal)
+        const keuntunganBatal = (order.total || 0) - (order.hpp || 0);
+
         if (initialProd) {
           let targetId = initialProd.id;
           let qtyToReturn = order.qty || 1;
@@ -63,23 +135,59 @@ export default function PengembalianPage() {
             const mainProd = products.find(p => p.sku === initialProd.linkedSku);
             if (mainProd) {
               targetId = mainProd.id;
-              // KEMBALIKAN SESUAI MULTIPLIER
               const multiplier = initialProd.multiplier || 1;
               qtyToReturn = (order.qty || 1) * multiplier;
             }
           }
 
+          // Kembalikan barang ke stok gudang karena kondisi masih bagus
           await updateDoc(doc(db, `users/${currentUser?.uid}/products`, targetId), {
             stock: increment(qtyToReturn)
           });
         }
         
-        await updateDoc(orderRef, { penanganan: newStatus, profit: 0, returFinal: true });
+        // 1. Kunci status transaksi asli tanpa mengubah nominal profit historisnya
+        await updateDoc(orderRef, { penanganan: newStatus, returFinal: true });
+
+        // 2. Ambil tanggal lokal hari ini (Bulan ini)
+        const tzoffset = (new Date()).getTimezoneOffset() * 60000; 
+        const todayLokal = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+
+        // 3. Tarik kembali keuntungan yang sudah keburu diambil bulan lalu, catat sebagai Opex Bulan Ini
+        if (keuntunganBatal > 0) {
+          await addDoc(collection(db, `users/${currentUser?.uid}/expenses`), {
+            category: "Koreksi Profit Retur",
+            description: `Retur Barang OK (Pesanan: #${order.orderId}) - Penyesuaian margin yang batal diperoleh`,
+            amount: keuntunganBatal,
+            paidBy: "SISTEM",
+            date: todayLokal,
+            createdAt: serverTimestamp()
+          });
+        }
+        
+        alert(`✅ Status Selesai: Barang balik ke stok & pembatalan profit Rp ${keuntunganBatal.toLocaleString('id-ID')} dicatat ke Operasional bulan ini.`);
 
       } else if (newStatus === "Rusak" || newStatus === "Tidak Kembali") {
-        const kerugian = -(order.hpp || 0);
-        await updateDoc(orderRef, { penanganan: newStatus, profit: kerugian, returFinal: true });
-        alert(`Status ${newStatus}: Dicatat sebagai kerugian modal.`);
+        const kerugian = order.hpp || 0;
+        
+        // 1. Batal/Nol-kan profit di transaksi lama (Karena barang tidak jadi terjual)
+        await updateDoc(orderRef, { penanganan: newStatus, profit: 0, returFinal: true });
+
+        // 2. Suntikkan kerugian tersebut ke Biaya Operasional (Expenses) BULAN INI (Hari ini)
+        const tzoffset = (new Date()).getTimezoneOffset() * 60000; 
+        const todayLokal = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
+
+        // Pastikan Kakak sudah import 'addDoc' dan 'serverTimestamp' dari "firebase/firestore" di bagian paling atas file
+        await addDoc(collection(db, `users/${currentUser?.uid}/expenses`), {
+          category: "Kerugian Retur",
+          description: `Retur ${newStatus} (Pesanan: #${order.orderId}) - ${order.product}`,
+          amount: kerugian,
+          paidBy: "SISTEM",
+          date: todayLokal,
+          createdAt: serverTimestamp()
+        });
+
+        alert(`Status ${newStatus}: Transaksi dibatalkan dan kerugian Rp ${kerugian.toLocaleString('id-ID')} otomatis dicatat ke Biaya Operasional bulan ini.`);
       } else {
         await updateDoc(orderRef, { penanganan: newStatus });
       }
@@ -113,13 +221,47 @@ export default function PengembalianPage() {
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-20">
       
-      {/* HEADER & SEARCH BAR - RESPONSIVE STACK ON MOBILE */}
-      <div className="px-4 sm:px-10 pt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* HEADER & CONTROLS */}
+      <div className="px-4 sm:px-10 pt-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-[#0F172A] leading-tight">Manajemen Retur</h1>
           <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Otomatisasi Stok & Akuntansi Kerugian</p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          
+          {/* 🚀 TOGGLE PILIHAN MARKETPLACE */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
+            <button
+              onClick={() => setSelectedMarketplace("shopee")}
+              className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${
+                selectedMarketplace === "shopee" 
+                  ? "bg-white text-orange-600 shadow-xs" 
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
+            >
+              Shopee
+            </button>
+            <button
+              onClick={() => setSelectedMarketplace("tiktok")}
+              className={`px-3 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${
+                selectedMarketplace === "tiktok" 
+                  ? "bg-slate-900 text-white shadow-xs" 
+                  : "text-slate-400 hover:text-slate-600"
+              }`}
+            >
+              TikTok
+            </button>
+          </div>
+
+          {/* TOMBOL IMPORT FILE EXCEL */}
+          <label className="cursor-pointer flex items-center justify-center gap-2 bg-white border border-slate-200 px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black text-slate-600 uppercase hover:bg-slate-50 hover:text-[#0047AB] transition-all shadow-sm shrink-0">
+            <Upload size={14} /> 
+            <span>{isProcessing ? "Memproses..." : `Impor Retur ${selectedMarketplace}`}</span>
+            <input type="file" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls" disabled={isProcessing} />
+          </label>
+
+          {/* SEARCH BAR */}
           <div className="relative flex-1 sm:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input 
@@ -129,14 +271,11 @@ export default function PengembalianPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="w-10 h-10 rounded-xl bg-[#0047AB] text-white flex items-center justify-center font-black shadow-lg shrink-0">K</div>
         </div>
       </div>
 
-      {/* STATS CARDS - 2 COLUMNS ON MOBILE */}
+      {/* STATS CARDS */}
       <div className="px-4 sm:px-10 mt-6 sm:mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        
-        {/* Card 1: Kerugian Dialami */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-red-500 flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-red-500 uppercase tracking-widest mb-1 sm:mb-3 flex items-center">
@@ -147,7 +286,6 @@ export default function PengembalianPage() {
           <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Dari Barang Rusak/Hilang</p>
         </div>
 
-        {/* Card 2: Total Kasus */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1 sm:mb-3">Total Kasus Retur</p>
@@ -156,7 +294,6 @@ export default function PengembalianPage() {
           <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Masuk ke Sistem</p>
         </div>
 
-        {/* Card 3: Masih Proses */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-orange-400 flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1 sm:mb-3">Masih Proses</p>
@@ -165,7 +302,6 @@ export default function PengembalianPage() {
           <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Menunggu Keputusan</p>
         </div>
 
-        {/* Card 4: Selesai/Final */}
         <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-emerald-500 flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1 sm:mb-3">Selesai/Final</p>

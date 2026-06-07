@@ -1,43 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import React from 'react';
-import { db } from "../../lib/firebase"; // Sesuaikan path
-import { useAuth } from "../../context/AuthContext"; // Sesuaikan path
-import AuthComponent from "../../components/AuthComponent"; // Sesuaikan path
-import ListItemCard from "../../components/ListItemCard"; // <-- Impor komponen kartu baru kita
+import { db } from "../../lib/firebase"; 
+import { useAuth } from "../../context/AuthContext"; 
+import AuthComponent from "../../components/AuthComponent"; 
+import ListItemCard from "../../components/ListItemCard"; 
+import { PlusCircle, ListTodo, ChevronLeft, LayoutList } from "lucide-react";
+
 import {
   collection,
   onSnapshot,
   addDoc,
   doc,
-  deleteDoc,
   query,
   orderBy,
   serverTimestamp,
   Timestamp,
-  writeBatch, // Diperlukan untuk menghapus list & itemnya
-  where, // Diperlukan untuk menghapus list & itemnya
+  writeBatch,
+  where,
   getDocs
 } from "firebase/firestore";
 
-// --- Interface ---
-// Ini adalah "Daftar" induk
 interface List {
   id: string;
   name: string;
   createdAt: Timestamp;
 }
 
-// --- Komponen Halaman Utama ---
 export default function ListsPage() {
   const { currentUser, loading: authLoading } = useAuth();
   
-  const [lists, setLists] = useState<List[]>([]); // State untuk SEMUA daftar
-  const [newListName, setNewListName] = useState(""); // State untuk input "buat list"
+  const [lists, setLists] = useState<List[]>([]); 
+  const [newListName, setNewListName] = useState(""); 
 
-  // Efek: Mendengarkan koleksi "lists"
   useEffect(() => {
     if (!currentUser) {
       setLists([]);
@@ -58,9 +54,6 @@ export default function ListsPage() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // --- Fungsi CRUD Halaman ---
-
-  // Membuat "Daftar" (kartu) baru
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newListName.trim() === "" || !currentUser) return;
@@ -70,14 +63,12 @@ export default function ListsPage() {
       name: newListName,
       createdAt: serverTimestamp(),
     });
-    setNewListName(""); // Kosongkan input
+    setNewListName(""); 
   };
   
-  // Menghapus "Daftar" (kartu) BESERTA semua item di dalamnya
   const handleDeleteList = async (listId: string) => {
     if (!currentUser) return;
     
-    // Konfirmasi dulu
     const listToDelete = lists.find(l => l.id === listId);
     if (!listToDelete) return;
     
@@ -85,21 +76,17 @@ export default function ListsPage() {
       try {
         const batch = writeBatch(db);
 
-        // 1. Hapus Dokumen List Induk
         const listDocRef = doc(db, `users/${currentUser.uid}/lists`, listId);
         batch.delete(listDocRef);
 
-        // 2. Temukan dan Hapus semua item di dalamnya
         const itemsPath = `users/${currentUser.uid}/listItems`;
         const q = query(collection(db, itemsPath), where("listId", "==", listId));
         
-        // Dapatkan snapshot dari item yang akan dihapus (perlu query)
-        const itemsSnapshot = await getDocs(q); // getDocs, bukan onSnapshot
+        const itemsSnapshot = await getDocs(q); 
         itemsSnapshot.forEach(doc => {
-          batch.delete(doc.ref); // Tambahkan setiap item ke batch
+          batch.delete(doc.ref); 
         });
 
-        // 3. Eksekusi semua penghapusan
         await batch.commit();
 
       } catch (error) {
@@ -108,100 +95,114 @@ export default function ListsPage() {
       }
     }
   };
-  
-  // Impor getDocs jika belum ada di atas
-  // import { ..., getDocs } from "firebase/firestore";
-  // Note: Jika getDocs error, pastikan sudah diimpor dari 'firebase/firestore'
 
-  // --- Render (Loading & Auth) ---
+  // --- STATE: LOADING ---
   if (authLoading) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-24 dark:bg-black">
-        <p className="dark:text-white">Memuat sesi...</p>
-      </main>
+      <div className="flex items-center justify-center min-h-screen bg-[#F8F9FB]">
+        <p className="font-black text-[#0047AB] animate-pulse uppercase tracking-widest text-xs">Memuat Sesi...</p>
+      </div>
     );
   }
 
+  // --- STATE: BELUM LOGIN ---
   if (!currentUser) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-8 md:p-24 dark:bg-black">
-        <div className="w-full max-w-2xl text-center">
-          <h1 className="mb-8 text-4xl font-bold dark:text-white">My Lists</h1>
-          <p className="mb-8 dark:text-gray-300">
-            Silakan login atau daftar untuk membuat daftar kustom.
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F9FB] p-6">
+        <div className="w-full max-w-md bg-white p-8 sm:p-10 rounded-[32px] border border-slate-100 shadow-sm text-center">
+          <div className="w-16 h-16 bg-blue-50 text-[#0047AB] rounded-full flex items-center justify-center mx-auto mb-6">
+            <LayoutList size={32} />
+          </div>
+          <h1 className="text-2xl font-black text-[#0F172A] mb-2 tracking-tight">Akses Terbatas</h1>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">
+            Silakan login untuk mengelola daftar.
           </p>
           <AuthComponent />
-          <Link href="/" className="mt-12 inline-block text-blue-600 hover:underline dark:text-blue-400">
-            Back to Home
+          <Link href="/" className="mt-8 inline-flex items-center justify-center gap-2 text-xs font-black text-slate-400 hover:text-[#0047AB] uppercase transition-colors">
+            <ChevronLeft size={16} /> Kembali ke Beranda
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
-  // --- Tampilan Utama (Sudah Login) ---
+  // --- TAMPILAN UTAMA (SUDAH LOGIN) ---
   return (
-    <main className="flex min-h-screen flex-col items-center p-8 md:p-24 dark:bg-black">
-      <div className="w-full max-w-6xl"> {/* Dibuat lebih lebar (max-w-6xl) */}
-        <div className="mb-8 text-center">
-          <AuthComponent />
-        </div>
-        
-        <h1 className="mb-8 text-center text-4xl font-bold dark:text-white">
-          My Custom Lists
+    <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-20">
+      
+      {/* 🚀 HEADER SECTION */}
+      <div className="px-4 sm:px-10 pt-10 sm:pt-14">
+        <p className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+          Personalisasi & Catatan
+        </p>
+        <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-black text-[#0F172A] tracking-tighter leading-none flex items-center gap-3">
+          <ListTodo className="text-[#0047AB] hidden sm:block" size={36} strokeWidth={2.5} />
+          Custom Lists
         </h1>
+      </div>
 
-        {/* --- Form Buat List Baru --- */}
+      {/* 🚀 FORM BUAT LIST (Desain Floating Pill) */}
+      <div className="px-4 sm:px-10 mt-8">
         <form
           onSubmit={handleCreateList}
-          className="mx-auto mb-12 max-w-lg rounded-lg bg-gray-100 p-6 dark:bg-gray-800"
+          className="flex flex-col sm:flex-row items-center bg-white p-2 rounded-[20px] sm:rounded-full shadow-sm border border-slate-200 max-w-2xl transition-all focus-within:border-[#0047AB] focus-within:shadow-md"
         >
-          <h2 className="mb-4 text-2xl font-semibold dark:text-white">Buat Daftar Baru</h2>
-          <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="flex-1 w-full px-4 py-2 sm:py-0">
             <input
               type="text"
               value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
-              placeholder="Nama Daftar (mis: Belanjaan, Film)"
-              className="flex-grow rounded-lg border p-3 text-black dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              placeholder="Tulis nama daftar baru (mis: Belanja, Film)..."
+              className="w-full bg-transparent text-sm sm:text-base font-bold text-[#0F172A] outline-none placeholder:text-slate-300 placeholder:font-medium"
             />
-            <button
-              type="submit"
-              className="rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white transition-colors hover:bg-blue-700"
-            >
-              Buat List
-            </button>
           </div>
+          <button
+            type="submit"
+            disabled={!newListName.trim()}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#0047AB] text-white px-6 py-3 sm:py-2.5 rounded-xl sm:rounded-full font-black text-[10px] sm:text-xs uppercase shadow-md shadow-blue-100 hover:bg-blue-800 disabled:opacity-50 transition-all shrink-0"
+          >
+            <PlusCircle size={16} /> <span className="tracking-widest">Buat List</span>
+          </button>
         </form>
+      </div>
 
-        <hr className="mb-12 border-gray-600" />
+      {/* 🚀 TAB MENU VISUAL (Pemisah Garis Sederhana) */}
+      <div className="px-4 sm:px-10 mt-10 sm:mt-12">
+        <div className="flex border-b border-slate-200">
+          <div className="pb-3 text-sm sm:text-base text-[#0F172A] font-black border-b-[3px] sm:border-b-4 border-[#0F172A] tracking-tight flex items-center gap-2">
+            <LayoutList size={18} /> Koleksi Daftar
+          </div>
+        </div>
+      </div>
 
-        {/* --- Grid untuk Kartu Daftar --- */}
-        <h2 className="mb-6 text-3xl font-bold dark:text-white">Daftar Tersimpan</h2>
+      {/* 🚀 DAFTAR TERSIMPAN (GRID) */}
+      <div className="px-4 sm:px-10 mt-8">
         {lists.length === 0 ? (
-          <p className="dark:text-gray-400">Anda belum membuat daftar apapun.</p>
+          <div className="bg-white rounded-[24px] sm:rounded-[32px] border border-slate-100 shadow-sm p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
+            <ListTodo size={56} className="mb-4 text-slate-200" strokeWidth={1.5} />
+            <p className="text-xs font-black uppercase tracking-widest text-slate-300">Belum ada daftar yang dibuat.</p>
+            <p className="text-[10px] font-bold text-slate-400 mt-2">Gunakan kolom di atas untuk mulai membuat list.</p>
+          </div>
         ) : (
-          // Ini adalah layout grid 2 kolom
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {lists.map((list) => (
               <ListItemCard 
                 key={list.id} 
                 list={list}
-                onDeleteList={handleDeleteList} // Kirim fungsi delete sebagai prop
+                onDeleteList={handleDeleteList} 
               />
             ))}
           </div>
         )}
-
-        <div className="mt-12 text-center">
-          <Link href="/" className="inline-block text-blue-600 hover:underline dark:text-blue-400">
-            Back to Home
-          </Link>
-        </div>
       </div>
-    </main>
+
+      {/* 🚀 FOOTER ACTION */}
+      <div className="px-4 sm:px-10 mt-12 text-center lg:text-left">
+        <Link href="/" className="inline-flex items-center gap-2 text-[10px] sm:text-xs font-black text-slate-400 hover:text-[#0047AB] uppercase transition-colors tracking-widest">
+          <ChevronLeft size={16} /> Kembali ke Beranda
+        </Link>
+      </div>
+      
+    </div>
   );
 }
-
-// PASTIKAN Anda mengimpor 'getDocs' di atas
-// import { ..., getDocs } from "firebase/firestore";
