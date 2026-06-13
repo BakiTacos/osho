@@ -57,18 +57,44 @@ export default function PembayaranPage() {
   const years = [2024, 2025, 2026];
 
   // 🚀 PERBAIKAN: SORTING FILTERED INVOICES
-  const rawFilteredInvoices = paymentService.filterByTime(invoices, timeFilter, selectedMonth, selectedYear);
-  const filteredInvoices = [...rawFilteredInvoices].sort((a, b) => {
-    // Cari format -YYYYMMDD- (contoh: SUPARTA-20260613-001)
-    const matchA = a.noNota?.match(/-(\d{8})-/);
-    const matchB = b.noNota?.match(/-(\d{8})-/);
-    
-    if (matchA && matchB) {
-      return matchB[1].localeCompare(matchA[1]); // Descending (terbaru di atas)
+  // 🚀 LOGIKA FILTER & SORTING KHUSUS NOTA (Membaca Tanggal dari Nomor)
+  const getInvoiceDate = (inv: any) => {
+    // Cari pola 8 digit YYYYMMDD di dalam noNota (contoh: SUPARTA-20260613-001)
+    const match = inv.noNota?.match(/-(\d{4})(\d{2})(\d{2})-/);
+    if (match) {
+      const yyyy = parseInt(match[1]);
+      const mm = parseInt(match[2]) - 1; // Bulan di JavaScript dimulai dari 0
+      const dd = parseInt(match[3]);
+      return new Date(yyyy, mm, dd);
     }
-    return (b.noNota || "").localeCompare(a.noNota || "");
+    // Sekoci penyelamat jika nota diinput manual tanpa format tanggal
+    if (inv.createdAt) {
+      return inv.createdAt.toDate ? inv.createdAt.toDate() : new Date(inv.createdAt);
+    }
+    return new Date();
+  };
+
+  const filteredInvoices = invoices.filter((inv) => {
+    const invDate = getInvoiceDate(inv);
+    const now = new Date();
+    
+    // Set waktu ke 00:00:00 untuk perbandingan hari yang akurat
+    const todayStr = now.toDateString();
+    const invStr = invDate.toDateString();
+    
+    const diffInDays = Math.floor((now.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (timeFilter === "Hari Ini") return invStr === todayStr;
+    if (timeFilter === "3 Hari") return diffInDays >= 0 && diffInDays <= 3;
+    if (timeFilter === "Bulan") return invDate.getMonth() === selectedMonth && invDate.getFullYear() === selectedYear;
+    
+    return true;
+  }).sort((a, b) => {
+    // Descending: Tanggal terbaru selalu berada di urutan paling atas tabel
+    return getInvoiceDate(b).getTime() - getInvoiceDate(a).getTime();
   });
 
+  // (Filter untuk Withdrawal dan Expense tetap menggunakan bawaan PaymentService)
   const filteredWithdrawals = paymentService.filterByTime(withdrawals, timeFilter, selectedMonth, selectedYear);
   const filteredExpenses = paymentService.filterByTime(expenses, timeFilter, selectedMonth, selectedYear);
   
