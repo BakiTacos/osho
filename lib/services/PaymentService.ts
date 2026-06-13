@@ -152,7 +152,7 @@ export class PaymentService {
       for (const item of items) {
         const matched = this.products.find(p => p.sku === item.sku.toUpperCase());
         if (matched) {
-          const qtyToInc = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
+          const qtyToInc = item.unit === 'lusin' ? Number(item.qty) * 12 : item.unit === 'half_lusin' ? Number(item.qty) * 6 : Number(item.qty);
           await updateDoc(doc(db, `users/${this.currentUser.uid}/products`, matched.id), { stock: increment(qtyToInc) });
         }
       }
@@ -163,7 +163,7 @@ export class PaymentService {
     for (const item of inv.items) {
       const matched = this.products.find(p => p.sku === item.sku.toUpperCase());
       if (matched) {
-        const qtyToDec = item.unit === 'lusin' ? Number(item.qty) * 12 : Number(item.qty);
+        const qtyToDec = item.unit === 'lusin' ? Number(item.qty) * 12 : item.unit === 'half_lusin' ? Number(item.qty) * 6 : Number(item.qty);
         await updateDoc(doc(db, `users/${this.currentUser.uid}/products`, matched.id), { stock: increment(-qtyToDec) });
       }
     }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Landmark, Pencil } from 'lucide-react';
+import { X, Plus, Trash2, Landmark, Pencil, AlertCircle } from 'lucide-react';
 
 export const WithdrawModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) => {
   if (!isOpen) return null;
@@ -190,38 +190,163 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
   );
 };
 
-export const InvoiceModal = ({ isOpen, onClose, form, setForm, items, setItems, products, onSubmit }: any) => {
+export const InvoiceModal = ({ 
+  isOpen, 
+  onClose, 
+  form, 
+  setForm, 
+  items, 
+  setItems, 
+  products, 
+  suppliers = [],
+  onSubmit 
+}: any) => {
   if (!isOpen) return null;
+
+  const handleSupplierChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedName = e.target.value;
+    const matchedSup = suppliers.find((s: any) => s.name === selectedName);
+    
+    let autoNota = form.noNota || '';
+    
+    if (matchedSup) {
+      // Bikin format otomatis: KODE-YYYYMMDD- (Misal: SUPARTA-20260613-)
+      const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      autoNota = `${matchedSup.code}-${today}-`;
+    }
+
+    setForm({ ...form, supplier: selectedName, noNota: autoNota });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-5xl rounded-[40px] p-8 max-h-[90vh] overflow-y-auto shadow-2xl relative no-scrollbar">
-        <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-black tracking-tighter">Tambah Nota & Restock</h2><button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full"><X/></button></div>
+        
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-black tracking-tighter">Tambah Nota & Restock</h2>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors">
+            <X />
+          </button>
+        </div>
+
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nomor Nota</label><input required value={form.noNota} className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB]" placeholder="Contoh: INV/2024/001" onChange={e => setForm({...form, noNota: e.target.value})} /></div>
-            <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nama Supplier</label><input required value={form.supplier} className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB]" placeholder="Nama Toko / Distributor" onChange={e => setForm({...form, supplier: e.target.value})} /></div>
+            
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nama Supplier</label>
+              <select 
+                required 
+                value={form.supplier} 
+                onChange={handleSupplierChange}
+                className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB] cursor-pointer outline-none appearance-none"
+              >
+                <option value="" disabled>Pilih Supplier Terdaftar...</option>
+                {suppliers.map((sup: any) => (
+                  <option key={sup.id} value={sup.name}>
+                    {sup.name} ({sup.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nomor Nota</label>
+              <input 
+                required 
+                value={form.noNota} 
+                onChange={e => setForm({...form, noNota: e.target.value})} 
+                className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB] outline-none uppercase" 
+                placeholder="Contoh: SUPARTA-20260613-001" 
+              />
+            </div>
+            
           </div>
+
           <div className="space-y-4">
-            <div className="flex justify-between items-center px-2"><h5 className="text-[10px] font-black uppercase text-[#0047AB] tracking-widest">Detail Item Belanja</h5><button type="button" onClick={() => setItems([...items, {sku:'', name:'', qty:1, price:0, unit:'lusin'}])} className="flex items-center gap-2 text-[9px] font-black bg-blue-50 text-[#0047AB] px-4 py-2 rounded-xl hover:bg-blue-100 transition-all"><Plus size={12}/> TAMBAH ITEM</button></div>
-            <div className="grid grid-cols-12 gap-3 px-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]"><div className="col-span-2">SKU Produk</div><div className="col-span-3">Nama Barang</div><div className="col-span-2">Satuan</div><div className="col-span-2 text-center">Qty</div><div className="col-span-2">Harga Beli</div><div className="col-span-1"></div></div>
-            <div className="space-y-2">
-              {items.map((item: any, idx: number) => (
-                <div key={idx} className="grid grid-cols-12 gap-3 bg-slate-50/50 p-3 rounded-2xl items-center border border-slate-100">
-                  <input required className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-bold border-none shadow-sm focus:ring-2 focus:ring-blue-200" placeholder="SKU" value={item.sku} onChange={e => { const newItems = [...items]; newItems[idx].sku = e.target.value; const matched = products.find((p: any) => p.sku === e.target.value.toUpperCase()); if(matched) newItems[idx].name = matched.name; setItems(newItems); }}/>
-                  <input className="col-span-3 bg-transparent py-3 px-4 rounded-xl text-xs font-bold text-slate-400 border-none" placeholder="Nama Produk" value={item.name} readOnly/>
-                  <select className="col-span-2 bg-white py-3 px-2 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm cursor-pointer" value={item.unit} onChange={e => { const newItems = [...items]; newItems[idx].unit = e.target.value; setItems(newItems); }}><option value="lusin">Lusin (x12)</option><option value="pcs">Pcs (Satuan)</option></select>
-                  <input type="number" required min="1" className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-bold text-center border-none shadow-sm focus:ring-2 focus:ring-blue-200" value={item.qty} onChange={e => { const newItems = [...items]; newItems[idx].qty = Number(e.target.value); setItems(newItems); }}/>
-                  <input type="number" required min="1" className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm focus:ring-2 focus:ring-blue-200" placeholder="Rp" value={item.price || ''} onChange={e => { const newItems = [...items]; newItems[idx].price = Number(e.target.value); setItems(newItems); }}/>
-                  <button type="button" onClick={() => setItems(items.filter((_: any, i: number) => i !== idx))} className="col-span-1 text-red-300 hover:text-red-500 transition-all flex justify-center"><Trash2 size={16}/></button>
-                </div>
-              ))}
+            <div className="flex justify-between items-center px-2">
+              <h5 className="text-[10px] font-black uppercase text-[#0047AB] tracking-widest">Detail Item Belanja</h5>
+              <button type="button" onClick={() => setItems([...items, {sku:'', name:'', qty:1, price:0, unit:'lusin'}])} className="flex items-center gap-2 text-[9px] font-black bg-blue-50 text-[#0047AB] px-4 py-2 rounded-xl hover:bg-blue-100 transition-all">
+                <Plus size={12}/> TAMBAH ITEM
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-12 gap-3 px-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+              <div className="col-span-2">SKU Produk</div>
+              <div className="col-span-3">Nama Barang</div>
+              <div className="col-span-2">Satuan</div>
+              <div className="col-span-2 text-center">Qty</div>
+              <div className="col-span-2">Harga Beli Total</div>
+              <div className="col-span-1"></div>
+            </div>
+            
+            <div className="space-y-3">
+              {items.map((item: any, idx: number) => {
+                
+                // 🚀 SMART PRICE CHECKER LOGIC
+                const matched = products.find((p: any) => p.sku === item.sku.toUpperCase());
+                let isPriceDiff = false;
+                let masterCost = 0;
+                let currentItemCostPerPcs = 0;
+
+                if (matched && item.price > 0) {
+                  masterCost = Number(matched.costPrice) || 0;
+                  // Tentukan multiplier berdasarkan satuan
+                  const multiplier = item.unit === 'lusin' ? 12 : item.unit === 'half_lusin' ? 6 : 1;
+                  // Harga per Pcs dari nota saat ini
+                  currentItemCostPerPcs = item.price / multiplier;
+                  
+                  // Toleransi perbedaan Rp 1 untuk menghindari isu pembagian koma (floating point)
+                  if (Math.abs(currentItemCostPerPcs - masterCost) > 1) { 
+                    isPriceDiff = true;
+                  }
+                }
+
+                return (
+                  <div key={idx} className="flex flex-col gap-1">
+                    <div className={`grid grid-cols-12 gap-3 bg-slate-50/50 p-3 rounded-2xl items-center border transition-all ${isPriceDiff ? 'border-orange-300 bg-orange-50/30' : 'border-slate-100'}`}>
+                      <input required className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-bold border-none shadow-sm focus:ring-2 focus:ring-blue-200 outline-none uppercase" placeholder="SKU" value={item.sku} onChange={e => { const newItems = [...items]; newItems[idx].sku = e.target.value; const m = products.find((p: any) => p.sku === e.target.value.toUpperCase()); if(m) newItems[idx].name = m.name; setItems(newItems); }}/>
+                      <input className="col-span-3 bg-transparent py-3 px-4 rounded-xl text-xs font-bold text-slate-400 border-none outline-none" placeholder="Nama Produk Otomatis" value={item.name} readOnly/>
+                      <select className="col-span-2 bg-white py-3 px-2 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm cursor-pointer outline-none" value={item.unit} onChange={e => { const newItems = [...items]; newItems[idx].unit = e.target.value; setItems(newItems); }}>
+                        <option value="lusin">Lusin (x12)</option>
+                        <option value="half_lusin">1/2 Lusin (x6)</option> {/* 🚀 OPSI 6 PCS */}
+                        <option value="pcs">Pcs (Satuan)</option>
+                      </select>
+                      <input type="number" required min="1" className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-bold text-center border-none shadow-sm focus:ring-2 focus:ring-blue-200 outline-none" value={item.qty} onChange={e => { const newItems = [...items]; newItems[idx].qty = Number(e.target.value); setItems(newItems); }}/>
+                      <input type="number" required min="1" className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm focus:ring-2 focus:ring-blue-200 outline-none" placeholder="Rp" value={item.price || ''} onChange={e => { const newItems = [...items]; newItems[idx].price = Number(e.target.value); setItems(newItems); }}/>
+                      <button type="button" onClick={() => setItems(items.filter((_: any, i: number) => i !== idx))} className="col-span-1 text-red-300 hover:text-red-500 transition-all flex justify-center">
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
+
+                    {/* 🚀 NOTIFIKASI PERINGATAN HARGA */}
+                    {isPriceDiff && (
+                       <div className="flex items-center gap-1.5 ml-2 mt-0.5 animate-in fade-in zoom-in duration-300">
+                         <AlertCircle size={12} className="text-orange-500" />
+                         <p className="text-[9px] font-bold text-orange-600">
+                           <span className="font-black uppercase">PERHATIAN!</span> Harga beli per-pcs saat ini <span className="font-black border-b border-orange-400">Rp {Math.round(currentItemCostPerPcs).toLocaleString('id-ID')}</span> BERBEDA dengan Data Master Modal (<span className="font-black">Rp {masterCost.toLocaleString('id-ID')}</span>).
+                         </p>
+                       </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+
           <div className="flex justify-between items-center pt-6 border-t border-slate-50">
-            <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ringkasan Biaya</p><div className="text-2xl font-black text-[#0F172A]">Rp {items.reduce((a: any,b: any) => a + (b.qty * b.price), 0).toLocaleString('id-ID')}</div></div>
-            <div className="flex gap-3"><button type="button" onClick={onClose} className="px-8 py-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-200 transition-all">Batal</button><button type="submit" className="px-10 py-4 bg-[#0047AB] text-white rounded-2xl font-black text-[10px] uppercase shadow-xl shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all">Simpan Nota & Update Stok</button></div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ringkasan Biaya</p>
+              <div className="text-2xl font-black text-[#0F172A]">
+                Rp {items.reduce((a: any,b: any) => a + (b.qty * b.price), 0).toLocaleString('id-ID')}
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="px-8 py-4 bg-slate-100 rounded-2xl font-black text-[10px] uppercase hover:bg-slate-200 transition-all">Batal</button>
+              <button type="submit" className="px-10 py-4 bg-[#0047AB] text-white rounded-2xl font-black text-[10px] uppercase shadow-xl shadow-blue-100 hover:scale-[1.02] active:scale-95 transition-all">Simpan Nota & Update Stok</button>
+            </div>
           </div>
         </form>
+
       </div>
     </div>
   );
