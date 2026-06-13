@@ -283,17 +283,23 @@ export const InvoiceModal = ({
               {items.map((item: any, idx: number) => {
                 
                 // 🚀 SMART PRICE CHECKER LOGIC
+                // 🚀 SMART PRICE CHECKER LOGIC
                 const matched = products.find((p: any) => p.sku === item.sku.toUpperCase());
                 let isPriceDiff = false;
                 let masterCost = 0;
                 let currentItemCostPerPcs = 0;
 
-                if (matched && item.price > 0) {
+                if (matched && item.price > 0 && item.qty > 0) { // Pastikan qty > 0 untuk menghindari pembagian dengan nol
                   masterCost = Number(matched.costPrice) || 0;
+                  
                   // Tentukan multiplier berdasarkan satuan
                   const multiplier = item.unit === 'lusin' ? 12 : item.unit === 'half_lusin' ? 6 : 1;
-                  // Harga per Pcs dari nota saat ini
-                  currentItemCostPerPcs = item.price / multiplier;
+                  
+                  // 🚀 FIX: Dapatkan Total Jumlah Pcs = (Qty Input * Multiplier Satuan)
+                  const totalPcs = item.qty * multiplier;
+                  
+                  // 🚀 FIX: Harga per Pcs = (Harga Beli Total / Total Jumlah Pcs)
+                  currentItemCostPerPcs = item.price / totalPcs;
                   
                   // Toleransi perbedaan Rp 1 untuk menghindari isu pembagian koma (floating point)
                   if (Math.abs(currentItemCostPerPcs - masterCost) > 1) { 
