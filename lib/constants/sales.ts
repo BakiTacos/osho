@@ -1,5 +1,5 @@
 export const MARKETPLACE_CONFIG: any = {
-  shopee: { name: "Shopee", dataStartRow: 1, cols: { orderId: 0, resi: 4, sku: 14, name: 13, total: 20, qty: 18 } },
+  shopee: { name: "Shopee", dataStartRow: 1, cols: { orderId: 0, resi: 5, sku: 15, name: 14, total: 17, qty: 19 } },
   tiktok: { name: "Tiktok", dataStartRow: 2, cols: { orderId: 0, sku: 6, total: 13, qty: 9, shippingType: 40, // Tipe Layanan (Standard/Economy/Cargo)
       province: 48,     // Provinsi Tujuan
       weight: 55 } },
