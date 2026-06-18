@@ -191,30 +191,18 @@ export const ExpenseModal = ({ isOpen, onClose, form, setForm, onSubmit }: any) 
 };
 
 export const InvoiceModal = ({ 
-  isOpen, 
-  onClose, 
-  form, 
-  setForm, 
-  items, 
-  setItems, 
-  products, 
-  suppliers = [],
-  onSubmit 
+  isOpen, onClose, form, setForm, items, setItems, products, suppliers = [], onSubmit 
 }: any) => {
   if (!isOpen) return null;
 
   const handleSupplierChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedName = e.target.value;
     const matchedSup = suppliers.find((s: any) => s.name === selectedName);
-    
     let autoNota = form.noNota || '';
-    
     if (matchedSup) {
-      // Bikin format otomatis: KODE-YYYYMMDD- (Misal: SUPARTA-20260613-)
       const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       autoNota = `${matchedSup.code}-${today}-`;
     }
-
     setForm({ ...form, supplier: selectedName, noNota: autoNota });
   };
 
@@ -224,42 +212,22 @@ export const InvoiceModal = ({
         
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-black tracking-tighter">Tambah Nota & Restock</h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors">
-            <X />
-          </button>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors"><X /></button>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nama Supplier</label>
-              <select 
-                required 
-                value={form.supplier} 
-                onChange={handleSupplierChange}
-                className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB] cursor-pointer outline-none appearance-none"
-              >
+              <select required value={form.supplier} onChange={handleSupplierChange} className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB] cursor-pointer outline-none appearance-none">
                 <option value="" disabled>Pilih Supplier Terdaftar...</option>
-                {suppliers.map((sup: any) => (
-                  <option key={sup.id} value={sup.name}>
-                    {sup.name} ({sup.code})
-                  </option>
-                ))}
+                {suppliers.map((sup: any) => <option key={sup.id} value={sup.name}>{sup.name} ({sup.code})</option>)}
               </select>
             </div>
-
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Nomor Nota</label>
-              <input 
-                required 
-                value={form.noNota} 
-                onChange={e => setForm({...form, noNota: e.target.value})} 
-                className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB] outline-none uppercase" 
-                placeholder="Contoh: SUPARTA-20260613-001" 
-              />
+              <input required value={form.noNota} onChange={e => setForm({...form, noNota: e.target.value})} className="w-full bg-slate-50 rounded-2xl py-4 px-6 font-bold text-sm border-none focus:ring-2 focus:ring-[#0047AB] outline-none uppercase" placeholder="Contoh: SUPARTA-20260613-001" />
             </div>
-            
           </div>
 
           <div className="space-y-4">
@@ -273,35 +241,33 @@ export const InvoiceModal = ({
             <div className="grid grid-cols-12 gap-3 px-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
               <div className="col-span-2">SKU Produk</div>
               <div className="col-span-3">Nama Barang</div>
-              <div className="col-span-2">Satuan</div>
-              <div className="col-span-2 text-center">Qty</div>
-              <div className="col-span-2">Harga Beli Total</div>
+              <div className="col-span-2">Satuan Input</div>
+              <div className="col-span-2 text-center">Jumlah (Qty)</div>
+              <div className="col-span-2">Subtotal Harga</div>
               <div className="col-span-1"></div>
             </div>
             
             <div className="space-y-3">
               {items.map((item: any, idx: number) => {
                 
-                // 🚀 SMART PRICE CHECKER LOGIC
-                // 🚀 SMART PRICE CHECKER LOGIC
+                // 🚀 SMART PRICE CHECKER (SUBTOTAL ABSOLUT)
                 const matched = products.find((p: any) => p.sku === item.sku.toUpperCase());
                 let isPriceDiff = false;
                 let masterCost = 0;
                 let currentItemCostPerPcs = 0;
 
-                if (matched && item.price > 0 && item.qty > 0) { // Pastikan qty > 0 untuk menghindari pembagian dengan nol
+                if (matched && item.price > 0 && item.qty > 0) { 
                   masterCost = Number(matched.costPrice) || 0;
                   
-                  // Tentukan multiplier berdasarkan satuan
+                  // 1. Tentukan multiplier (1 lusin = 12, dll)
                   const multiplier = item.unit === 'lusin' ? 12 : item.unit === 'half_lusin' ? 6 : 1;
                   
-                  // 🚀 FIX: Dapatkan Total Jumlah Pcs = (Qty Input * Multiplier Satuan)
-                  const totalPcs = item.qty * multiplier;
+                  // 2. Hitung jumlah FISIK keping barang: Qty * Multiplier
+                  const totalPcs = Number(item.qty) * multiplier;
                   
-                  // 🚀 FIX: Harga per Pcs = (Harga Beli Total / Total Jumlah Pcs)
-                  currentItemCostPerPcs = item.price / totalPcs;
+                  // 3. Harga per keping = Harga Subtotal Baris dibagi Jumlah Fisik Barang
+                  currentItemCostPerPcs = Number(item.price) / totalPcs;
                   
-                  // Toleransi perbedaan Rp 1 untuk menghindari isu pembagian koma (floating point)
                   if (Math.abs(currentItemCostPerPcs - masterCost) > 1) { 
                     isPriceDiff = true;
                   }
@@ -314,17 +280,14 @@ export const InvoiceModal = ({
                       <input className="col-span-3 bg-transparent py-3 px-4 rounded-xl text-xs font-bold text-slate-400 border-none outline-none" placeholder="Nama Produk Otomatis" value={item.name} readOnly/>
                       <select className="col-span-2 bg-white py-3 px-2 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm cursor-pointer outline-none" value={item.unit} onChange={e => { const newItems = [...items]; newItems[idx].unit = e.target.value; setItems(newItems); }}>
                         <option value="lusin">Lusin (x12)</option>
-                        <option value="half_lusin">1/2 Lusin (x6)</option> {/* 🚀 OPSI 6 PCS */}
+                        <option value="half_lusin">1/2 Lusin (x6)</option>
                         <option value="pcs">Pcs (Satuan)</option>
                       </select>
                       <input type="number" required min="1" className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-bold text-center border-none shadow-sm focus:ring-2 focus:ring-blue-200 outline-none" value={item.qty} onChange={e => { const newItems = [...items]; newItems[idx].qty = Number(e.target.value); setItems(newItems); }}/>
-                      <input type="number" required min="1" className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm focus:ring-2 focus:ring-blue-200 outline-none" placeholder="Rp" value={item.price || ''} onChange={e => { const newItems = [...items]; newItems[idx].price = Number(e.target.value); setItems(newItems); }}/>
-                      <button type="button" onClick={() => setItems(items.filter((_: any, i: number) => i !== idx))} className="col-span-1 text-red-300 hover:text-red-500 transition-all flex justify-center">
-                        <Trash2 size={16}/>
-                      </button>
+                      <input type="number" required min="0" className="col-span-2 bg-white py-3 px-4 rounded-xl text-xs font-black text-[#0047AB] border-none shadow-sm focus:ring-2 focus:ring-blue-200 outline-none" placeholder="Rp" value={item.price || ''} onChange={e => { const newItems = [...items]; newItems[idx].price = Number(e.target.value); setItems(newItems); }}/>
+                      <button type="button" onClick={() => setItems(items.filter((_: any, i: number) => i !== idx))} className="col-span-1 text-red-300 hover:text-red-500 transition-all flex justify-center"><Trash2 size={16}/></button>
                     </div>
 
-                    {/* 🚀 NOTIFIKASI PERINGATAN HARGA */}
                     {isPriceDiff && (
                        <div className="flex items-center gap-1.5 ml-2 mt-0.5 animate-in fade-in zoom-in duration-300">
                          <AlertCircle size={12} className="text-orange-500" />
@@ -341,9 +304,10 @@ export const InvoiceModal = ({
 
           <div className="flex justify-between items-center pt-6 border-t border-slate-50">
             <div className="space-y-1">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ringkasan Biaya</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Grand Total Nota</p>
               <div className="text-2xl font-black text-[#0F172A]">
-                Rp {items.reduce((a: any,b: any) => a + (b.qty * b.price), 0).toLocaleString('id-ID')}
+                {/* 🚀 FIX FINAL: Tidak ada lagi perkalian QTY! Cukup jumlahkan semua kolom harga input! */}
+                Rp {items.reduce((a: any, b: any) => a + Number(b.price || 0), 0).toLocaleString('id-ID')}
               </div>
             </div>
             <div className="flex gap-3">

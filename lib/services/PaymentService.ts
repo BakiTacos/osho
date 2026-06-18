@@ -4,12 +4,9 @@ import { collection, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, increme
 export class PaymentService {
   constructor(private currentUser: any, private products: any[]) {}
 
-  // --- FILTER & CALCULATIONS ---
-  // --- FILTER & CALCULATIONS ---
   public filterByTime(data: any[], timeFilter: string, month: number, year: number) {
     const now = new Date();
     
-    // 1. Lakukan penyaringan data terlebih dahulu
     const filtered = data.filter(item => {
       if (!item.createdAt) return false;
       
@@ -22,22 +19,19 @@ export class PaymentService {
       return true;
     });
 
-    // 2. 🔥 SORTING LOGIC: Urutkan dari yang PALING BARU ke PALING LAMA
     return filtered.sort((a, b) => {
       const dateA = a.createdAt.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
       const dateB = b.createdAt.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
-      return dateB - dateA; // Ubah jadi `dateA - dateB` jika ingin dari yang paling lama ke paling baru
+      return dateB - dateA; 
     });
   }
 
   public calculateStats(filteredWithdrawals: any[], filteredInvoices: any[], filteredExpenses: any[]) {
-    // 1. Statistik Berdasarkan Platform (Withdrawal)
     const platformStats: Record<string, number> = filteredWithdrawals.reduce((acc: any, curr) => {
       acc[curr.platform] = (acc[curr.platform] || 0) + curr.amount;
       return acc;
     }, {});
 
-    // 2. Statistik Berdasarkan Pembayar (OPEX / Expenses)
     const payerStats: Record<string, number> = filteredExpenses.reduce((acc: any, curr) => {
       const payer = curr.paidBy || "TIDAK TERSET";
       acc[payer] = (acc[payer] || 0) + Number(curr.amount);
@@ -59,94 +53,55 @@ export class PaymentService {
     };
   }
 
-  // --- FIRESTORE ACTIONS ---
-
   public async saveWithdraw(form: any) {
     if (Number(form.amount) <= 0) throw new Error("Jumlah harus > 0");
-    
     const { id, date, ...dataToSave } = form;
-    
-    // 🚀 FIX: Ambil tanggal dari form pengguna. Jika kosong, baru pakai waktu sekarang.
     const transactionDate = date ? new Date(date) : new Date();
 
     if (id) {
       const docRef = doc(db, `users/${this.currentUser.uid}/withdrawals`, id);
       await updateDoc(docRef, { 
-        ...dataToSave, 
-        date, 
-        amount: Number(dataToSave.amount),
-        createdAt: transactionDate, // Sinkronisasi tanggal
-        updatedAt: serverTimestamp() 
+        ...dataToSave, date, amount: Number(dataToSave.amount), createdAt: transactionDate, updatedAt: serverTimestamp() 
       });
     } else {
       await addDoc(collection(db, `users/${this.currentUser.uid}/withdrawals`), { 
-        ...dataToSave, 
-        date,
-        amount: Number(dataToSave.amount), 
-        status: 'Berhasil', 
-        editCount: 0, 
-        createdAt: transactionDate, // Simpan pakai tanggal pilihan
-        updatedAt: serverTimestamp() 
+        ...dataToSave, date, amount: Number(dataToSave.amount), status: 'Berhasil', editCount: 0, createdAt: transactionDate, updatedAt: serverTimestamp() 
       });
     }
   }
 
   public async saveExpense(form: any) {
     if (Number(form.amount) <= 0) throw new Error("Jumlah harus > 0");
-    
     const { id, date, ...dataToSave } = form;
-    
-    // 🚀 FIX: Ambil tanggal dari input biaya operasional
     const transactionDate = date ? new Date(date) : new Date();
 
     if (id) {
       const docRef = doc(db, `users/${this.currentUser.uid}/expenses`, id);
       await updateDoc(docRef, { 
-        ...dataToSave, 
-        date,
-        amount: Number(dataToSave.amount),
-        createdAt: transactionDate, 
-        updatedAt: serverTimestamp() 
+        ...dataToSave, date, amount: Number(dataToSave.amount), createdAt: transactionDate, updatedAt: serverTimestamp() 
       });
     } else {
       await addDoc(collection(db, `users/${this.currentUser.uid}/expenses`), { 
-        ...dataToSave, 
-        date,
-        amount: Number(dataToSave.amount), 
-        createdAt: transactionDate, 
-        updatedAt: serverTimestamp() 
+        ...dataToSave, date, amount: Number(dataToSave.amount), createdAt: transactionDate, updatedAt: serverTimestamp() 
       });
     }
   }
 
   public async saveInvoice(form: any, items: any[]) {
-    const hasInvalid = items.some(i => Number(i.qty) <= 0 || Number(i.price) <= 0);
-    if (hasInvalid) throw new Error("Qty dan Harga harus lebih besar dari 0");
-
-    const total = items.reduce((a, b) => a + (b.qty * b.price), 0);
+    // 🚀 FIX: Jangan pakai b.qty * b.price! Langsung jumlahkan Subtotal (b.price) saja.
+    const total = items.reduce((a, b) => a + Number(b.price || 0), 0);
     
-    // Khusus invoice, form menggunakan 'dueDate' sebagai representasi tanggal dari UI Kakak
     const { id, dueDate, ...dataToSave } = form;
     const transactionDate = dueDate ? new Date(dueDate) : new Date();
 
     if (id) {
       const docRef = doc(db, `users/${this.currentUser.uid}/supplier_invoices`, id);
       await updateDoc(docRef, { 
-        ...dataToSave, 
-        dueDate,
-        items, 
-        amount: total, 
-        createdAt: transactionDate, // Timpa serverTimestamp dengan tanggal dari form
-        updatedAt: serverTimestamp() 
+        ...dataToSave, dueDate, items, amount: total, createdAt: transactionDate, updatedAt: serverTimestamp() 
       });
     } else {
       await addDoc(collection(db, `users/${this.currentUser.uid}/supplier_invoices`), { 
-        ...dataToSave, 
-        dueDate,
-        items, 
-        amount: total, 
-        createdAt: transactionDate, 
-        updatedAt: serverTimestamp() 
+        ...dataToSave, dueDate, items, amount: total, createdAt: transactionDate, updatedAt: serverTimestamp() 
       });
       
       for (const item of items) {
