@@ -25,7 +25,7 @@ export default function Home() {
       {/* HEADER UTAMA */}
       <div className="px-4 sm:px-10 pt-10 pb-4">
         <h2 className="text-3xl sm:text-[42px] font-black text-[#0F172A] tracking-tighter leading-none">Beranda</h2>
-        <p className="text-[#64748B] mt-2 text-xs sm:text-sm font-medium">Selamat datang kembali. Silakan pilih modul kerja operasional harian Anda.</p>
+        <p className="text-[#64748B] mt-2 text-xs sm:text-sm font-medium">Selamat datang kembali. Silakan pilih operasional harian Anda.</p>
       </div>
 
       {/* RESPONSIVE RENDERING INTERFACE PINTASAN */}

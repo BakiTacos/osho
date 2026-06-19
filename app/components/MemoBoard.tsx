@@ -33,16 +33,16 @@ export const MemoBoard = () => {
 
   return (
     <div className="px-4 sm:px-10 mt-6 animate-in fade-in slide-in-from-top-4 duration-300">
-      <div className="bg-white p-5 sm:p-7 rounded-[28px] border border-[#F1F5F9] shadow-xs">
+      <div className="bg-white p-5 sm:p-7 rounded-[20px] border border-[#F1F5F9] shadow-xs">
         
         {/* 1. HEADER PAPAN AGENDA (NAVY & SLATE TIMELISS STYLE) */}
         <div className="flex items-center gap-3 mb-5">
-          <div className="p-2.5 bg-[#F0F7FF] text-[#0047AB] rounded-xl shrink-0">
+          <div className="p-2.5 bg-[#F0F7FF] text-[#0047AB] rounded-2xl shrink-0">
             <ListTodo size={18} strokeWidth={2.5} />
           </div>
           <div>
-            <h4 className="text-xs sm:text-sm font-black text-[#0F172A] uppercase tracking-wider">Catatan & Agenda Gudang</h4>
-            <p className="text-[9px] sm:text-[10px] text-[#94A3B8] font-black uppercase tracking-widest mt-0.5">Koordinasi internal mandiri harian</p>
+            <h4 className="text-xs sm:text-sm font-black text-[#0F172A] uppercase tracking-wider">Catatan & Agenda</h4>
+            <p className="text-[9px] sm:text-[10px] text-[#94A3B8] font-black uppercase tracking-widest mt-0.5">Catatan Pengingat</p>
           </div>
         </div>
 

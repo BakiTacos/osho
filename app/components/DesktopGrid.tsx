@@ -16,7 +16,7 @@ export const DesktopGrid = ({ shortcuts }: DesktopGridProps) => {
             <Link 
               key={item.name} 
               href={item.href}
-              className="group bg-white p-6 rounded-3xl border border-[#F1F5F9] shadow-sm hover:shadow-md hover:border-slate-200 transition-all duration-300 flex flex-col items-start hover:-translate-y-1 relative"
+              className="group bg-white p-6 rounded-2xl border border-[#F1F5F9] shadow-sm hover:shadow-md hover:border-slate-200 transition-all duration-300 flex flex-col items-start hover:-translate-y-1 relative"
             >
               <div className={`p-3 rounded-2xl mb-4 transition-transform group-hover:scale-110 ${item.bg} ${item.color}`}>
                 <item.icon size={24} strokeWidth={2.5} />

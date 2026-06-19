@@ -15,7 +15,8 @@ import {
   User,
   BoxIcon,
   MapIcon,
-  Settings
+  Settings,
+  Home
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -32,8 +33,8 @@ export default function Sidebar() {
     }
   };
 
-  const sidebarItems = [
-    // 🔧 NAMA MENU DIUBAH MENJADI "Home"
+  // 1. DATA MENU UTAMA UNTUK DESKTOP (LENGKAP 7 MENU)
+  const desktopItems = [
     { name: "Beranda", icon: LayoutDashboard, href: "/" },
     { name: "Inventaris", icon: Calculator, href: "/inventaris" },
     { name: "Penjualan", icon: LinkIcon, href: "/penjualan" },
@@ -41,6 +42,14 @@ export default function Sidebar() {
     { name: "Retur", icon: BoxIcon, href: "/pengembalian" }, 
     { name: "Laporan", icon: MapIcon, href: "/laporan" },
     { name: "Pengaturan", icon: Settings, href: "/settings" },
+  ];
+
+  // 2. DATA SELEKSI UNTUK MOBILE (4 MENU UTAMA OPERASIONAL GUDANG)
+  const mobileNavItems = [
+    { icon: Home, href: "/", name: "Beranda" },
+    { icon: Calculator, href: "/inventaris", name: "Stok" },
+    { icon: LinkIcon, href: "/penjualan", name: "Penjualan" },
+    { icon: BoxIcon, href: "/pengembalian", name: "Retur" },
   ];
 
   return (
@@ -59,7 +68,7 @@ export default function Sidebar() {
 
         {/* Navigation Items */}
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto no-scrollbar">
-          {sidebarItems.map((item) => {
+          {desktopItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link 
@@ -108,51 +117,38 @@ export default function Sidebar() {
       </aside>
 
       {/* ========================================= */}
-      {/* 📱 FLOATING NAVBAR MOBILE (Ukuran Layar Kecil) */}
+      {/* 📱 🚀 REVISI KOKOH: STICKY BOTTOM NAVBAR APP-STYLE (ANTI-MENIMPA KONTEN) */}
       {/* ========================================= */}
-      <nav className="lg:hidden fixed bottom-4 inset-x-4 z-50 bg-white/90 backdrop-blur-md border border-slate-200 shadow-2xl rounded-2xl flex items-center overflow-x-auto no-scrollbar px-2 py-2 gap-1 snap-x">
+      {/* Menggunakan w-full, bottom-0, inset-x-0 agar menempel mati dan presisi di dasar HP */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 w-full z-50 bg-white border-t border-[#E2E8F0] shadow-[0_-4px_24px_rgba(0,0,0,0.04)] flex items-center justify-between px-4 py-2 pb-safe">
         
-        {sidebarItems.map((item) => {
+        {mobileNavItems.map((item) => {
           const isActive = pathname === item.href;
+          
           return (
             <Link 
               key={item.name} 
               href={item.href}
-              className={`snap-center flex flex-col items-center justify-center min-w-[72px] px-1 py-2 rounded-xl transition-all ${
+              className={`flex-1 flex flex-col items-center justify-center py-2 rounded-xl transition-all duration-150 active:scale-95 ${
                 isActive 
-                  ? "text-[#0047AB] bg-blue-50/50" 
-                  : "text-slate-400 hover:text-slate-600"
+                  ? "text-[#0047AB] bg-[#F1F5F9]" // Blok abu terang khas sidebar desktop saat aktif
+                  : "text-[#64748B] hover:text-[#0F172A]"
               }`}
             >
-              <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className="mb-1" />
-              <span className={`text-[9px] tracking-tight ${isActive ? "font-black" : "font-bold"}`}>
+              {/* Ikon Menu */}
+              <item.icon 
+                size={18} 
+                strokeWidth={isActive ? 2.5 : 2} 
+                className="mb-1" 
+              />
+
+              {/* Label Singkat */}
+              <span className={`text-[9px] tracking-widest uppercase ${isActive ? "font-black" : "font-bold"}`}>
                 {item.name}
               </span>
             </Link>
           );
         })}
-        
-        {/* Divider Vertikal */}
-        <div className="w-px h-8 bg-slate-200 mx-1 shrink-0"></div>
-
-        {/* Tombol Logout/Login Mobile */}
-        {currentUser ? (
-          <button 
-            onClick={handleLogout}
-            className="snap-center flex flex-col items-center justify-center min-w-[64px] px-1 py-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"
-          >
-            <LogOut size={20} className="mb-1" />
-            <span className="text-[9px] font-bold tracking-tight">Logout</span>
-          </button>
-        ) : (
-          <Link 
-            href="/counter"
-            className="snap-center flex flex-col items-center justify-center min-w-[64px] px-1 py-2 rounded-xl text-[#0047AB] bg-blue-50 transition-all shrink-0"
-          >
-            <User size={20} className="mb-1" />
-            <span className="text-[9px] font-black tracking-tight">Login</span>
-          </Link>
-        )}
 
       </nav>
     </>
