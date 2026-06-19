@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { 
   Plus, Download, Loader2, Package, 
   ChevronLeft, ChevronRight, Layers,
-  ArrowUp, ArrowDown 
+  ArrowUp, ArrowDown, CheckCircle2, AlertTriangle 
 } from "lucide-react";
 
 import { useInventoryData } from "./hooks/useInventoryData";
@@ -20,19 +20,38 @@ import { CategoryFilter } from "./components/CategoryFilter";
 import { InventoryMobileGrid } from "./components/InventoryMobileGrid";
 import { InventoryDesktopTable } from "./components/InventoryDesktopTable";
 
+// Struktur tipe data untuk menampung notifikasi kilat di ruko
+interface ToastState {
+  show: boolean;
+  message: string;
+  type: "success" | "error";
+}
+
 export default function InventarisPage() {
   const { currentUser } = useAuth();
-  const { products, activeFees } = useInventoryData(currentUser);
+  
+  // Ambil data produk awal dari hook
+  const { products: initialProducts, activeFees } = useInventoryData(currentUser);
+  
+  // 🚀 PERBAIKAN 1: Tampung produk ke dalam state lokal agar bisa berubah instan (Real-time Mirroring)
+  const [localProducts, setLocalProducts] = useState<any[]>([]);
+
+  // Sinkronisasikan state lokal setiap kali data initialProducts dari Firebase berubah
+  useEffect(() => {
+    if (initialProducts && initialProducts.length > 0) {
+      setLocalProducts(initialProducts);
+    }
+  }, [initialProducts]);
   
   const inventoryService = React.useMemo(() => {
-    return new InventoryService(currentUser, activeFees, products);
-  }, [currentUser, activeFees, products]);
+    return new InventoryService(currentUser, activeFees, localProducts);
+  }, [currentUser, activeFees, localProducts]);
 
   const {
     searchTerm, setSearchTerm, selectedCategory, setSelectedCategory,
     sortBy, setSortBy, sortOrder, setSortOrder, currentPage, setCurrentPage,
     totalPages, currentItems, processedProducts, itemsPerPage, stats 
-  } = useInventoryFilter(products, inventoryService);
+  } = useInventoryFilter(localProducts, inventoryService);
 
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -41,6 +60,17 @@ export default function InventarisPage() {
   
   const [viewMode, setViewMode] = useState<"semua" | "harga" | "stok">("semua");
   const [showScrollButtons, setShowScrollButtons] = useState(false);
+
+  // 🚀 PERBAIKAN 2: State Kendali Notifikasi Kilat Toast
+  const [toast, setToast] = useState<ToastState>({ show: false, message: "", type: "success" });
+
+  const triggerToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ show: true, message, type });
+    // Otomatis sembunyikan notifikasi setelah 3 detik
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 3000);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -60,24 +90,49 @@ export default function InventarisPage() {
     setIsImporting(true);
     try {
       const count = await inventoryService.processMassImport(file);
-      alert(`Impor selesai. ${count} produk berhasil diproses.`);
+      triggerToast(`Impor selesai! ${count} produk berhasil diproses.`, "success");
     } catch (err) { 
-      alert("Gagal memproses file."); 
+      triggerToast("Gagal memproses file impor Excel.", "error");
     } finally { 
       setIsImporting(false); 
       e.target.value = ''; 
     }
   };
 
+  // 🚀 PERBAIKAN 3: Update fungsi agar tabel langsung berubah instan di layar RAM laptop/HP
   const handleUpdateStock = async (id: string) => {
-    await inventoryService.updateStock(id, Number(tempStock));
-    setEditingStockId(null);
+    try {
+      const parsedStock = Number(tempStock);
+      
+      // Jalankan fungsi update ke server Firestore cloud
+      await inventoryService.updateStock(id, parsedStock);
+      
+      // Langsung tembak perubahan ke state lokal RAM (Ubah data detik itu juga di tabel UI)
+      setLocalProducts(prev => 
+        prev.map(p => p.id === id ? { ...p, stock: parsedStock } : p)
+      );
+      
+      setEditingStockId(null);
+      triggerToast("Jumlah stok varian produk berhasil diperbarui!", "success");
+    } catch (error) {
+      triggerToast("Gagal memperbarui sisa stok fisik.", "error");
+    }
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Apakah Kakak yakin ingin menghapus produk ini?")) {
-      try { await inventoryService.deleteProduct(id); setActiveMenuId(null); } 
-      catch (error) { alert("Gagal menghapus."); }
+    if (window.confirm("Apakah Kakak yakin ingin menghapus produk ini dari katalog?")) {
+      try { 
+        await inventoryService.deleteProduct(id); 
+        
+        // Hapus langsung dari memori tabel lokal
+        setLocalProducts(prev => prev.filter(p => p.id !== id));
+        
+        setActiveMenuId(null); 
+        triggerToast("Produk berhasil dihapus dari katalog gudang.", "success");
+      } 
+      catch (error) { 
+        triggerToast("Gagal menghapus produk dari database.", "error");
+      }
     }
   };
 
@@ -90,13 +145,30 @@ export default function InventarisPage() {
   }
 
   return (
-    <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-32 lg:pb-16">
+    <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-32 lg:pb-16 relative">
       
+      {/* ======================================================= */}
+      {/* 🚀 NOTIFIKASI TOAST KILAT MELAYANG (FIX NOTIFIKASI BINGUNG) */}
+      {/* ======================================================= */}
+      {toast.show && (
+        <div className="fixed top-6 right-4 sm:right-10 z-[100] max-w-sm w-full bg-white border border-slate-100 rounded-2xl p-4 shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          {toast.type === "success" ? (
+            <CheckCircle2 className="text-emerald-500 shrink-0" size={20} />
+          ) : (
+            <AlertTriangle className="text-red-500 shrink-0" size={20} />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Notifikasi Sistem</p>
+            <p className="text-xs font-black text-slate-700 uppercase mt-0.5 leading-snug">{toast.message}</p>
+          </div>
+        </div>
+      )}
+
       {/* HEADER SECTION */}
       <div className="px-4 sm:px-10 pt-8 sm:pt-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-[#0F172A] tracking-tighter leading-none">Daftar Produk</h1>
-          <p className="text-[#64748B] mt-2 text-xs sm:text-sm font-bold">Pantau ketersediaan stok barang dan estimasi profit bersih.</p>
+          <h1 className="text-2xl sm:text-4xl font-black text-[#0F172A] tracking-tighter leading-none uppercase">Daftar Produk</h1>
+          <p className="text-[#64748B] mt-2 text-[11px] sm:text-xs font-bold uppercase">Pantau ketersediaan stok barang dan estimasi profit bersih jualan.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
