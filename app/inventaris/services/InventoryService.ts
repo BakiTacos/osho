@@ -1,7 +1,7 @@
-import { db } from "../firebase";
+import { db } from "../../../lib/firebase";
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import * as XLSX from 'xlsx';
-import { LOGISTICS_RATES } from "../../lib/constants/sales";
+import { LOGISTICS_RATES } from "../../../lib/constants/sales";
 
 export class InventoryService {
   constructor(

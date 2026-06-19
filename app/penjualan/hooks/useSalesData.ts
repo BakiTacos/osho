@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from "../../lib/firebase";
+import { db } from "../../../lib/firebase";
 import { collection, onSnapshot, query, orderBy, doc, where, limit } from "firebase/firestore";
 
 export function useSalesData(

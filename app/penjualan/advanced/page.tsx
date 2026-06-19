@@ -5,9 +5,9 @@ import { useAuth } from "../../../context/AuthContext";
 import { PackageCheck, Search, Plus, Trash2, Truck, AlertCircle, Loader2, CheckCircle2, Timer, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 
 // IMPORT CLEAN ARCHITECTURE
-import { useAdvancedFulfillmentData } from "../../hooks/useAdvancedFulfillmentData";
-import { AdvancedFulfillmentService } from "../../../lib/services/AdvancedFulfillmentService";
-import { AddWarehouseModal } from "../../../components/advanced/AddWarehouseModal";
+import { useAdvancedFulfillmentData } from "../../penjualan/advanced/hooks/useAdvancedFulfillmentData";
+import { AdvancedFulfillmentService } from "./services/AdvancedFulfillmentService";
+import { AddWarehouseModal } from "./components/AddWarehouseModal";
 
 export default function GudangShopeePage() {
   const { currentUser } = useAuth();

@@ -9,9 +9,9 @@ import {
   ChevronLeft, ChevronRight, Layers
 } from "lucide-react";
 
-import { useInventoryData, Product } from "../hooks/useInventoryData";
-import { InventoryService } from "../../lib/services/InventoryService";
-import { InventoryStats } from "../../components/inventory/InventoryStats";
+import { useInventoryData, Product } from "../inventaris/hooks/useInventoryData";
+import { InventoryService } from "../inventaris/services/InventoryService";
+import { InventoryStats } from "./components/InventoryStats";
 
 export default function InventarisPage() {
   const { currentUser } = useAuth();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from "../../lib/firebase";
+import { db } from "../../../../lib/firebase";
 import { collection, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 
 // Tambahkan parameter queryLimit dengan default 300

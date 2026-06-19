@@ -1,7 +1,7 @@
-import { db } from "../firebase";
+import { db } from "../../../lib/firebase";
 import { doc, updateDoc, increment, collection, addDoc, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
-import { calculateMarketplaceFee } from "../calculations";
-import { REGION_MAP, LOGISTICS_RATES } from "../constants/sales";
+import { calculateMarketplaceFee } from "../../../lib/calculations";
+import { REGION_MAP, LOGISTICS_RATES } from "../../../lib/constants/sales";
 
 export class SalesService {
   constructor(

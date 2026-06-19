@@ -1,4 +1,4 @@
-import { db } from "../firebase";
+import { db } from "../../../../lib/firebase";
 import { doc, updateDoc, increment, deleteDoc, setDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import * as XLSX from 'xlsx';
 

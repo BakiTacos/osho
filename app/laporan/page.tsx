@@ -5,9 +5,9 @@ import { useAuth } from "../../context/AuthContext";
 import { Search, Bell, HelpCircle, PlusCircle } from "lucide-react";
 
 // IMPORT CLEAN ARCHITECTURE
-import { useReportData } from "../hooks/useReportData";
-import { ReportService } from "../../lib/services/ReportService";
-import { FinanceView, StockView } from "../../components/report/ReportViews";
+import { useReportData } from "../laporan/hooks/useReportData";
+import { ReportService } from "./services/ReportService";
+import { FinanceView, StockView } from "./components/ReportViews";
 
 export default function LaporanPage() {
   const { currentUser } = useAuth();

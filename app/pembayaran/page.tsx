@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 
-import { usePaymentData } from "../hooks/usePaymentData";
-import { PaymentService } from "../../lib/services/PaymentService";
-import { WithdrawModal, ExpenseModal, InvoiceModal, HistoryModal } from "../../components/payment/PaymentModals";
+import { usePaymentData } from "../pembayaran/hooks/usePaymentData";
+import { PaymentService } from "../pembayaran/services/PaymentService";
+import { WithdrawModal, ExpenseModal, InvoiceModal, HistoryModal } from "./components/PaymentModals";
 
 export default function PembayaranPage() {
   const { currentUser } = useAuth();

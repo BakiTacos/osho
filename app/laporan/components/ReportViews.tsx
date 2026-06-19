@@ -1,5 +1,5 @@
 import React from 'react';
-import { StatCard } from './StatCard';
+import { StatCard } from '../../laporan/components/StatCard';
 import { Wallet, TrendingUp, TrendingDown, Banknote, PackageMinus, PackagePlus, BadgeDollarSign, AlertTriangle, Trophy, Package } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 

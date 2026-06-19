@@ -6,10 +6,10 @@ import { useAuth } from "../../context/AuthContext";
 import { 
   collection, onSnapshot, query, where, 
   doc, updateDoc, increment, orderBy,
-  writeBatch, getDocs, serverTimestamp
+  writeBatch, getDocs, serverTimestamp, addDoc
 } from "firebase/firestore";
 import { 
-  Search, Package, TrendingDown, Upload, AlertTriangle, X, Filter
+  Search, Package, TrendingDown, Upload, AlertTriangle, X, Filter, RefreshCcw, Loader2
 } from "lucide-react";
 import * as XLSX from 'xlsx';
 
@@ -19,15 +19,13 @@ export default function PengembalianPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   
-  // 🚀 STATE BARU: Filter Status Penanganan (Default: Proses)
   const [statusFilter, setStatusFilter] = useState("Proses");
-  const [isProcessing, setIsProcessing] = useState(false);
-  
+  const [isImporting, setIsImporting] = useState(false);
   const [selectedMarketplace, setSelectedMarketplace] = useState<"shopee" | "tiktok">("shopee");
 
-  // STATE UNTUK FITUR AFKIR GUDANG
-  const [isAfkirModalOpen, setIsAfkirModalOpen] = useState(false);
-  const [afkirForm, setAfkirForm] = useState({ sku: '', qty: 1, reason: '' });
+  // STATE UNTUK FITUR INPUT MANUAL (AFKIR & RETUR NYASAR)
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [manualForm, setManualForm] = useState({ sku: '', qty: 1, reason: '', kondisi: 'Rusak' });
 
   useEffect(() => {
     if (!currentUser) return;
@@ -49,10 +47,11 @@ export default function PengembalianPage() {
     return () => { unsubProd(); unsubRetur(); };
   }, [currentUser]);
 
+  // --- 🚀 JALUR 1: IMPOR EXCEL DENGAN HANDLING DATA LAMA (FAIL-SAFE) ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
-    setIsProcessing(true);
+    setIsImporting(true);
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -66,106 +65,152 @@ export default function PengembalianPage() {
         
         const rawRows = data.slice(startRow);
         const batch = writeBatch(db);
-        let foundCount = 0;
+        let updatedCount = 0;
+        let createdCount = 0;
+
+        const tzoffset = (new Date()).getTimezoneOffset() * 60000; 
+        const todayString = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
 
         for (const row of rawRows) {
           const orderId = String(row[targetIndex] || "").trim().replace(/^#/, "");
           if (!orderId) continue;
 
+          // Cari apakah data pesanan ada di database berjalan Kakak
           const qSales = query(
             collection(db, `users/${currentUser.uid}/sales`), 
             where("orderId", "==", orderId)
           );
-          
           const snapshot = await getDocs(qSales);
 
-          snapshot.forEach((docSnap) => {
-            const saleData = docSnap.data();
-            if (saleData.status !== "Retur") {
-              batch.update(docSnap.ref, { 
-                status: "Retur", 
-                penanganan: "Proses" 
-              });
-              foundCount++;
-            }
-          });
+          if (!snapshot.empty) {
+            // JALUR DATA ADA: Update status menjadi Retur
+            snapshot.forEach((docSnap) => {
+              const saleData = docSnap.data();
+              if (saleData.status !== "Retur") {
+                batch.update(docSnap.ref, { status: "Retur", penanganan: "Proses" });
+                updatedCount++;
+              }
+            });
+          } else {
+            // JALUR DATA TIDAK ADA (Retur Lampau/Nyasar): Buat data bayangan agar bisa diproses stoknya
+            // Mencoba membaca SKU dari kolom excel jika ada (Asumsi penempatan dasar kolom SKU tiruan)
+            const excelSku = String(row[selectedMarketplace === "shopee" ? 14 : 2] || "").trim().toUpperCase();
+            const matchedProd = products.find(p => p.sku === excelSku);
+
+            const newSaleRef = doc(collection(db, `users/${currentUser.uid}/sales`));
+            batch.set(newSaleRef, {
+              orderId: orderId,
+              product: matchedProd ? matchedProd.name : "Produk Masa Lalu (Impor Excel)",
+              sku: excelSku || "UNKNOWN",
+              qty: 1,
+              hpp: matchedProd ? (Number(matchedProd.costPrice) || 0) : 0,
+              total: 0,
+              marketplace: `${selectedMarketplace === "shopee" ? "Shopee" : "TikTok"} (Lama)`,
+              status: "Retur",
+              penanganan: "Proses",
+              returFinal: false,
+              profit: 0,
+              date: todayString,
+              createdAt: serverTimestamp()
+            });
+            createdCount++;
+          }
         }
 
-        if (foundCount > 0) {
-          await batch.commit();
-          alert(`✅ Sukses! ${foundCount} pesanan ${selectedMarketplace.toUpperCase()} berhasil diubah ke status Retur.`);
-        } else {
-          alert(`Proses selesai. Tidak ada transaksi baru yang cocok untuk platform ${selectedMarketplace.toUpperCase()}.`);
-        }
+        await batch.commit();
+        alert(`✅ Impor Berhasil!\n- ${updatedCount} Transaksi sistem diubah ke Retur.\n- ${createdCount} Paket lampau nyasar berhasil didaftarkan.`);
 
       } catch (err) { 
         console.error(err);
-        alert("Gagal memproses file Excel. Pastikan format kolom marketplace yang dipilih sudah sesuai."); 
+        alert("Gagal memproses file Excel. Periksa kembali format kolom data."); 
       } finally { 
-        setIsProcessing(false); 
+        setIsImporting(false); 
         e.target.value = ''; 
       }
     };
     reader.readAsBinaryString(file);
   };
 
-  // 🚀 FITUR AFKIR: Sinkronisasi ke Tabel Retur
-  const handleAfkirSubmit = async (e: React.FormEvent) => {
+  // --- 🚀 JALUR 2: INPUT MANUAL (AFKIR ATAU PAKET NYASAR) ---
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
 
-    const prod = products.find(p => p.sku === afkirForm.sku.toUpperCase());
-    if (!prod) return alert("❌ SKU tidak ditemukan di database Master Produk!");
+    const prod = products.find(p => p.sku === manualForm.sku.toUpperCase());
+    if (!prod) return alert("❌ Kode SKU tidak terdaftar di basis data barang!");
 
-    const lossAmount = (Number(prod.costPrice) || 0) * afkirForm.qty;
+    const lossAmount = (Number(prod.costPrice) || 0) * manualForm.qty;
     const tzoffset = (new Date()).getTimezoneOffset() * 60000; 
     const todayLokal = (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
 
     try {
       const batch = writeBatch(db);
-      
-      // 1. Potong Stok Produk
       const prodRef = doc(db, `users/${currentUser.uid}/products`, prod.id);
-      batch.update(prodRef, { stock: increment(-afkirForm.qty) });
+      const salesRef = doc(collection(db, `users/${currentUser.uid}/sales`));
 
-      // 2. Suntik Kerugian ke Biaya Operasional (Opex)
-      const expRef = doc(collection(db, `users/${currentUser.uid}/expenses`));
-      batch.set(expRef, {
-        category: "Penyusutan Gudang",
-        description: `Barang Rusak [${prod.sku}] x${afkirForm.qty} - ${afkirForm.reason}`,
-        amount: lossAmount,
-        paidBy: "SISTEM",
-        date: todayLokal,
-        createdAt: serverTimestamp()
-      });
+      if (manualForm.kondisi === "Bagus") {
+        // A. KASUS PAKET LAMA NYASAR: Tambah kembali ketersediaan stok fisik gudang
+        batch.update(prodRef, { stock: increment(manualForm.qty) });
 
-      // 3. 🚀 Catat ke tabel Sales sebagai "Retur Afkir" agar transparan di tabel
-      const afkirSalesRef = doc(collection(db, `users/${currentUser.uid}/sales`));
-      batch.set(afkirSalesRef, {
-        orderId: `AFKIR-${Math.floor(Date.now() / 1000)}`,
-        product: prod.name,
-        sku: prod.sku,
-        qty: afkirForm.qty,
-        hpp: lossAmount, // Total HPP yang hilang
-        total: 0,
-        marketplace: "Gudang", // Indikator asal usul
-        status: "Retur",
-        penanganan: "Afkir", // Status penanganan
-        returFinal: true, // Langsung final tanpa perlu diklik lagi
-        profit: -lossAmount,
-        date: todayLokal,
-        createdAt: serverTimestamp(),
-        catatan: afkirForm.reason // Transparansi alasan
-      });
+        // Catat jejak transparan di tabel dengan profit Rp 0
+        batch.set(salesRef, {
+          orderId: `RETUR-LAMPAU-${Math.floor(Date.now() / 1000)}`,
+          product: prod.name,
+          sku: prod.sku,
+          qty: manualForm.qty,
+          hpp: lossAmount,
+          total: 0,
+          marketplace: "Gudang",
+          status: "Retur",
+          penanganan: "Selesai", 
+          returFinal: true,
+          profit: 0,
+          date: todayLokal,
+          createdAt: serverTimestamp(),
+          catatan: `[Paket Nyasar Terdata] ${manualForm.reason}`
+        });
+        
+        alert(`✅ Sukses! Paket lampau berhasil dipulihkan langsung ke stok gudang.`);
+      } else {
+        // B. KASUS BARANG RUSAK (AFKIR): Potong stok gudang dan hitung pengeluaran operasional
+        batch.update(prodRef, { stock: increment(-manualForm.qty) });
+
+        const expRef = doc(collection(db, `users/${currentUser.uid}/expenses`));
+        batch.set(expRef, {
+          category: "Penyusutan Gudang",
+          description: `Barang Rusak [${prod.sku}] x${manualForm.qty} - ${manualForm.reason}`,
+          amount: lossAmount,
+          paidBy: "SISTEM",
+          date: todayLokal,
+          createdAt: serverTimestamp()
+        });
+
+        batch.set(salesRef, {
+          orderId: `AFKIR-${Math.floor(Date.now() / 1000)}`,
+          product: prod.name,
+          sku: prod.sku,
+          qty: manualForm.qty,
+          hpp: lossAmount,
+          total: 0,
+          marketplace: "Gudang",
+          status: "Retur",
+          penanganan: "Afkir",
+          returFinal: true,
+          profit: -lossAmount,
+          date: todayLokal,
+          createdAt: serverTimestamp(),
+          catatan: manualForm.reason
+        });
+        
+        alert(`✅ Sukses! Kerugian barang rusak masuk ke pengeluaran Operasional.`);
+      }
 
       await batch.commit();
-      
-      alert(`✅ Barang Penyusutan berhasil dicatat! Stok terpotong dan riwayat muncul di tabel.`);
-      setIsAfkirModalOpen(false);
-      setAfkirForm({ sku: '', qty: 1, reason: '' });
+      setIsManualModalOpen(false);
+      setManualForm({ sku: '', qty: 1, reason: '', kondisi: 'Rusak' });
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan saat memproses barang Penyusutan.");
+      alert("Terjadi kesalahan sistem saat memproses data.");
     }
   };
 
@@ -264,7 +309,6 @@ export default function PengembalianPage() {
     }
   };
 
-  // 🚀 KALKULASI TOTAL KERUGIAN (Termasuk Afkir Gudang)
   const totalLoss = returOrders.reduce((acc, curr) => {
     if (curr.penanganan === "Rusak" || curr.penanganan === "Tidak Kembali" || curr.penanganan === "Afkir") {
       return acc + (curr.hpp || 0);
@@ -272,12 +316,10 @@ export default function PengembalianPage() {
     return acc;
   }, 0);
 
-  // 🚀 LOGIKA FILTER GANDA (Search + Dropdown Status)
   const filteredData = returOrders.filter(item => {
     const matchSearch = item.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         item.product?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    // Default status jika belum ada field penanganan adalah "Proses"
     const currentStatus = item.penanganan || "Proses";
     const matchStatus = statusFilter === "Semua" ? true : currentStatus === statusFilter;
 
@@ -312,22 +354,22 @@ export default function PengembalianPage() {
 
           {/* TOMBOL IMPORT EXCEL */}
           <label className="cursor-pointer flex items-center justify-center gap-2 bg-white border border-slate-200 px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black text-[#0F172A] uppercase hover:bg-slate-50 transition-all shadow-sm shrink-0">
-            <Upload size={14} /> 
-            <span className="hidden sm:inline">{isProcessing ? "Memproses..." : `Impor Retur ${selectedMarketplace}`}</span>
+            {isImporting ? <Loader2 size={14} className="animate-spin text-[#0047AB]" /> : <Upload size={14} />} 
+            <span className="hidden sm:inline">{isImporting ? "Memproses..." : `Impor Retur ${selectedMarketplace}`}</span>
             <span className="sm:hidden">Impor</span>
-            <input type="file" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls" disabled={isProcessing} />
+            <input type="file" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls" disabled={isImporting} />
           </label>
 
-          {/* TOMBOL INPUT AFKIR GUDANG */}
-          <button onClick={() => setIsAfkirModalOpen(true)} className="flex items-center justify-center gap-2 bg-red-500 border border-red-600 px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black text-white uppercase hover:bg-red-600 transition-all shadow-sm shrink-0">
+          {/* TOMBOL INPUT MANUAL BARU */}
+          <button onClick={() => setIsManualModalOpen(true)} className="flex items-center justify-center gap-2 bg-red-500 border border-red-600 px-4 py-2.5 rounded-xl text-[10px] sm:text-xs font-black text-white uppercase hover:bg-red-600 transition-all shadow-sm shrink-0">
             <AlertTriangle size={14} /> 
-            <span className="hidden sm:inline">Input Penyusutan Gudang</span>
-            <span className="sm:hidden">Penyusutan</span>
+            <span className="hidden sm:inline">Input Barang Manual</span>
+            <span className="sm:hidden">Manual</span>
           </button>
         </div>
       </div>
 
-      {/* 🚀 FILTER BAR & SEARCH (BARIS KEDUA) */}
+      {/* FILTER BAR & SEARCH */}
       <div className="px-4 sm:px-10 mt-4 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
@@ -339,7 +381,6 @@ export default function PengembalianPage() {
           />
         </div>
         
-        {/* DROPDOWN FILTER STATUS */}
         <div className="relative w-full sm:w-auto shrink-0">
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <select
@@ -374,7 +415,7 @@ export default function PengembalianPage() {
           </div>
           <p className="text-[8px] sm:text-[10px] font-bold text-slate-300 mt-2">Masuk ke Sistem</p>
         </div>
-        <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[28px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-orange-400 flex flex-col justify-between">
+        <div className="bg-white p-4 sm:p-6 rounded-[24px] sm:rounded-[32px] border border-[#F1F5F9] shadow-sm border-l-4 border-l-orange-400 flex flex-col justify-between">
           <div>
             <p className="text-[8px] sm:text-[9px] font-black text-orange-500 uppercase tracking-widest mb-1 sm:mb-3">Masih Proses</p>
             <h3 className="text-sm sm:text-lg xl:text-xl font-black text-[#0F172A]">{returOrders.filter(o => !o.returFinal).length} Pesanan</h3>
@@ -412,25 +453,23 @@ export default function PengembalianPage() {
                         <span className="text-xs sm:text-sm font-bold text-[#0F172A] uppercase leading-tight truncate max-w-[200px] sm:max-w-[300px]" title={order.product}>{order.product}</span>
                         <span className="text-[8px] sm:text-[10px] font-bold text-slate-400 mt-1 uppercase">SKU: {order.sku} • Qty: {order.qty}</span>
                         
-                        {/* 🚀 Transparansi Alasan Khusus Gudang */}
-                        {order.marketplace === "Gudang" && order.catatan && (
+                        {order.catatan && (
                           <span className="mt-1.5 px-2 py-0.5 bg-red-50 text-red-500 rounded text-[8px] font-black uppercase w-fit tracking-widest border border-red-100">
-                            Alasan: {order.catatan}
+                            Info: {order.catatan}
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-4 sm:px-6 sm:py-6">
                       <span className={`px-2.5 py-1 rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${
-                        order.marketplace === 'Shopee' ? 'bg-orange-50 text-orange-600' :
-                        order.marketplace === 'Tiktok' ? 'bg-slate-900 text-white' : 
+                        order.marketplace.includes('Shopee') ? 'bg-orange-50 text-orange-600' :
+                        order.marketplace.includes('Tiktok') ? 'bg-slate-900 text-white' : 
                         order.marketplace === 'Gudang' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-blue-50 text-blue-600'
                       }`}>{order.marketplace}</span>
                     </td>
                     <td className="px-4 py-4 sm:px-6 sm:py-6">
                       <div className="flex justify-center">
-                        {/* 🚀 Jika dari Gudang, statusnya statis dan tidak bisa diubah */}
-                        {order.marketplace === "Gudang" ? (
+                        {order.penanganan === "Afkir" ? (
                           <span className="text-[8px] sm:text-[10px] font-black uppercase px-2.5 py-2 sm:px-4 sm:py-2.5 rounded-xl border-2 border-red-100 bg-red-50 text-red-600">
                              🗑️ Penyusutan Gudang
                           </span>
@@ -463,7 +502,6 @@ export default function PengembalianPage() {
                 ))}
               </tbody>
             </table>
-
             {filteredData.length === 0 && (
               <div className="py-24 sm:py-32 flex flex-col items-center justify-center text-slate-300 uppercase text-[8px] sm:text-[10px] font-black tracking-widest opacity-40">
                 <Package size={40} className="mb-4 animate-pulse" />
@@ -474,36 +512,51 @@ export default function PengembalianPage() {
         </div>
       </div>
 
-      {/* 🚀 MODAL INPUT AFKIR GUDANG */}
-      {isAfkirModalOpen && (
+      {/* 🚀 MODAL INPUT MANUAL (MODULAR & ADAPTIF MULTI-FUNGSI) */}
+      {isManualModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-[32px] p-6 sm:p-8 relative shadow-2xl">
-            <button onClick={() => setIsAfkirModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors"><X size={20}/></button>
+            <button onClick={() => setIsManualModalOpen(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors"><X size={20}/></button>
             <div className="mb-6">
-              <div className="w-12 h-12 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-4"><AlertTriangle size={24}/></div>
-              <h2 className="text-xl font-black text-[#0F172A] tracking-tight">Input Penyusutan Gudang</h2>
-              <p className="text-[10px] sm:text-xs font-bold text-slate-400 mt-1">Catat barang rusak/hilang tanpa nomor pesanan.</p>
+              <div className="w-12 h-12 bg-blue-50 text-[#0047AB] rounded-2xl flex items-center justify-center mb-4"><AlertTriangle size={24}/></div>
+              <h2 className="text-xl font-black text-[#0F172A] tracking-tight">Pencatatan Barang Manual</h2>
+              <p className="text-[10px] sm:text-xs font-bold text-slate-400 mt-1">Gunakan untuk mencatat penyusutan gudang atau paket lama tak terdata.</p>
             </div>
-            <form onSubmit={handleAfkirSubmit} className="space-y-4">
+            
+            <form onSubmit={handleManualSubmit} className="space-y-4">
+              {/* DROPDOWN PEMILIHAN JALUR KONDISI */}
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">SKU Barang Rusak</label>
-                <input list="sku-list" required value={afkirForm.sku} onChange={(e) => setAfkirForm({...afkirForm, sku: e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3.5 px-4 font-black text-[#0F172A] text-sm mt-1 uppercase outline-none focus:ring-2 focus:ring-red-200" placeholder="Ketik SKU..."/>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Kondisi / Jalur Barang</label>
+                <select 
+                  value={manualForm.kondisi} 
+                  onChange={(e) => setManualForm({...manualForm, kondisi: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3.5 px-4 font-black text-[#0F172A] text-sm mt-1 outline-none focus:ring-2 focus:ring-[#0047AB] cursor-pointer"
+                >
+                  <option value="Rusak">❌ Rusak / Cacat (Potong Stok & Catat Kerugian)</option>
+                  <option value="Bagus">✅ Masih Bagus / Paket Lama Nyasar (Tambah Stok Gudang)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">SKU Produk</label>
+                <input list="sku-list" required value={manualForm.sku} onChange={(e) => setManualForm({...manualForm, sku: e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3.5 px-4 font-black text-[#0F172A] text-sm mt-1 uppercase outline-none focus:ring-2 focus:ring-[#0047AB]" placeholder="Ketik SKU..."/>
                 <datalist id="sku-list">
                   {products.map(p => <option key={p.id} value={p.sku}>{p.name}</option>)}
                 </datalist>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jumlah (Qty)</label>
-                  <input type="number" min="1" required value={afkirForm.qty} onChange={(e) => setAfkirForm({...afkirForm, qty: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3.5 px-4 font-black text-[#0F172A] text-sm mt-1 outline-none focus:ring-2 focus:ring-red-200" placeholder="0"/>
-                </div>
+              
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jumlah (Qty)</label>
+                <input type="number" min="1" required value={manualForm.qty} onChange={(e) => setManualForm({...manualForm, qty: Number(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3.5 px-4 font-black text-[#0F172A] text-sm mt-1 outline-none focus:ring-2 focus:ring-[#0047AB]" placeholder="0"/>
               </div>
+
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Keterangan / Alasan</label>
-                <input required value={afkirForm.reason} onChange={(e) => setAfkirForm({...afkirForm, reason: e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3.5 px-4 font-bold text-[#0F172A] text-sm mt-1 outline-none focus:ring-2 focus:ring-red-200" placeholder="Contoh: Pecah saat bongkar muat"/>
+                <input required value={manualForm.reason} onChange={(e) => setManualForm({...manualForm, reason: e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-3.5 px-4 font-bold text-[#0F172A] text-sm mt-1 outline-none focus:ring-2 focus:ring-[#0047AB]" placeholder="Contoh: Paket hilang 3 bulan lalu ketemu / Cacat pabrik"/>
               </div>
-              <button type="submit" className="w-full mt-6 bg-red-500 text-white py-4 rounded-2xl font-black text-xs uppercase shadow-md shadow-red-200 hover:-translate-y-1 transition-all">
-                Potong Stok & Catat Kerugian
+
+              <button type="submit" className="w-full mt-6 bg-[#0047AB] text-white py-4 rounded-2xl font-black text-xs uppercase shadow-md shadow-blue-100 hover:-translate-y-1 transition-all">
+                Proses Data Barang
               </button>
             </form>
           </div>

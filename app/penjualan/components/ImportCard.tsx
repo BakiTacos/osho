@@ -1,7 +1,7 @@
 import React from 'react';
 import { Upload, Check, Loader2 } from "lucide-react";
 // Sesuaikan path ini dengan letak file constants kamu
-import { MARKETPLACE_CONFIG } from "../../lib/constants/sales"; 
+import { MARKETPLACE_CONFIG } from "../../../lib/constants/sales"; 
 
 export default function ImportCard({
   selectedMarketplace,

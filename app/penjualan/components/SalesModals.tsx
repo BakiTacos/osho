@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Loader2, Plus, Trash2 } from 'lucide-react';
-import { tiktokRegions } from "../../lib/constants/sales";
+import { tiktokRegions } from "../../../lib/constants/sales";
 
 export const ManualInputModal = ({ isOpen, onClose, manualForm, setManualForm, useCatalogPrice, setUseCatalogPrice, isProcessing, onSubmit, addManualItem, removeManualItem, updateManualItem }: any) => {
   if (!isOpen) return null;
