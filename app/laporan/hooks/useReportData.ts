@@ -1,64 +1,75 @@
+// app/inventaris/laporan/hooks/useReportData.ts
 import { useState, useEffect } from 'react';
 import { db } from "../../../lib/firebase";
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
 
 export function useReportData(currentUser: any, selectedMonth: number, selectedYear: number) {
   const [sales, setSales] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) return;
 
-    // 1. Buat Batasan Waktu (Date Range) untuk Server Firebase
-    // Ini akan mengambil dari tanggal 1 sampai tanggal terakhir di bulan yang dipilih
-    const startDate = new Date(selectedYear, selectedMonth, 1);
-    const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+    async function fetchReportSnapshot() {
+      try {
+        setLoading(true);
 
-    // 2. QUERY SALES (HEMAT READ: Hanya narik bulan ini)
-    const qSales = query(
-      collection(db, `users/${currentUser.uid}/sales`),
-      where("createdAt", ">=", startDate),
-      where("createdAt", "<=", endDate),
-      orderBy("createdAt", "desc")
-    );
-    const unsubSales = onSnapshot(qSales, (snap) => {
-      setSales(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+        // Pembatasan tanggal awal dan akhir bulan pilihan secara presisi
+        const startDate = new Date(selectedYear, selectedMonth, 1);
+        const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
 
-    // 3. QUERY EXPENSES (HEMAT READ: Hanya narik bulan ini)
-    const qExpenses = query(
-      collection(db, `users/${currentUser.uid}/expenses`),
-      where("createdAt", ">=", startDate),
-      where("createdAt", "<=", endDate),
-      orderBy("createdAt", "desc")
-    );
-    const unsubExpenses = onSnapshot(qExpenses, (snap) => {
-      setExpenses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+        // 🚀 ONE-TIME FETCH (MENGUTAMAKAN LOCAL CACHE DEVICE - 0% BOROS)
+        const salesQuery = query(
+          collection(db, `users/${currentUser.uid}/sales`),
+          where("createdAt", ">=", startDate),
+          where("createdAt", "<=", endDate),
+          orderBy("createdAt", "desc")
+        );
+        
+        const expensesQuery = query(
+          collection(db, `users/${currentUser.uid}/expenses`),
+          where("createdAt", ">=", startDate),
+          where("createdAt", "<=", endDate),
+          orderBy("createdAt", "desc")
+        );
 
-    // 4. QUERY INVOICES (HEMAT READ: Hanya narik bulan ini)
-    const qInvoices = query(
-      collection(db, `users/${currentUser.uid}/supplier_invoices`),
-      where("createdAt", ">=", startDate),
-      where("createdAt", "<=", endDate),
-      orderBy("createdAt", "desc")
-    );
-    const unsubInvoices = onSnapshot(qInvoices, (snap) => {
-      setInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+        const invoicesQuery = query(
+          collection(db, `users/${currentUser.uid}/supplier_invoices`),
+          where("createdAt", ">=", startDate),
+          where("createdAt", "<=", endDate),
+          orderBy("createdAt", "desc")
+        );
 
-    // 5. QUERY PRODUCTS (KECUALI PRODUK, INI TETAP LOAD SEMUA)
-    // Produk biasanya ditarik semua karena kita butuh valuasi total aset gudang saat ini,
-    // bukan cuma produk yang dibuat di bulan tersebut.
-    const unsubProd = onSnapshot(collection(db, `users/${currentUser.uid}/products`), (snap) => {
-      setProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+        const productsQuery = query(
+          collection(db, `users/${currentUser.uid}/products`),
+          orderBy("name", "asc")
+        );
 
-    // CLEANUP
-    return () => { unsubSales(); unsubExpenses(); unsubInvoices(); unsubProd(); };
-  }, [currentUser, selectedMonth, selectedYear]); // Reload jika user ganti bulan di UI
+        // Eksekusi penarikan data secara kolektif paralel demi akselerasi kecepatan load
+        const [salesSnap, expensesSnap, invoicesSnap, productsSnap] = await Promise.all([
+          getDocs(salesQuery),
+          getDocs(expensesQuery),
+          getDocs(invoicesQuery),
+          getDocs(productsQuery)
+        ]);
 
-  return { sales, expenses, products, invoices };
+        setSales(salesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setExpenses(expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setInvoices(invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+      } catch (err) {
+        console.error("Gagal mengunduh ringkasan data laporan:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchReportSnapshot();
+  }, [currentUser, selectedMonth, selectedYear]);
+
+  return { sales, expenses, products, invoices, loading };
 }

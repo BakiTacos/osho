@@ -96,7 +96,7 @@ export default function InventarisPage() {
       <div className="px-4 sm:px-10 pt-8 sm:pt-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-black text-[#0F172A] tracking-tighter leading-none">Daftar Produk</h1>
-          <p className="text-[#64748B] mt-2 text-xs sm:text-sm font-bold">Pantau ketersediaan stok barang gudang dan pantauan estimasi profit bersih.</p>
+          <p className="text-[#64748B] mt-2 text-xs sm:text-sm font-bold">Pantau ketersediaan stok barang dan estimasi profit bersih.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">

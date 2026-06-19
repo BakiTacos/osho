@@ -11,7 +11,7 @@ export function useDashboard() {
     { name: "Pembayaran", desc: "Cek Nota, Biaya Operasional, dan Alur Dana", icon: ListTodo, href: "/pembayaran", color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-100" },
     { name: "Retur", desc: "Pesanan Retur & Gagal Kirim", icon: BoxIcon, href: "/pengembalian", color: "text-rose-600", bg: "bg-rose-50", border: "border-rose-100" },
     { name: "Laporan", desc: "Laporan Keuangan & Stok", icon: MapIcon, href: "/laporan", color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-100" },
-    { name: "Pengaturan", desc: "Konfigurasi Akun", icon: Settings, href: "/settings", color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" },
+    { name: "Pengaturan", desc: "Konfigurasi Akun", icon: Settings, href: "/pengaturan", color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200" },
   ];
 
   return { currentUser, shortcuts };

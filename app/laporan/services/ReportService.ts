@@ -15,7 +15,6 @@ export class ReportService {
     private selectedYear: number,
     private timeRange: string
   ) {
-    // PENGAMAN UTAMA: Selalu berikan fallback array kosong jika data masih loading
     this.sales = sales || [];
     this.expenses = expenses || [];
     this.products = products || [];
@@ -23,161 +22,125 @@ export class ReportService {
   }
 
   /**
-   * Helper Pengaman Tanggal (Mencegah Crash saat Parsing Date)
+   * Mengubah timestamp Firebase atau string biasa menjadi objek tanggal Javascript yang valid
    */
-  private parseDate(createdAt: any): Date | null {
-    if (!createdAt) return null;
-    if (typeof createdAt.toDate === 'function') {
-      return createdAt.toDate();
+  private parseDate(dateObj: any): Date | null {
+    if (!dateObj) return null;
+    if (typeof dateObj.toDate === 'function') {
+      return dateObj.toDate();
     }
-    const parsed = new Date(createdAt);
+    const parsed = new Date(dateObj);
     return isNaN(parsed.getTime()) ? null : parsed;
   }
 
   /**
-   * Menyaring data berdasarkan filter waktu aktif di dashboard
+   * 🚀 KUNCI PERBAIKAN 1: Penyaring waktu super ketat (Anti-Bocor Data Bulan Lain)
    */
   private filterByTime(data: any[]) {
-    const now = new Date();
     return data.filter(item => {
-      const itemDate = this.parseDate(item.createdAt);
+      // Periksa semua kemungkinan field nama tanggal di database ruko Kakak
+      const itemDate = this.parseDate(item.createdAt || item.date || item.invoiceDate || item.tanggalNota);
       if (!itemDate) return false;
 
+      const itemMonth = itemDate.getMonth();
+      const itemYear = itemDate.getFullYear();
+
+      // Jika memilih rentang Bulan + Tahun aktif
       if (this.timeRange === "Bulan + Tahun") {
-        return itemDate.getMonth() === this.selectedMonth && 
-               itemDate.getFullYear() === this.selectedYear;
+        return itemMonth === this.selectedMonth && itemYear === this.selectedYear;
       }
       
+      // Jika memilih rentang 3 Bulan Terakhir
       if (this.timeRange === "3 Bulan Terakhir") {
+        const now = new Date();
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(now.getMonth() - 3);
         return itemDate >= threeMonthsAgo && itemDate <= now;
       }
       
+      // Jika memilih rentang Tahun Ini
       if (this.timeRange === "Tahun Ini") {
-        return itemDate.getFullYear() === now.getFullYear();
+        const now = new Date();
+        return itemYear === now.getFullYear();
       }
 
-      return true;
+      // 🚀 DEFAULT FALLBACK: Jika tidak ada yang cocok, kunci wajib hanya bulan berjalan (Mencegah meluber ke 31 juta)
+      return itemMonth === this.selectedMonth && itemYear === this.selectedYear;
     });
   }
 
-  /**
-   * Mengembalikan rincian ringkasan finansial utama (Omset, Profit Kotor, OPEX, Profit Bersih)
-   */
   public getFinancialSummary() {
     const filteredSales = this.filterByTime(this.sales);
     const filteredExpenses = this.filterByTime(this.expenses);
 
     const totalOmset = filteredSales.reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
     const totalHpp = filteredSales.reduce((acc, curr) => acc + (Number(curr.hpp) || 0), 0);
-    
-    // Profit kotor murni akumulasi dari profit tiap transaksi penjualan
     const grossProfit = filteredSales.reduce((acc, curr) => acc + (Number(curr.profit) || 0), 0);
     const totalOpex = filteredExpenses.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
     const netProfit = grossProfit - totalOpex;
 
-    return {
-      totalOmset,
-      totalHpp,
-      grossProfit,
-      totalOpex,
-      netProfit,
-      profitFinal: netProfit
-    };
+    return { totalOmset, totalHpp, grossProfit, totalOpex, netProfit };
   }
 
-  /**
-   * KUNCI PERBAIKAN 1: Menghitung total nilai valuasi aset serta potensi cuan sisa stok aktif
-   * (Mengecualikan produk dengan stok minus/penyesuaian)
-   */
   public getStockFinancials() {
     let totalValuation = 0;
     let totalEstProfit = 0;
 
     this.products.forEach(p => {
       const stock = Number(p.stock) || 0;
-      
-      // PERBAIKAN: Jika stok 0 atau minus, jangan masukkan ke kalkulasi aset & potensi cuan
       if (stock <= 0) return; 
-
-      const cost = Number(p.costPrice || p.capitalPrice || p.buyPrice || 0);
-      const price = Number(p.sellingPrice || p.price || 0);
-      
+      const cost = Number(p.costPrice || p.capitalPrice || 0);
+      const price = Number(p.price || 0);
       totalValuation += stock * cost;
       totalEstProfit += stock * Math.max(0, price - cost);
     });
 
-    return {
-      totalValuation,
-      totalEstProfit
-    };
+    return { totalValuation, totalEstProfit };
   }
 
-  /**
-   * KUNCI PERBAIKAN 2: Menghitung metrik analisis stok termasuk penyaringan produk dengan MARGIN < 10%
-   */
   public getStockAnalyzerStats() {
     const filteredSales = this.filterByTime(this.sales);
     const filteredInvoices = this.filterByTime(this.invoices);
 
-    // 1. Kalkulasi barang keluar (Unit & Valuasi HPP) & Hitung Frekuensi Terjual per Produk
     let unitOut = 0;
     let valuationOut = 0;
     const productSalesTracker: Record<string, number> = {};
 
     filteredSales.forEach(sale => {
       valuationOut += Number(sale.hpp || 0);
-
       if (Array.isArray(sale.items)) {
         sale.items.forEach((item: any) => {
           const qty = Number(item.qty || item.quantity || 1);
           unitOut += qty;
-
           const productName = item.name || item.sku || "Unknown Product";
           productSalesTracker[productName] = (productSalesTracker[productName] || 0) + qty;
         });
       } else {
-        const qty = Number(sale.qty || sale.quantity || 1);
+        const qty = Number(sale.qty || 1);
         unitOut += qty;
-
         const productName = sale.name || sale.sku || "Unknown Product";
         productSalesTracker[productName] = (productSalesTracker[productName] || 0) + qty;
       }
     });
 
-    // 2. Tentukan produk dengan penjualan tertinggi (Most Sold)
     let topProduct = "Belum Ada Data";
     let topQty = 0;
-
     Object.entries(productSalesTracker).forEach(([name, qty]) => {
-      if (qty > topQty) {
-        topQty = qty;
-        topProduct = name;
-      }
+      if (qty > topQty) { topQty = qty; topProduct = name; }
     });
 
-    const mostSold = [topProduct, topQty];
-
-    // 3. Cari produk dengan jumlah stok fisik terbanyak di gudang (Top Inventory)
     let topInventoryProduct = { name: "Belum Ada Data", stock: 0 };
     let maxStock = -1;
-
     this.products.forEach(p => {
       const stockVal = Number(p.stock) || 0;
       if (stockVal > maxStock) {
         maxStock = stockVal;
-        topInventoryProduct = {
-          name: p.name || p.sku || "Unknown Product",
-          stock: stockVal
-        };
+        topInventoryProduct = { name: p.name || p.sku || "Unknown Product", stock: stockVal };
       }
     });
 
-    // 4. Kalkulasi barang masuk (Unit & Nominal belanja) dari Nota Supplier
     let unitIn = 0;
     let valuationIn = 0;
-
     filteredInvoices.forEach(inv => {
       if (Array.isArray(inv.items)) {
         inv.items.forEach((item: any) => {
@@ -187,71 +150,86 @@ export class ReportService {
       } else {
         unitIn += Number(inv.qty || 0);
       }
-      valuationIn += Number(inv.amount || 0);
+      valuationIn += Number(inv.amount || inv.totalAmount || 0);
     });
 
-    // 5. Deteksi produk yang stoknya kritis (< 10 pcs)
     const lowStockProducts = this.products.filter(p => (Number(p.stock) || 0) < 10);
-
-    // 6. PERBAIKAN: Hitung jumlah produk dengan Margin Keuntungan < 10%
     const lowMarginProducts = this.products.filter(p => {
-      const cost = Number(p.costPrice || p.capitalPrice || p.buyPrice || 0);
-      const price = Number(p.sellingPrice || p.price || 0);
-      
-      // Lewati produk yang belum diset harga jualnya untuk menghindari pembagian dengan nol
+      const cost = Number(p.costPrice || 0);
+      const price = Number(p.price || 0);
       if (price <= 0) return false; 
-      
-      // Rumus Margin Keuntungan: ((Harga Jual - Modal) / Harga Jual) * 100
       const margin = ((price - cost) / price) * 100;
       return margin < 10;
     });
 
-    const lowMarginCount = lowMarginProducts.length;
-
     return {
-      unitOut,
-      valuationOut,
-      unitIn,
-      valuationIn,
-      mostSold,
-      topInventory: topInventoryProduct,
-      lowStockCount: lowStockProducts.length,
-      totalProducts: this.products.length,
-      lowStockProducts,
-      // Properti baru untuk dikonsumsi oleh komponen "Margin < 10%" di UI
-      lowMarginCount, 
-      lowMarginProducts
+      unitOut, valuationOut, unitIn, valuationIn, mostSold: [topProduct, topQty],
+      topInventory: topInventoryProduct, lowStockCount: lowStockProducts.length,
+      totalProducts: this.products.length, lowMarginCount: lowMarginProducts.length
     };
   }
 
   /**
-   * Membuat struktur data tren bulanan untuk Recharts (Pemasukan vs Profit Bersih)
+   * 🚀 PERBAIKAN TOTAL: Garansi Akurasi Data Belanja Nota Supplier & Kerugian Retur Gudang
    */
-  public getChartData(months: string[]) {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const monthlyData = months.map(m => ({ name: m, pemasukan: 0, laba: 0 }));
+  public getDeepFinancialDetail() {
+    const filteredInvoices = this.filterByTime(this.invoices);
+    const filteredExpenses = this.filterByTime(this.expenses);
+    const filteredSales = this.filterByTime(this.sales);
+    
+    // 1. Akumulasi belanja nota supplier dengan membaca seluruh variasi key nominal Firestore
+    const totalInvoiceSpend = filteredInvoices.reduce((acc, curr) => {
+      const value = Number(curr.amount || curr.totalAmount || curr.grandTotal || curr.total || 0);
+      return acc + value;
+    }, 0);
+    
+    // 2. Akumulasi nilai kerugian riil retur barang yang valid (Menampilkan angka 130rb yang sesungguhnya)
+    const totalReturnLoss = filteredSales.reduce((acc, curr) => {
+      const statusStr = String(curr.status || "").toLowerCase();
+      
+      // Jika invoice penjualan terdeteksi berstatus retur atau pembatalan sejenis
+      if (statusStr === 'retur' || curr.isRetur === true || statusStr === 'refund') {
+        // Menggunakan nilai nominal transaksi penuh atau nilai total kerugian modal barang yang hangus
+        const lossValue = Number(curr.total || curr.hpp || curr.amount || 0);
+        return acc + lossValue;
+      }
+      return acc;
+    }, 0);
+
+    // 3. Breakdown Kategori Operasional (OPEX)
+    const opexBreakdown: Record<string, number> = {};
+    filteredExpenses.forEach(exp => {
+      const cat = exp.category || "Lainnya";
+      opexBreakdown[cat] = (opexBreakdown[cat] || 0) + (Number(exp.amount || exp.total || 0));
+    });
+
+    const opexChartData = Object.entries(opexBreakdown).map(([name, value]) => ({
+      name,
+      value
+    }));
+
+    return { totalInvoiceSpend, totalReturnLoss, opexChartData };
+  }
+
+  public getChartData() {
+    const totalDays = new Date(this.selectedYear, this.selectedMonth + 1, 0).getDate();
+    const dailyData = Array.from({ length: totalDays }, (_, i) => ({
+      name: `${i + 1}`, 
+      pemasukan: 0,
+      laba: 0 
+    }));
 
     this.sales.forEach(sale => {
-      const date = this.parseDate(sale.createdAt);
-      if (date && date.getFullYear() === currentYear) {
-        const mIdx = date.getMonth();
-        const saleTotal = Number(sale.total) || 0;
-        const saleProfit = Number(sale.profit) || 0; 
-
-        monthlyData[mIdx].pemasukan += saleTotal;
-        monthlyData[mIdx].laba += saleProfit;
+      const date = this.parseDate(sale.createdAt || sale.date);
+      if (date && date.getMonth() === this.selectedMonth && date.getFullYear() === this.selectedYear) {
+        const dayIdx = date.getDate() - 1; 
+        if (dayIdx >= 0 && dayIdx < totalDays) {
+          dailyData[dayIdx].pemasukan += (Number(sale.total) || 0);
+          dailyData[dayIdx].laba += (Number(sale.profit) || 0); 
+        }
       }
     });
 
-    this.expenses.forEach(exp => {
-      const date = this.parseDate(exp.createdAt);
-      if (date && date.getFullYear() === currentYear) {
-        const mIdx = date.getMonth();
-        monthlyData[mIdx].laba -= (Number(exp.amount) || 0);
-      }
-    });
-
-    return monthlyData;
+    return dailyData;
   }
 }

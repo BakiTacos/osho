@@ -41,7 +41,7 @@ export default function Sidebar() {
     { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
     { name: "Retur", icon: BoxIcon, href: "/pengembalian" }, 
     { name: "Laporan", icon: MapIcon, href: "/laporan" },
-    { name: "Pengaturan", icon: Settings, href: "/settings" },
+    { name: "Pengaturan", icon: Settings, href: "/pengaturan" },
   ];
 
   // 2. DATA SELEKSI UNTUK MOBILE (4 MENU UTAMA OPERASIONAL GUDANG)
