@@ -12,6 +12,7 @@ import {
   Mail, Lock, LogIn, UserPlus, LogOut, 
   ShieldCheck, Loader2, ArrowRight 
 } from "lucide-react";
+import Cookies from "js-cookie"; // 🚀 SUNTIKKAN UTENSIL KUKI KEAMANAN
 
 export default function AuthComponent() {
   const [email, setEmail] = useState("");
@@ -27,15 +28,40 @@ export default function AuthComponent() {
     setError("");
     setIsLoading(true);
     try {
+      let userCredential;
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
       }
+
+      // 🚀 KUNCI KUKI SAKTI 1 BULAN (30 HARI EXPIRED)
+      const user = userCredential.user;
+      const token = await user.getIdToken();
+      
+      Cookies.set('session_token', token, { 
+        expires: 30, // 🔥 Token otomatis hangus/dihapus browser setelah 30 hari
+        secure: true, // Hanya berjalan di protokol HTTPS aman
+        sameSite: 'strict' // Proteksi ketat dari pembajakan kuki luar
+      });
+
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // 🚀 FUNGSI KELUAR SISTEM DENGAN PENGHANCUR KUKI INSTAN
+  const handleLogout = async () => {
+    if (window.confirm("Apakah Kakak yakin ingin keluar dari sistem ruko?")) {
+      try {
+        await signOut(auth);
+        Cookies.remove('session_token'); // 🔥 Hancurkan kuki detik itu juga tanpa sisa
+        window.location.href = "/"; // Refresh dan tendang ke halaman depan
+      } catch (err) {
+        setError("Gagal membersihkan sesi login.");
+      }
     }
   };
 
@@ -48,12 +74,12 @@ export default function AuthComponent() {
             <ShieldCheck size={40} strokeWidth={2.5} />
           </div>
           <h2 className="text-3xl font-black text-[#0F172A] tracking-tighter mb-2">Sistem Aktif</h2>
-          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-10">
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-10 truncate px-4">
             {currentUser.email}
           </p>
           
           <button
-            onClick={() => signOut(auth)}
+            onClick={handleLogout} // 🚀 Panggil fungsi pembersih kuki manual
             className="w-full bg-[#0F172A] text-white py-5 rounded-[24px] font-black text-sm shadow-xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all"
           >
             <LogOut size={18} />
@@ -74,7 +100,7 @@ export default function AuthComponent() {
           <div className="w-16 h-16 bg-[#0047AB] text-white rounded-[24px] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-200">
             <LogIn size={28} strokeWidth={3} />
           </div>
-          <h1 className="text-4xl font-black text-[#0F172A] tracking-tighter leading-tight">
+          <h1 className="text-4xl font-black text-[#0F172A] tracking-tighter leading-tight uppercase">
             {isLogin ? "Selamat Datang" : "Daftar Akun"}
           </h1>
         </div>
@@ -140,6 +166,7 @@ export default function AuthComponent() {
         <button
           onClick={() => setIsLogin(!isLogin)}
           className="mt-10 w-full text-center group"
+          type="button"
         >
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest group-hover:text-[#0047AB] transition-colors">
             {isLogin ? "Belum punya akses?" : "Sudah terdaftar?"} 

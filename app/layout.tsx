@@ -4,40 +4,60 @@
 import "./globals.css"; 
 import { Inter } from "next/font/google";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import { auth } from "../lib/firebase"; // 🚀 IMPOR INSTANCE AUTH FIREBASE UNTUK FORCE KICK
+import { signOut } from "firebase/auth"; // 🚀 IMPOR FUNGSI LOGOUT PAKSA
 import Navbar from "../components/Navbar";
 import AuthComponent from "../components/AuthComponent";
 import { Loader2 } from "lucide-react";
-import { usePathname } from "next/navigation"; // 🚀 SUNTIKKAN FITUR PEMBACA JALUR URL
+import { usePathname } from "next/navigation"; 
 import { useEffect } from "react";
+import Cookies from "js-cookie"; // 🚀 IMPOR UTENSIL KUKI UNTUK MEMERIKSA SESI LAMA
 
 const inter = Inter({ subsets: ["latin"] });
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { currentUser, loading } = useAuth();
-  const pathname = usePathname(); // Ambil alamat URL aktif (misal: "/inventaris/mapping")
+  const pathname = usePathname(); 
 
-  // 🚀 LOGIKA DINAMIS MENGUBAH JUDUL TAB BROWSER SECARA OTOMATIS (MANFAATKAN RAM LOKAL)
+  // =======================================================
+  // 🚀 PERBAIKAN SAKTI: FORCE KICK AKUN YANG TIDAK PUNYA KUKI BARU
+  // =======================================================
   useEffect(() => {
-    // 1. Jika pengguna belum masuk atau data sedang dimuat
+    // Ambil token sesi dari penyimpanan kuki browser lokal
+    const sessionToken = Cookies.get('session_token');
+
+    // Jika Firebase mendeteksi ada user login, tapi kuki berumur 1 bulannya KOSONG / BELUM ADA,
+    // berarti ini adalah perangkat lama yang tersangkut atau masa aktif kukinya sudah habis.
+    if (currentUser && !sessionToken) {
+      // Tendang paksa detik itu juga dari server cloud Firebase!
+      signOut(auth).then(() => {
+        // Bersihkan sisa kuki barangkali ada serpihan yang tertinggal
+        Cookies.remove('session_token');
+        // Segarkan halaman agar UI langsung mengunci ke form login
+        window.location.href = "/";
+        alert("Sesi masuk Anda telah di-reset demi keamanan sistem. Silakan login kembali.");
+      });
+    }
+  }, [currentUser, pathname]); // Otomatis memeriksa setiap kali user berpindah halaman ruko
+
+  // =======================================================
+  // 🚀 LOGIKA DINAMIS MENGUBAH JUDUL TAB BROWSER SECARA OTOMATIS
+  // =======================================================
+  useEffect(() => {
     if (loading || !currentUser) {
       document.title = "Simple and Yours | Manajemen";
       return;
     }
 
-    // 2. Pecah alamat URL berdasarkan tanda garis miring "/"
     const segments = pathname.split("/").filter(Boolean);
 
-    // 3. Jika murni di halaman beranda utama ("/")
     if (segments.length === 0) {
       document.title = "Beranda | Simple and Yours";
       return;
     }
 
-    // 4. Ambil kata kunci terakhir di URL untuk dijadikan judul utama
-    // Contoh: "/inventaris/mapping" -> diambil kata "mapping"
     const lastSegment = segments[segments.length - 1];
 
-    // 5. Kamus terjemahan otomatis agar judul tab berbahasa Indonesia rapi & estetik
     const pageTitles: Record<string, string> = {
       "inventaris": "Katalog Inventaris Gudang",
       "tambah": "Tambah Produk Baru",
@@ -50,19 +70,16 @@ function AppContent({ children }: { children: React.ReactNode }) {
       "pengaturan": "Pengaturan Sistem Ruko"
     };
 
-    // 6. Cari kecocokan kata kunci di dalam kamus di atas
     const dynamicTitle = pageTitles[lastSegment.toLowerCase()];
 
     if (dynamicTitle) {
       document.title = `${dynamicTitle} | SNY & PARATA`;
     } else {
-      // Fallback cadangan jika nama folder belum didaftarkan di kamus: 
-      // Mengubah huruf pertama menjadi besar (Contoh: "stok" -> "Stok | SNY & PARATA")
       const formattedFallback = lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);
       document.title = `${formattedFallback} | SNY & PARATA`;
     }
 
-  }, [pathname, loading, currentUser]); // Efek ini otomatis memicu ulang setiap kali rute halaman berganti!
+  }, [pathname, loading, currentUser]); 
 
   if (loading) {
     return (
