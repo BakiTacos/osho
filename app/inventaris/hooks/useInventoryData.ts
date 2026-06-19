@@ -1,49 +1,43 @@
+// app/inventaris/hooks/useInventoryData.ts
 import { useState, useEffect } from 'react';
 import { db } from "../../../lib/firebase";
-import { collection, onSnapshot, query, orderBy, doc } from "firebase/firestore";
-
-export interface Product {
-  id: string;
-  name: string;
-  sku: string;
-  category: string;
-  price: number;
-  costPrice: number;
-  stock: number;
-  imageUrl: string;
-  isMapping?: boolean;
-  linkedSku?: string;
-  multiplier?: number;
-
-  useMarketplacePrices?: boolean; // Toggle aktif/tidak
-  priceShopee?: number;           // Harga khusus Shopee
-  priceTiktok?: number;           // Harga khusus Tiktok
-  priceLazada?: number;           // Harga khusus Lazada
-  
-  // Metadata tambahan (opsional)
-  updatedAt?: any;
-}
+import { collection, getDocs, query, orderBy, doc, getDoc } from "firebase/firestore";
+import { Product } from '../types/inventory';
 
 export function useInventoryData(currentUser: any) {
   const [products, setProducts] = useState<Product[]>([]);
   const [activeFees, setActiveFees] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) return;
     
-    // 1. Listen Data Produk
-    const q = query(collection(db, `users/${currentUser.uid}/products`), orderBy("name", "asc"));
-    const unsubProd = onSnapshot(q, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
-    });
+    async function loadInitialData() {
+      try {
+        setLoading(true);
 
-    // 2. Listen Data Biaya Admin
-    const unsubFees = onSnapshot(doc(db, `users/${currentUser.uid}/settings`, "admin_fees"), (snap) => {
-      if (snap.exists()) setActiveFees(snap.data());
-    });
+        // 🚀 SEKAT KEBOCORAN 1: Ambil data produk satu kali (One-time Fetch)
+        // Firebase JS SDK otomatis mendahulukan Cache lokal baru mengambil data baru di server
+        const q = query(collection(db, `users/${currentUser.uid}/products`), orderBy("name", "asc"));
+        const querySnapshot = await getDocs(q);
+        setProducts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
 
-    return () => { unsubProd(); unsubFees(); };
+        // 🚀 SEKAT KEBOCORAN 2: Ambil biaya admin satu kali saja
+        const feeDocRef = doc(db, `users/${currentUser.uid}/settings`, "admin_fees");
+        const feeSnap = await getDoc(feeDocRef);
+        if (feeSnap.exists()) {
+          setActiveFees(feeSnap.data());
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data inventaris:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadInitialData();
   }, [currentUser]);
 
-  return { products, activeFees };
+  // Ekspor status loading jika Kakak butuh animasi skeleton loader di page utama
+  return { products, activeFees, loading };
 }

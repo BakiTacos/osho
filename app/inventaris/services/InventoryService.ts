@@ -149,7 +149,8 @@ export class InventoryService {
 
             if (!latestDataMap[rawSku] || currentDate > latestDataMap[rawSku].date) {
               latestDataMap[rawSku] = {
-                sku: rawSku, name: String(row[1] || "Tanpa Nama").toUpperCase(),
+                sku: rawSku, 
+                name: String(row[1] || "Tanpa Nama").toUpperCase(),
                 price: Number(String(row[2] || "0").replace(/[^0-9.-]+/g, "")),
                 costPrice: Number(String(row[3] || "0").replace(/[^0-9.-]+/g, "")),
                 date: currentDate
@@ -157,17 +158,45 @@ export class InventoryService {
             }
           });
 
-          const uploadPromises = Object.values(latestDataMap).map((item) => {
-            const docRef = doc(db, `users/${this.currentUser.uid}/products`, item.sku);
-            return setDoc(docRef, {
-              sku: item.sku, name: item.name, price: item.price, costPrice: item.costPrice,
-              stock: 0, category: "Lainnya", imageUrl: "", isMapping: false, updatedAt: serverTimestamp()
-            }, { merge: true });
-          });
+          const itemsArray = Object.values(latestDataMap);
+          let batch = writeBatch(db);
+          let counter = 0;
 
-          await Promise.all(uploadPromises);
-          resolve(Object.keys(latestDataMap).length);
-        } catch (err) { reject(err); }
+          // 🚀 AMANKAN DENGAN METODE MULTI-BATCH (BATAS MAKSIMAL FIREBASE 500 DOKUMEN PER BATCH)
+          for (const item of itemsArray) {
+            const docRef = doc(db, `users/${this.currentUser.uid}/products`, item.sku);
+            
+            batch.set(docRef, {
+              sku: item.sku, 
+              name: item.name, 
+              price: item.price, 
+              costPrice: item.costPrice,
+              stock: 0, 
+              category: "Lainnya", 
+              imageUrl: "", 
+              isMapping: false, 
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            counter++;
+
+            // Jika hitungan dalam paket sudah mencapai 500, kirim massal lalu buka paket baru
+            if (counter === 500) {
+              await batch.commit();
+              batch = writeBatch(db);
+              counter = 0;
+            }
+          }
+
+          // Kirim sisa data yang belum mencapai kelipatan 500
+          if (counter > 0) {
+            await batch.commit();
+          }
+
+          resolve(itemsArray.length);
+        } catch (err) { 
+          reject(err); 
+        }
       };
       reader.readAsBinaryString(file);
     });
