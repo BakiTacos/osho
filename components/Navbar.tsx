@@ -34,7 +34,7 @@ export default function Sidebar() {
 
   const sidebarItems = [
     // 🔧 NAMA MENU DIUBAH MENJADI "Home"
-    { name: "Home", icon: LayoutDashboard, href: "/" },
+    { name: "Beranda", icon: LayoutDashboard, href: "/" },
     { name: "Inventaris", icon: Calculator, href: "/inventaris" },
     { name: "Penjualan", icon: LinkIcon, href: "/penjualan" },
     { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
