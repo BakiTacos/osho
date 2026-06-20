@@ -73,7 +73,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
     const dynamicTitle = pageTitles[lastSegment.toLowerCase()];
 
     if (dynamicTitle) {
-      document.title = `${dynamicTitle} | SNY & PARATA`;
+      document.title = `${dynamicTitle} | SNY`;
     } else {
       const formattedFallback = lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);
       document.title = `${formattedFallback} | SNY & PARATA`;
