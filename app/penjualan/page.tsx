@@ -1,7 +1,7 @@
 // app/penjualan/page.tsx
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from "../../context/AuthContext";
 import { useSalesPage } from "./hooks/useSalesPage"; 
 import { doc, updateDoc } from "firebase/firestore";
@@ -16,6 +16,9 @@ import ImportCard from "./components/ImportCard";
 import { ManualInputModal } from "./components/SalesModals";
 import { ManualEditModal } from "./components/ManualEditModal"; 
 
+// 🚀 EMBED MODULAR MONOLITH: Suntikkan modal customizer invoice baru ruko
+import { InvoiceCustomizerModal } from "./components/InvoiceCustomizerModal";
+
 export default function PenjualanPage() {
   const { currentUser } = useAuth();
   
@@ -29,12 +32,16 @@ export default function PenjualanPage() {
     handleEditPendingSubmit, handleDirectDatabaseCleanup, handleFileUpload, handleManualSubmit
   } = useSalesPage(currentUser);
 
+  // 🚀 STATE PENGUNCI DRAF INVOICE LOKAL MEMORI RAM
+  const [isInvoiceCustomizerOpen, setIsInvoiceCustomizerOpen] = useState(false);
+  const [selectedTxForInvoice, setSelectedTxForInvoice] = useState<any>(null);
+
   if (!currentUser) return null;
 
   return (
     <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] pb-10 space-y-4">
       
-      {/* 1. HEADER (Suntikkan fungsi pembersih database ganda langsung ke dalam header) */}
+      {/* 1. HEADER */}
       <SalesHeader 
         onOpenManual={() => setIsManualModalOpen(true)} 
         onDirectCleanup={handleDirectDatabaseCleanup}
@@ -51,16 +58,13 @@ export default function PenjualanPage() {
         pendingCount={transactions.filter(t => t.product === "Produk Luar Katalog").length}
       />
 
-      {/* BANNER REKONSILIASI ROBUST LAMA RESMI DIHAPUS UTUH DARI SINI AGAR DESAIN RAMPING */}
-
-      {/* 3. STATS SUMMARY REKAP FINANSIAL */}
       {/* 3. STATS SUMMARY REKAP FINANSIAL */}
       <SalesStats transactions={filteredTransactions} label={timeFilter} />
 
-      {/* 🚀 PERBAIKAN STRUKTUR LAYOUT KEVIN: STACK VERTIKAL (ATAS - BAWAH) */}
+      {/* STRUKTUR LAYOUT STACK VERTIKAL (ATAS - BAWAH) */}
       <div className="px-4 sm:px-10 py-2 flex flex-col gap-6">
         
-        {/* 📥 SEKTOR ATAS: Kartu Impor Excel Marketplace (Hanya muncul di Desktop, lebar penuh) */}
+        {/* 📥 SEKTOR ATAS: Kartu Impor Excel Marketplace */}
         <div className="hidden md:block w-full">
           <ImportCard 
             selectedMarketplace={selectedMarketplace}
@@ -70,7 +74,7 @@ export default function PenjualanPage() {
           />
         </div>
 
-        {/* 📊 SEKTOR BAWAH: Tabel Riwayat Transaksi Jualan Utama (Lebar penuh, sangat lega!) */}
+        {/* 📊 SEKTOR BAWAH: Tabel Riwayat Transaksi Jualan Utama */}
         <div className="w-full">
           <SalesTable 
             items={filteredTransactions}
@@ -91,10 +95,14 @@ export default function PenjualanPage() {
               });
               setIsEditModalOpen(true);
             }}
+            // 🚀 SUNTIKKAN PROPERTI BARU KE DALAM TABLE AGAR TOMBOL "BUAT INVOICES" JALAN PERSISI
+            onGenerateInvoice={(t: any) => {
+              setSelectedTxForInvoice(t);
+              setIsInvoiceCustomizerOpen(true);
+            }}
           />
         </div>  
       </div>
-
 
       {/* 5. MODAL PENJUALAN MANUAL MULTI-PRODUCT */}
       <ManualInputModal 
@@ -124,6 +132,17 @@ export default function PenjualanPage() {
         isProcessing={isProcessing}
         onSubmit={handleEditPendingSubmit}
       />
+
+      {/* 🚀 7. MODAL CUSTOMIZER INVOICE GENERATOR (INTERAKTIF FLYOUT) */}
+      <InvoiceCustomizerModal 
+          isOpen={isInvoiceCustomizerOpen}
+          onClose={() => {
+            setIsInvoiceCustomizerOpen(false);
+            setSelectedTxForInvoice(null);
+          }}
+          transaction={selectedTxForInvoice}
+        />
+
     </div>
   );
 }

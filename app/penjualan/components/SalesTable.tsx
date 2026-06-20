@@ -1,11 +1,28 @@
-import React, { useState } from 'react';
-import { Trash2, ChevronLeft, ChevronRight, ShoppingBag, Info, ChevronDown, ChevronUp, Pencil } from "lucide-react";
+// app/penjualan/components/SalesTable.tsx
+"use client";
 
-export default function SalesTable({ items, selectedIds, setSelectedIds, onDeleteBulk, onDeleteSingle, onStatusUpdate, onEdit }: any) {
+import React, { useState } from 'react';
+import { 
+  Trash2, ChevronLeft, ChevronRight, ShoppingBag, Info, 
+  ChevronDown, ChevronUp, Pencil, FileText, MoreVertical 
+} from "lucide-react";
+
+export default function SalesTable({ 
+  items, 
+  selectedIds, 
+  setSelectedIds, 
+  onDeleteBulk, 
+  onDeleteSingle, 
+  onStatusUpdate, 
+  onEdit,
+  onGenerateInvoice 
+}: any) {
   const [currentPage, setCurrentPage] = useState(1);
-  // STATE BARU: Untuk melacak baris mana yang rincian adminnya sedang dibuka di Mobile
   const [expandedRow, setExpandedRow] = useState<string | null>(null); 
   
+  // 🎯 PERBAIKAN MUTLAK: Deklarasikan setActiveMenuId agar tidak memicu crash "is not defined"
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
   const itemsPerPage = 20;
   const totalPages = Math.ceil(items.length / itemsPerPage);
   const currentItems = items.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -20,7 +37,7 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
       {selectedIds.length > 0 && (
         <div className="flex justify-between items-center bg-red-50 p-4 rounded-2xl border border-red-100 animate-in fade-in slide-in-from-top-2">
           <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">{selectedIds.length} Item Terpilih</p>
-          <button onClick={onDeleteBulk} className="bg-red-600 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase flex items-center gap-2 shadow-lg shadow-red-100 hover:bg-red-700 transition-all">
+          <button onClick={onDeleteBulk} className="bg-red-600 text-white px-4 py-2 rounded-xl font-black text-[9px] uppercase flex items-center gap-2 shadow-lg shadow-red-100 hover:bg-red-700 transition-all cursor-pointer">
             <Trash2 size={14} /> Hapus
           </button>
         </div>
@@ -96,17 +113,55 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
                         <option value="Proses">Proses</option><option value="Selesai">Selesai</option><option value="Retur">Retur</option>
                       </select>
                     </td>
-                    <td className="px-6 py-5 text-right whitespace-nowrap">
-                      {/* 🛠️ ACTION BUTTON DESKTOP: TOMBOL EDIT PETAKAN SKU */}
-                      {t.product === "Produk Luar Katalog" && (
+                    
+                    <td className="px-6 py-5 text-right whitespace-nowrap relative">
+                      <div className="flex items-center justify-end gap-1">
+                        {t.product === "Produk Luar Katalog" && (
+                          <button 
+                            type="button"
+                            onClick={() => onEdit && onEdit(t)} 
+                            className="bg-blue-50 hover:bg-blue-100 text-[#0047AB] px-2.5 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-wider inline-flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Pencil size={10} /> Petakan SKU
+                          </button>
+                        )}
                         <button 
-                          onClick={() => onEdit && onEdit(t)} 
-                          className="bg-blue-50 hover:bg-blue-100 text-[#0047AB] px-2.5 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-wider mr-2 inline-flex items-center gap-1 transition-all"
+                          type="button"
+                          onClick={() => setActiveMenuId(activeMenuId === t.id ? null : t.id)} 
+                          className="p-1.5 text-slate-300 hover:text-slate-600 transition-colors cursor-pointer"
                         >
-                          <Pencil size={10} /> Petakan SKU
+                          <MoreVertical size={16}/>
                         </button>
+                      </div>
+
+                      {/* LACI LAYER DROPDOWN DESKTOP */}
+                      {activeMenuId === t.id && (
+                        <div className="absolute right-12 top-12 w-38 bg-white border border-slate-100 rounded-xl shadow-xl z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 text-left">
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              onGenerateInvoice && onGenerateInvoice(t);
+                              setActiveMenuId(null);
+                            }} 
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-[10px] font-black text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
+                          >
+                            <FileText size={12} className="text-[#0047AB] shrink-0" />
+                            <span className="uppercase">Buat Invoices</span>
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              onDeleteSingle(t);
+                              setActiveMenuId(null);
+                            }} 
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-[10px] font-black text-red-500 hover:bg-red-50 transition-colors cursor-pointer text-left"
+                          >
+                            <Trash2 size={12} className="shrink-0 text-red-500" />
+                            <span className="uppercase">Hapus Data</span>
+                          </button>
+                        </div>
                       )}
-                      <button onClick={() => onDeleteSingle(t)} className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition-all inline-flex items-center justify-center"><Trash2 size={16} /></button>
                     </td>
                   </tr>
                 );
@@ -116,7 +171,7 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
         </div>
 
         {/* ========================================= */}
-        {/* 📱 MOBILE VIEW (CARD LAYOUT WITH ACCORDION) */}
+        {/* 📱 MOBILE VIEW                             */}
         {/* ========================================= */}
         <div className="block lg:hidden divide-y divide-slate-50">
           <div className="p-4 bg-[#F8F9FB] border-b border-[#F1F5F9] flex items-center gap-3">
@@ -130,12 +185,10 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
             const logistik = Number(t.logisticsFee) || 0;
             const profit = Number(t.profit) || 0;
             const adminFee = Math.round(total - hpp - logistik - profit);
-            const isExpanded = expandedRow === t.id; // Cek apakah baris ini sedang dibuka
+            const isExpanded = expandedRow === t.id;
 
             return (
               <div key={t.id} className={`p-4 transition-colors flex flex-col ${t.product === "Produk Luar Katalog" ? "bg-red-50/30" : "hover:bg-slate-50/50"}`}>
-                
-                {/* Header Card (Info Utama) */}
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex items-start gap-3 overflow-hidden">
                     <input type="checkbox" className="rounded text-[#0047AB] cursor-pointer mt-1 shrink-0"
@@ -147,28 +200,34 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
                         {t.product}
                       </span>
                       <div className="flex items-center gap-1.5 mt-1.5">
-                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase border bg-slate-100">{t.marketplace}</span>
+                        <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter border bg-slate-100">{t.marketplace}</span>
                         <span className="text-[9px] font-bold text-[#0047AB] truncate">#{t.orderId}</span>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Container Tombol Aksi Kanan Atas Mobile */}
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* 🛠️ ACTION BUTTON MOBILE: TOMBOL EDIT PETAKAN SKU */}
+                    <button 
+                      type="button" 
+                      onClick={() => onGenerateInvoice && onGenerateInvoice(t)} 
+                      className="p-2 text-[#0047AB] bg-blue-50/70 rounded-lg active:bg-blue-100 flex items-center justify-center transition-all cursor-pointer"
+                    >
+                      <FileText size={13} strokeWidth={2.5} />
+                    </button>
+
                     {t.product === "Produk Luar Katalog" && (
                       <button 
+                        type="button"
                         onClick={() => onEdit && onEdit(t)} 
-                        className="bg-blue-50 text-[#0047AB] rounded-lg text-[9px] font-black uppercase tracking-wider px-2 py-1.5 transition-all inline-flex items-center gap-1"
+                        className="bg-blue-50 text-[#0047AB] rounded-lg text-[9px] font-black uppercase tracking-wider px-2 py-1.5 transition-all inline-flex items-center gap-1 cursor-pointer"
                       >
                         <Pencil size={10} /> Petakan
                       </button>
                     )}
-                    <button onClick={() => onDeleteSingle(t)} className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg shrink-0"><Trash2 size={16} /></button>
+                    <button type="button" onClick={() => onDeleteSingle(t)} className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg shrink-0 cursor-pointer"><Trash2 size={16} /></button>
                   </div>
                 </div>
 
-                {/* Info Profit & Aksi Accordion */}
                 <div className="flex items-end justify-between mt-3 pt-3 border-t border-slate-100/50">
                   <div className="flex flex-col">
                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Net Profit <span className="font-black text-[#0047AB] bg-blue-50 px-1 rounded ml-1">Qty: {t.qty}</span></span>
@@ -185,17 +244,16 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
                       <option value="Retur">Retur</option>
                     </select>
                     
-                    {/* TOMBOL BUKA/TUTUP RINCIAN ADMIN */}
                     <button 
+                      type="button"
                       onClick={() => setExpandedRow(isExpanded ? null : t.id)} 
-                      className={`p-1.5 rounded-lg border flex items-center justify-center transition-all ${isExpanded ? 'bg-[#0047AB] text-white border-[#0047AB]' : 'bg-white text-slate-400 border-slate-200'}`}
+                      className={`p-1.5 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${isExpanded ? 'bg-[#0047AB] text-white border-[#0047AB]' : 'bg-white text-slate-400 border-slate-200'}`}
                     >
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                   </div>
                 </div>
 
-                {/* AREA RINCIAN BIAYA (MUNCUL JIKA EXPANDED) */}
                 {isExpanded && (
                   <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2 animate-in fade-in slide-in-from-top-1">
                     <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase">
@@ -214,15 +272,12 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
                     )}
                   </div>
                 )}
-
               </div>
             );
           })}
         </div>
         
-        {/* ========================================= */}
-        {/* EMPTY STATE & PAGINATION                  */}
-        {/* ========================================= */}
+        {/* Empty State & Pagination */}
         {currentItems.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 text-slate-200">
             <ShoppingBag size={48} strokeWidth={1.5} className="mb-4 opacity-30" />
@@ -233,8 +288,8 @@ export default function SalesTable({ items, selectedIds, setSelectedIds, onDelet
         <div className="p-4 sm:p-6 border-t border-[#F8F9FB] flex items-center justify-between mt-auto bg-white">
           <span className="text-[9px] sm:text-[10px] font-black text-[#94A3B8] uppercase tracking-widest">Page {currentPage} of {totalPages || 1}</span>
           <div className="flex gap-2">
-            <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all"><ChevronLeft size={16}/></button>
-            <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages || totalPages === 0} className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all"><ChevronRight size={16}/></button>
+            <button onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all cursor-pointer"><ChevronLeft size={16}/></button>
+            <button onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages || totalPages === 0} className="p-2 border border-[#E2E8F0] text-slate-400 hover:text-[#0047AB] rounded-lg disabled:opacity-20 transition-all cursor-pointer"><ChevronRight size={16}/></button>
           </div>
         </div>
       </div>
