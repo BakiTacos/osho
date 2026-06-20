@@ -1,9 +1,35 @@
-export const MARKETPLACE_CONFIG: any = {
-  shopee: { name: "Shopee", dataStartRow: 1, cols: { orderId: 0, resi: 5, sku: 15, name: 14, total: 17, qty: 19 } },
-  tiktok: { name: "Tiktok", dataStartRow: 2, cols: { orderId: 0, sku: 6, total: 13, qty: 9, shippingType: 40, // Tipe Layanan (Standard/Economy/Cargo)
-      province: 48,     // Provinsi Tujuan
-      weight: 55 } },
-  lazada: { name: "Lazada", dataStartRow: 1, cols: { orderId: 0, sku: 6, name: 4, total: 15, qty: 9 } }
+export const MARKETPLACE_CONFIG: Record<string, {
+  name: string;
+  dataStartRow: number;
+  cols: {
+    orderId: number;
+    resi: number;
+    sku: number;
+    total: number;
+    qty: number;
+    createdAt?: number; // 🚀 TAMBAHKAN INI agar eror properti hilang!
+    name?: number;
+    shippingType?: number;
+    province?: number;
+    weight?: number;
+    lazadaItemId?: number;
+  }
+}> = {
+  shopee: { 
+    name: "Shopee", 
+    dataStartRow: 1, 
+    cols: { orderId: 0, resi: 5, sku: 15, total: 17, qty: 19, createdAt: 3 } // Sesuaikan index aslinya jika ada
+  },
+  tiktok: { 
+    name: "Tiktok", 
+    dataStartRow: 2, 
+    cols: { orderId: 0, resi: 39, sku: 6, total: 13, qty: 9, shippingType: 40, province: 48, weight: 55, createdAt: 1 } 
+  },
+  lazada: { 
+    name: "Lazada", 
+    dataStartRow: 1, 
+    cols: { orderId: 12, resi: 59, sku: 5, total: 15, qty: 9, lazadaItemId: 4, createdAt: 1 } 
+  }
 };
 
 export const DEFAULT_MARKETPLACE_SETTINGS = {

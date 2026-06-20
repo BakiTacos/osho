@@ -1,5 +1,8 @@
+// services/SalesService.ts
 import { db } from "../../../lib/firebase";
-import { doc, updateDoc, increment, collection, addDoc, serverTimestamp, deleteDoc, writeBatch } from "firebase/firestore";
+import { 
+  doc, collection, serverTimestamp, increment, writeBatch 
+} from "firebase/firestore";
 import { calculateMarketplaceFee } from "../../../lib/calculations";
 import { REGION_MAP, LOGISTICS_RATES } from "../../../lib/constants/sales";
 
@@ -24,32 +27,21 @@ export class SalesService {
       return totalRevenue - totalHpp - logisticsFee;
     }
     const adminFees = calculateMarketplaceFee(totalRevenue, mpSettings);
-    
-    // Profit dipotong HPP, Admin Fee, dan Biaya Logistik Baru
     return totalRevenue - totalHpp - adminFees - logisticsFee;
   }
 
   public calculateTikTokLogistics(type: string, province: string, weight: number): number {
     if (!province) return 0;
-
-    // PERBAIKAN DI SINI:
-    // Jika 'province' adalah "DKI JAKARTA" -> jadi "JAVA_JKT"
-    // Jika 'province' sudah "JAVA_JKT" (dari dropdown) -> tetap "JAVA_JKT"
     const regionId = REGION_MAP[province.toUpperCase()] || province.toUpperCase();
-
-    const serviceType = type.toUpperCase(); // STANDARD atau SAVER
+    const serviceType = type.toUpperCase();
     
     try {
       const rateTable = LOGISTICS_RATES[serviceType];
-      if (!rateTable || !rateTable[regionId]) {
-        console.warn(`Tarif tidak ditemukan untuk: ${serviceType} - ${regionId}`);
-        return 0;
-      }
+      if (!rateTable || !rateTable[regionId]) return 0;
 
       const rates = rateTable[regionId];
       const itemWeight = Math.max(0.1, weight);
 
-      // Logika perhitungan berat (sama seperti sebelumnya)
       if (itemWeight <= 0.5) return rates[0];
       if (itemWeight <= 1.0) return rates[1];
       
@@ -59,46 +51,55 @@ export class SalesService {
       
       return baseRate + extraCharge;
     } catch (error) {
-      console.error("Error calculating TikTok logistics:", error);
       return 0;
     }
   }
 
-  public async updateProductStock(skuInput: string, change: number, resiInput?: string) {
+  // 🚀 OPTIMASI: Fungsi internal khusus untuk mendaftarkan mutasi stok ke dalam BATCH
+  private injectStockMutationToBatch(batch: any, skuInput: string, change: number, identifierInput?: string) {
     const sku = skuInput.replace(/\s+/g, '').toUpperCase();
-    const resi = resiInput?.trim() || "";
+    const identifier = identifierInput?.trim() || "";
     const product = this.catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
     
     if (product) {
-      let targetSku = product.sku;
       let productId = product.id;
       let finalChange = change;
 
       if (product.isMapping && product.linkedSku) {
         const mainProd = this.catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === product.linkedSku.replace(/\s+/g, '').toUpperCase());
         if (mainProd) {
-          targetSku = mainProd.sku;
           productId = mainProd.id;
           finalChange = change * (product.multiplier || 1);
         }
       }
 
-      if (resi !== "") {
-        const warehouseMatch = this.shopeeWarehouse.find(w => w.resi.trim() === resi && w.sku.replace(/\s+/g, '').toUpperCase() === targetSku.toUpperCase() && !w.isUsed);
+      // Jalur pengaman Shopee Warehouse (Hanya berlaku untuk transaksi otomatis hasil Impor Excel)
+      if (identifier !== "") {
+        const warehouseMatch = this.shopeeWarehouse.find(w => 
+          (w.resi.trim() === identifier || w.orderId?.trim() === identifier) && 
+          w.sku.replace(/\s+/g, '').toUpperCase() === sku && !w.isUsed
+        );
         if (warehouseMatch) {
-          await updateDoc(doc(db, `users/${this.currentUser.uid}/shopee_warehouse`, warehouseMatch.id), { isUsed: true, usedAt: serverTimestamp() });
-          return; 
+          const whRef = doc(db, `users/${this.currentUser.uid}/shopee_warehouse`, warehouseMatch.id);
+          batch.update(whRef, { isUsed: true, usedAt: serverTimestamp() });
+          return; // Mengunci data gudang shopee selesai
         }
       }
-      await updateDoc(doc(db, `users/${this.currentUser.uid}/products`, productId), { stock: increment(finalChange) });
+      
+      // Jika bukan shopee warehouse, mutasi stok fisik rak berjalan normal
+      const prodRef = doc(db, `users/${this.currentUser.uid}/products`, productId);
+      batch.update(prodRef, { stock: increment(finalChange) });
     }
   }
 
+  // 🚀 KUNCI PERBAIKAN UTAMA: PROSES MANUAL KINI MENGGUNAKAN ATOMIC BATCH (1 KETUKAN JARINGAN KILAT)
   public async processMultiProductManual(manualForm: any, useCatalogPrice: boolean) {
     const orderId = manualForm.orderId.trim() || `MAN-${Date.now()}`;
+    const resi = manualForm.resi?.trim() || ""; 
     const marketplace = manualForm.source.toLowerCase();
     
-    // 1. Hitung total biaya logistik TikTok (seperti sebelumnya)
+    const batch = writeBatch(db);
+    
     let totalLogisticsFee = 0;
     if (marketplace === 'tiktok') {
       totalLogisticsFee = this.calculateTikTokLogistics(
@@ -120,23 +121,14 @@ export class SalesService {
 
       if (matched) {
         productName = matched.name;
-        
-        // --- LOGIKA HARGA SPESIFIK MARKETPLACE ---
         if (useCatalogPrice) {
-          // Ambil harga umum dulu
           unitPrice = Number(matched.price);
-          
-          // Jika marketplace adalah TikTok dan fitur harga khusus aktif
           if (marketplace === 'tiktok' && matched.useMarketplacePrices) {
-            // Gunakan priceTiktok jika ada (lebih besar dari 0), jika tidak balik ke price umum
-            unitPrice = (matched.priceTiktok && Number(matched.priceTiktok) > 0) 
-                        ? Number(matched.priceTiktok) 
-                        : Number(matched.price);
+            unitPrice = (matched.priceTiktok && Number(matched.priceTiktok) > 0) ? Number(matched.priceTiktok) : Number(matched.price);
           }
         } else {
           unitPrice = Number(item.manualPrice);
         }
-        // ------------------------------------------
 
         if (matched.isMapping && matched.linkedSku) {
           const main = this.catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
@@ -154,18 +146,42 @@ export class SalesService {
       const totalHpp = (unitCost * multiplier) * qty;
       const netProfit = this.calculateNetProfitEntry(totalRevenue, totalHpp, manualForm.source, logisticsFeePerItem);
 
-      await addDoc(collection(db, `users/${this.currentUser.uid}/sales`), {
-        orderId, sku, product: productName, total: totalRevenue, hpp: totalHpp,
-        qty, profit: netProfit, logisticsFee: logisticsFeePerItem,
-        marketplace: manualForm.source, status: manualForm.status, createdAt: serverTimestamp()
+      // Siapkan dokumen sales baru di dalam batch antrean
+      const newSalesRef = doc(collection(db, `users/${this.currentUser.uid}/sales`));
+      batch.set(newSalesRef, {
+        orderId, 
+        resi, 
+        sku, 
+        product: productName, 
+        total: totalRevenue, 
+        hpp: totalHpp,
+        qty, 
+        profit: netProfit, 
+        logisticsFee: logisticsFeePerItem,
+        marketplace: manualForm.source, 
+        status: manualForm.status, 
+        createdAt: serverTimestamp()
       });
-      await this.updateProductStock(sku, -qty, orderId);
+
+      // 🚀 AMAN DARI BUG: Pemotongan stok manual di-inject langsung tanpa parameter identifier bayangan
+      this.injectStockMutationToBatch(batch, sku, -qty, "");
     }
+
+    // Tembak seluruh data sekaligus ke server Cloud Firebase secara instan!
+    await batch.commit();
   }
 
+  // 🚀 OPTIMASI PERFORMA: Penghapusan tunggal kini ikut memanfaatkan Batch System
   public async deleteTransaction(tx: any) {
-    await deleteDoc(doc(db, `users/${this.currentUser.uid}/sales`, tx.id));
-    await this.updateProductStock(tx.sku, tx.qty);
+    const batch = writeBatch(db);
+    
+    const salesDocRef = doc(db, `users/${this.currentUser.uid}/sales`, tx.id);
+    batch.delete(salesDocRef);
+    
+    // Kembalikan jumlah stok fisik ke rak ruko
+    this.injectStockMutationToBatch(batch, tx.sku, tx.qty, tx.orderId);
+    
+    await batch.commit();
   }
 
   public async bulkDeleteTransactions(transactions: any[], selectedIds: string[]) {
@@ -173,7 +189,7 @@ export class SalesService {
     for (const id of selectedIds) {
       const tx = transactions.find(t => t.id === id);
       if (tx) {
-        await this.updateProductStock(tx.sku, tx.qty);
+        this.injectStockMutationToBatch(batch, tx.sku, tx.qty, tx.orderId);
         batch.delete(doc(db, `users/${this.currentUser.uid}/sales`, id));
       }
     }

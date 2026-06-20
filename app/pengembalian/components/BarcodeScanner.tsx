@@ -57,7 +57,7 @@ export default function BarcodeScanner({ onScanSuccess, onClose }: BarcodeScanne
       {/* FOOTER BAR BRANDING KOSMETIK RAMPING */}
       <div className="p-6 bg-gradient-to-t from-black/80 to-transparent text-center z-10">
         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse">
-          ⚡ MURNI SCANNER INTELLIGENT • AUTOMATIC DETECT ⚡
+          SCAN BARCODE NOMOR RESI / NOMOR PESANAN
         </p>
       </div>
 

@@ -29,10 +29,12 @@ export interface AfkirFormState {
 }
 
 // 2. Form Khusus Paket Misterius Hasil Scan Zong (Eksternal)
+// types/retur.ts
 export interface MysteriousReturnFormState {
-  orderIdOrResi: string; // Wajib diisi (otomatis terisi dari hasil scan)
+  orderIdOrResi: string;
   sku: string;
   qty: number;
   marketplace: string;
   reason: string;
+  penanganan: "Pending SKU" | "Proses" | "Selesai"; // 🚀 BARU: Status awal dinamis
 }

@@ -158,29 +158,59 @@ export class ReturService {
   }
 
   // Tambahkan fungsi ini di dalam class ReturService di file ReturService.ts
+    // app/inventaris/pengembalian/services/ReturService.ts
+
+// app/inventaris/pengembalian/services/ReturService.ts
+
     public async processMysteriousReturn(form: MysteriousReturnFormState, prod: any): Promise<void> {
-    const lossAmount = (Number(prod.costPrice) || 0) * form.qty;
-    const todayLokal = this.getTodayString();
     const batch = writeBatch(db);
+    const todayLokal = this.getTodayString();
 
+    const prodRef = doc(db, `users/${this.uid}/products`, prod.id);
+    const hppAmount = Number(prod.costPrice || 0);
+    const estimatedSalePrice = Number(prod.sellingPrice || 0);
+    
+    // Hitung potensi profit yang batal jika kasus langsung diselesaikan
+    const lostProfitPerUnit = estimatedSalePrice - hppAmount;
+    const totalLostProfit = lostProfitPerUnit * form.qty;
+
+    // 🚀 PERCABANGAN LOGIKA BERDASARKAN STATUS PILIHAN ADMIN GUDANG:
+    if (form.penanganan === "Selesai") {
+        // KONDISI A: Langsung eksekusi pulihkan fisik ke rak dan potong profit bulanan
+        batch.update(prodRef, { stock: increment(form.qty) });
+
+        if (totalLostProfit > 0) {
+        const expRef = doc(collection(db, `users/${this.uid}/expenses`));
+        batch.set(expRef, {
+            category: "Koreksi Profit Retur",
+            description: `Pembatalan Profit Paket Misterius [${prod.sku}] x${form.qty} - Resi/Order: ${form.orderIdOrResi}`,
+            amount: totalLostProfit,
+            paidBy: "SISTEM",
+            date: todayLokal,
+            createdAt: serverTimestamp()
+        });
+        }
+    }
+
+    // Catat dokumen di tabel sales/retur sesuai status penanganan yang dipilih
     const salesRef = doc(collection(db, `users/${this.uid}/sales`));
-
-    // Daftarkan sebagai dokumen retur berstatus Pending SKU agar bisa dievaluasi admin
     batch.set(salesRef, {
-        orderId: form.orderIdOrResi.toUpperCase().trim(), // Menyimpan nomor resi/pesanan hasil scan luar
+        orderId: form.orderIdOrResi.toUpperCase().trim(),
         product: prod.name,
         sku: prod.sku.toUpperCase().trim(),
         qty: form.qty,
-        hpp: lossAmount,
-        total: 0,
+        hpp: hppAmount * form.qty,
+        total: estimatedSalePrice * form.qty,
         marketplace: `${form.marketplace} (Misterius)`,
         status: "Retur",
-        penanganan: "Pending SKU", // Masuk karantina pending biar dicek owner nanti
-        returFinal: false,
+        penanganan: form.penanganan, // 🚀 DINAMIS: Mengikuti pilihan opsi modal admin
+        returFinal: form.penanganan === "Selesai", // Hanya TRUE jika langsung selesai
         profit: 0,
         date: todayLokal,
         createdAt: serverTimestamp(),
-        catatan: `[Paket Misterius Hasil Scan] ${form.reason}`
+        catatan: form.penanganan === "Selesai"
+        ? `[Paket Misterius Selesai] Fisik masuk rak. Koreksi profit Rp ${totalLostProfit.toLocaleString('id-ID')} dicatat ke pengeluaran. Ket: ${form.reason}`
+        : `[Paket Misterius Tertahan - Status: ${form.penanganan}] Fisik barang belum masuk rak gudang. Alasan: ${form.reason}`
     });
 
     await batch.commit();

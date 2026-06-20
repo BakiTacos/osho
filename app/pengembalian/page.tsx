@@ -40,34 +40,32 @@ export default function PengembalianPage() {
   });
   
   const [mysteriousForm, setMysteriousForm] = useState<MysteriousReturnFormState>({
-    orderIdOrResi: '', sku: '', qty: 1, marketplace: 'Shopee', reason: ''
+    orderIdOrResi: '', sku: '', qty: 1, marketplace: 'Shopee', reason: '', penanganan: 'Proses'
   });
 
   // 🚀 LOGIKA INTI: INTEGRASI INTELEKTUAL HASIL SCAN KAMERA PWA
   const handleBarcodeScanSuccess = (decodedText: string) => {
-    setIsScannerActive(false); // Tutup lensa kamera full-screen
+    setIsScannerActive(false);
 
-    // Cari secara kilat di database memori RAM lokal (0% Reads Server)
     const matchFound = returOrders.find(
       order => String(order.orderId || "").toUpperCase() === decodedText.toUpperCase() ||
-               String(order.resi || "").toUpperCase() === decodedText.toUpperCase()
+              String(order.resi || "").toUpperCase() === decodedText.toUpperCase()
     );
 
     if (matchFound) {
-      // KONDISI A: Data pesanan eksis! Langsung filter tabel ke nomor tersebut agar admin bisa eksekusi selesai/rusak
       setSearchTerm(decodedText);
       setCurrentPage(1);
       alert(`📦 DATA COCOK!\nPaket terdaftar atas nama produk:\n"${matchFound.product}".\nSilakan tentukan keputusan akhir penanganan.`);
     } else {
-      // KONDISI B (MAU KEVIN): Data zong! Otomatis tembak nomor kode ke form, dan buka Modal Paket Misterius
       setMysteriousForm({
         orderIdOrResi: decodedText,
         sku: '',
         qty: 1,
         marketplace: 'Shopee',
-        reason: 'Paket retur fisik datang namun nomor resi pengiriman tidak ditemukan di data jualan ruko.'
+        reason: 'Paket retur fisik datang namun nomor resi pengiriman tidak ditemukan di data jualan ruko.',
+        penanganan: 'Pending SKU' // 🚀 BARU: Default masuk karantina dulu saat gagal scan kamera
       });
-      setIsMysteriousModalOpen(true); // 🚀 LANGSUNG BUKA MODAL MANUAL KHUSUS EKSTERNAL RESI
+      setIsMysteriousModalOpen(true);
     }
   };
 
@@ -178,16 +176,16 @@ export default function PengembalianPage() {
           onFileUpload={handleFileUpload}
           onOpenManualModal={() => setIsAfkirModalOpen(true)} // Membuka Modal Afkir Internal Gudang
           onOpenMysteriousModal={() => {
-            // 🚀 BARU: Kosongkan state penampung sebelum modal dibuka manual agar bersih dari sisa resi scan lama
             setMysteriousForm({
-              orderIdOrResi: '', // Admin bebas mengetik nomor resi/pesanan dari nota robek di sini
+              orderIdOrResi: '',
               sku: '',
               qty: 1,
               marketplace: 'Shopee',
-              reason: 'Input manual langsung dari gudang operasional ruko.'
+              reason: 'Input manual langsung dari gudang operasional ruko.',
+              penanganan: 'Pending SKU' // 🚀 BARU: Default pilihan teratas aman
             });
-            setIsMysteriousModalOpen(true); // Membuka Modal Paket Misterius Eksternal
-          }} 
+            setIsMysteriousModalOpen(true);
+          }}
         />
       </div>
 

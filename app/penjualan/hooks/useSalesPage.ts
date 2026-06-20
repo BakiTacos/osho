@@ -1,14 +1,16 @@
 // app/penjualan/hooks/useSalesPage.ts
-import { useState, useEffect } from 'react';
+"use client";
+
+import React, { useState, useEffect } from 'react';
 import { db } from "@/lib/firebase";
-import { doc, updateDoc, collection, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, serverTimestamp, setDoc, writeBatch, increment } from "firebase/firestore";
 import * as XLSX from 'xlsx';
 import { useSalesData } from "../hooks/useSalesData"; 
 import { SalesService } from "../../penjualan/services/SalesService";
 import { MARKETPLACE_CONFIG } from "../../../lib/constants/sales";
 
 export function useSalesPage(currentUser: any) {
-  // States Utama
+  // --- STATES UTAMA ---
   const [isProcessing, setIsProcessing] = useState(false);
   const [useCatalogPrice, setUseCatalogPrice] = useState(true);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -19,36 +21,52 @@ export function useSalesPage(currentUser: any) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
-  // States Edit Transaksi Pending
+  // --- STATE AKLIR REFRESH COUNTER (ANTI-BOCO R-READS) ---
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // --- STATES EDIT TRANSAKSI PENDING SKU ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
-    id: '', orderId: '', sku: '', product: '', qty: 1, total: 0, marketplace: ''
+    id: '', orderId: '', resi: '', sku: '', product: '', qty: 1, total: 0, marketplace: ''
   });
 
+  // Ambil data on-demand strictly menggunakan trigger ram hemat kuota
   const { catalog, transactions, shopeeWarehouse, activeFees } = useSalesData(
     currentUser, 
     timeFilter, 
     selectedMonth, 
-    selectedYear
+    selectedYear,
+    refreshTrigger 
   );
+
+  // Pemicu taktis ambil data baru secara terukur
+  const triggerDataRefresh = () => setRefreshTrigger(prev => prev + 1);
   
   const salesService = new SalesService(currentUser, catalog, shopeeWarehouse, activeFees);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // --- STATE CONFIG FORM MANUAL RUKO MULTI-PRODUK ---
   const [manualForm, setManualForm] = useState({
-    orderId: '', source: 'Shopee', status: 'Proses', tiktokProvince: '', 
-    tiktokWeight: 1, tiktokType: 'Standard',
+    orderId: '', 
+    resi: '', 
+    source: 'Shopee', 
+    status: 'Proses', 
+    tiktokProvince: '', 
+    tiktokWeight: 1, 
+    tiktokType: 'Standard',
     items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }]
   });
 
-  // Reset Paginasi / Pilihan IDs jika filter berubah
+  // Reset Paginasi / Pilihan IDs jika filter diubah
   useEffect(() => {
     setSelectedIds([]);
   }, [timeFilter, statusTab, searchSales, selectedMonth, selectedYear]);
 
-  // Logic Filter Tabel Utama
+  // --- LOGIKA FILTER UTAMA FILTER TABEL ---
   const filteredTransactions = transactions.filter((t) => {
     if (!t.createdAt) return false;
-    const txDate = t.createdAt.toDate();
+    
+    const txDate = t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
     const now = new Date();
     const diffInDays = (now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24);
 
@@ -59,26 +77,29 @@ export function useSalesPage(currentUser: any) {
     let statusMatch = statusTab === "Semua" ? true : 
                       statusTab === "Pending" ? t.product === "Produk Luar Katalog" : t.status === statusTab;
 
-    const searchTerm = searchSales.toLowerCase();
+    const searchTerm = searchSales.toLowerCase().trim();
     const searchMatch = 
-      (t.orderId && t.orderId.toLowerCase().includes(searchTerm)) ||
-      (t.product && t.product.toLowerCase().includes(searchTerm)) ||
-      (t.sku && t.sku.toLowerCase().includes(searchTerm)) ||
-      (t.marketplace && t.marketplace.toLowerCase().includes(searchTerm));
+      (t.orderId && String(t.orderId).toLowerCase().includes(searchTerm)) ||
+      (t.resi && String(t.resi).toLowerCase().includes(searchTerm)) || 
+      (t.product && String(t.product).toLowerCase().includes(searchTerm)) ||
+      (t.sku && String(t.sku).toLowerCase().includes(searchTerm)) ||
+      (t.marketplace && String(t.marketplace).toLowerCase().includes(searchTerm));
       
     return timeMatch && statusMatch && searchMatch;
   });
 
-  // Handler: Kirim Perbaikan Produk Pending
+  // --- HANDLER 1: PETAKAN ULANG PRODUK PENDING SKU ---
   const handleEditPendingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || isProcessing) return;
     setIsProcessing(true);
 
     try {
-      const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === editForm.sku);
+      const cleanSkuInput = editForm.sku.replace(/\s+/g, '').toUpperCase();
+      const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === cleanSkuInput);
+      
       if (!matched) {
-        alert("❌ SKU tidak ditemukan di katalog inventaris!");
+        alert("❌ SKU tidak ditemukan di katalog inventaris ruko!");
         setIsProcessing(false);
         return;
       }
@@ -86,10 +107,17 @@ export function useSalesPage(currentUser: any) {
       let unitCost = Number(matched.costPrice) || 0;
       let multiplier = 1;
 
+      let targetProductId = matched.id;
+      let finalQtyToDeduct = editForm.qty;
+
       if (matched.isMapping && matched.linkedSku) {
         const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
-        unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
-        multiplier = Number(matched.multiplier) || 1;
+        if (main) {
+          unitCost = Number(main.costPrice);
+          multiplier = Number(matched.multiplier) || 1;
+          targetProductId = main.id;
+          finalQtyToDeduct = editForm.qty * multiplier;
+        }
       }
 
       const totalHpp = (unitCost * multiplier) * editForm.qty;
@@ -98,9 +126,11 @@ export function useSalesPage(currentUser: any) {
       const marketplaceKey = String(editForm.marketplace).toLowerCase();
       const netProfit = salesService.calculateNetProfitEntry(editForm.total, totalHpp, marketplaceKey, logisticsFee);
 
+      const batch = writeBatch(db);
+      
       const salesDocRef = doc(db, `users/${currentUser.uid}/sales`, editForm.id);
-      await updateDoc(salesDocRef, {
-        sku: editForm.sku,
+      batch.update(salesDocRef, {
+        sku: cleanSkuInput,
         product: matched.name,
         hpp: totalHpp,
         profit: netProfit,
@@ -108,21 +138,38 @@ export function useSalesPage(currentUser: any) {
       });
 
       if (oldTx && oldTx.sku) {
-        await salesService.updateProductStock(String(oldTx.sku).replace(/\s+/g, '').toUpperCase(), oldTx.qty, editForm.orderId);
+        const oldCleanSku = String(oldTx.sku).replace(/\s+/g, '').toUpperCase();
+        const oldProdMatch = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === oldCleanSku);
+        if (oldProdMatch) {
+          let oldProductId = oldProdMatch.id;
+          let oldQtyToReturn = oldTx.qty;
+          if (oldProdMatch.isMapping && oldProdMatch.linkedSku) {
+            const oldMain = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === oldProdMatch.linkedSku.replace(/\s+/g, '').toUpperCase());
+            if (oldMain) {
+              oldProductId = oldMain.id;
+              oldQtyToReturn = oldTx.qty * (Number(oldProdMatch.multiplier) || 1);
+            }
+          }
+          batch.update(doc(db, `users/${currentUser.uid}/products`, oldProductId), { stock: increment(oldQtyToReturn) });
+        }
       }
-      await salesService.updateProductStock(editForm.sku, -editForm.qty, editForm.orderId);
 
-      alert("✅ Sukses memetakan produk!");
+      batch.update(doc(db, `users/${currentUser.uid}/products`, targetProductId), { stock: increment(-finalQtyToDeduct) });
+
+      await batch.commit();
+
+      triggerDataRefresh(); 
+      alert("✅ Sukses memetakan produk pending!");
       setIsEditModalOpen(false);
     } catch (err) {
       console.error(err);
-      alert("Gagal memperbarui data pending.");
+      alert("❌ Gagal memperbarui data pending.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Handler: Sapu Bersih Duplikasi Transaksi
+  // --- HANDLER 2: SAPU BERSIH DUPLIKASI DATA BERJALAN (ADAPTIF MULTI-MARKETPLACE) ---
   const handleDirectDatabaseCleanup = async () => {
     if (transactions.length === 0) return alert("Tidak ada data transaksi yang termuat.");
     setIsProcessing(true);
@@ -134,41 +181,51 @@ export function useSalesPage(currentUser: any) {
       [...transactions].reverse().forEach((t) => {
         const cleanOrderId = String(t.orderId || "").trim().replace(/^#/, "").toLowerCase();
         const cleanSku = String(t.sku || "").replace(/\s+/g, "").toUpperCase();
-        const uniqueKey = `${cleanOrderId}_${cleanSku}`;
+        const marketplaceName = String(t.marketplace || "").toLowerCase();
+        const lazadaItemIdValue = String(t.lazadaItemId || "").trim();
+
+        let uniqueKey = "";
+        if (marketplaceName.includes("lazada") && lazadaItemIdValue) {
+          uniqueKey = `lazada_${cleanOrderId}_${lazadaItemIdValue}`;
+        } else {
+          uniqueKey = `general_${cleanOrderId}_${cleanSku}`;
+        }
 
         if (seenEntries.has(uniqueKey)) {
-          duplicatesToDelete.push(t);
+          duplicatesToDelete.push(t); 
         } else {
-          seenEntries.add(uniqueKey);
+          seenEntries.add(uniqueKey); 
         }
       });
 
       if (duplicatesToDelete.length === 0) {
-        alert("✨ Mantap, Kev! Database bersih dari data ganda.");
+        alert("✨ Mantap, Kev! Database ruko sudah 100% bersih dan rapi dari data ganda.");
         setIsProcessing(false);
         return;
       }
 
-      const konfirmasi = window.confirm(`⚠️ Terdeteksi ${duplicatesToDelete.length} data duplikat baru. Sapu bersih?`);
+      const konfirmasi = window.confirm(
+        `⚠️ Terdeteksi ${duplicatesToDelete.length} data duplikat riil (Aman dari item borongan Lazada).\nSapu bersih dari database cloud?`
+      );
       if (!konfirmasi) {
         setIsProcessing(false);
         return;
       }
 
-      for (const tx of duplicatesToDelete) {
-        await salesService.deleteTransaction(tx);
-        const cleanSku = String(tx.sku || "").replace(/\s+/g, "").toUpperCase();
-        await salesService.updateProductStock(cleanSku, Number(tx.qty) || 1, tx.orderId);
-      }
-      alert(`✅ Sukses Besar! Data duplikat berhasil disapu bersih.`);
+      const idsToDelete = duplicatesToDelete.map(d => d.id);
+      await salesService.bulkDeleteTransactions(transactions, idsToDelete);
+      
+      triggerDataRefresh(); 
+      alert(`✅ Sukses Besar! ${duplicatesToDelete.length} Data duplikat berhasil disapu bersih tanpa merusak pesanan borongan.`);
     } catch (err) {
-      console.error(err);
+      console.error("Gagal membersihkan data ganda:", err);
+      alert("❌ Terjadi kesalahan sistem saat membersihkan data ganda.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Handler: Pemrosesan Unggah Dokumen Excel Marketplace
+  // --- HANDLER 3: UNGGAH DOKUMEN EXCEL MARKETPLACE (SINKRONISASI RESI & ORDER ID) ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
@@ -176,12 +233,19 @@ export function useSalesPage(currentUser: any) {
     const reader = new FileReader();
     const config = MARKETPLACE_CONFIG[selectedMarketplace];
 
+    if (!config) {
+      alert("❌ Konfigurasi marketplace tidak ditemukan!");
+      setIsProcessing(false);
+      return;
+    }
+
     reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
         const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as any[][];
         const headers = data[0];
+        
         const finalSkuIdx = (config.cols.sku !== undefined) ? config.cols.sku : headers.findIndex((h: any) => String(h).toUpperCase().includes("SKU"));
         const rawRows = data.slice(config.dataStartRow);
 
@@ -190,29 +254,51 @@ export function useSalesPage(currentUser: any) {
         };
         
         let addedCount = 0;
+        const excelBatch = writeBatch(db);
+
         for (const row of rawRows) {
           const resiValue = String(row[config.cols.resi] || "").trim();
-          const orderIdLama = String(row[config.cols.orderId] || "").trim();
-          const finalId = resiValue || orderIdLama;
-          if (!finalId) continue;
+          const orderIdValue = String(row[config.cols.orderId] || "").trim().replace(/^#/, "");
+          
+          const baseKeyForDoc = orderIdValue || resiValue;
+          if (!baseKeyForDoc) continue;
 
-          const cleanOrderId = finalId.replace(/^#/, "").trim();
           let rawSku = String(row[finalSkuIdx] || "").trim();
           if (selectedMarketplace === 'shopee' && !rawSku) rawSku = String(row[12] || "").trim(); 
           const sku = rawSku.replace(/\s+/g, '').toUpperCase();
           
-          const isAlreadyInState = transactions.some(t => 
-            String(t.orderId).trim().replace(/^#/, "").toLowerCase() === cleanOrderId.toLowerCase() && 
-            String(t.sku).replace(/\s+/g, '').toUpperCase() === sku
-          );
-          if (isAlreadyInState) continue;
+          let uniqueKeyForCheck = "";
+          if (selectedMarketplace === 'lazada' && config.cols.lazadaItemId !== undefined) {
+            const lazadaItemIdValue = String(row[config.cols.lazadaItemId as number] || "").trim();
+            uniqueKeyForCheck = `${orderIdValue}_${lazadaItemIdValue}`; 
+          } else {
+            uniqueKeyForCheck = `${orderIdValue}_${sku}`; 
+          }
+
+          const isAlreadyInState = transactions.some(t => {
+            const txOrderId = String(t.orderId || "").trim().replace(/^#/, "");
+            const txSku = String(t.sku || "").replace(/\s+/g, '').toUpperCase();
+            const txLazadaItemId = String(t.lazadaItemId || "").trim();
+
+            if (selectedMarketplace === 'lazada' && txLazadaItemId) {
+              return `${txOrderId}_${txLazadaItemId}`.toLowerCase() === uniqueKeyForCheck.toLowerCase();
+            }
+            return `${txOrderId}_${txSku}`.toLowerCase() === uniqueKeyForCheck.toLowerCase();
+          });
+
+          if (isAlreadyInState) continue; 
 
           let qty = Number(row[config.cols.qty]) || 1;
           const matched = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === sku);
           
           let unitPrice = 0, unitCost = 0, multiplier = 1, productName = "Produk Luar Katalog";
+          let targetProductId = "";
+          let finalQtyToDeduct = qty;
+
           if (matched) {
             productName = matched.name;
+            targetProductId = matched.id;
+
             let catalogPrice = Number(matched.price) || 0;
             if (selectedMarketplace === 'tiktok' && matched.useMarketplacePrices) {
               catalogPrice = (matched.priceTiktok && Number(matched.priceTiktok) > 0) ? Number(matched.priceTiktok) : catalogPrice;
@@ -222,8 +308,12 @@ export function useSalesPage(currentUser: any) {
 
             if (matched.isMapping && matched.linkedSku) {
               const main = catalog.find(p => p.sku.replace(/\s+/g, '').toUpperCase() === matched.linkedSku.replace(/\s+/g, '').toUpperCase());
-              unitCost = main ? Number(main.costPrice) : Number(matched.costPrice);
-              multiplier = Number(matched.multiplier) || 1;
+              if (main) {
+                unitCost = Number(main.costPrice);
+                multiplier = Number(matched.multiplier) || 1;
+                targetProductId = main.id;
+                finalQtyToDeduct = qty * multiplier;
+              }
             } else { 
               unitCost = Number(matched.costPrice) || 0; 
             }
@@ -235,16 +325,23 @@ export function useSalesPage(currentUser: any) {
           const totalHpp = (unitCost * multiplier) * qty;
 
           let logisticsFee = 0;
-          if (selectedMarketplace === 'tiktok') {
-            const rawShippingType = String(row[config.cols.shippingType] || "").trim().toUpperCase();
-            const rawProvince = String(row[config.cols.province] || "").trim().toUpperCase();
-            const parcelWeight = Number(row[config.cols.weight]) || 0;
+          if (
+            selectedMarketplace === 'tiktok' && 
+            config.cols.shippingType !== undefined && 
+            config.cols.province !== undefined && 
+            config.cols.weight !== undefined
+          ) {
+            const rawShippingType = String(row[config.cols.shippingType as number] || "").trim().toUpperCase();
+            const rawProvince = String(row[config.cols.province as number] || "").trim().toUpperCase();
+            const parcelWeight = Number(row[config.cols.weight as number]) || 0;
+            
             const finalShippingType = TIKTOK_SHIPPING_MAP[rawShippingType] || "STANDARD";
             logisticsFee = salesService.calculateTikTokLogistics(finalShippingType, rawProvince, parcelWeight);
           }
 
           const netProfit = salesService.calculateNetProfitEntry(totalRevenue, totalHpp, selectedMarketplace, logisticsFee);
-          const rawExcelDate = config.cols.createdAt !== undefined ? row[config.cols.createdAt] : null; 
+          
+          const rawExcelDate = config.cols.createdAt !== undefined ? row[config.cols.createdAt as number] : null; 
           let transactionDate = new Date();
 
           if (rawExcelDate !== null && rawExcelDate !== undefined && rawExcelDate !== "") {
@@ -255,42 +352,113 @@ export function useSalesPage(currentUser: any) {
               if (!isNaN(parsedDate.getTime())) transactionDate = parsedDate;
             }
           }
-
           if (isNaN(transactionDate.getTime())) transactionDate = new Date();
 
-          const customDocId = `${cleanOrderId}_${sku}`;
+          const customDocId = selectedMarketplace === 'lazada' && config.cols.lazadaItemId !== undefined
+            ? `${orderIdValue}_${String(row[config.cols.lazadaItemId as number] || "").trim()}`
+            : `${orderIdValue || baseKeyForDoc}_${sku}`;
+            
           const salesDocRef = doc(db, `users/${currentUser.uid}/sales`, customDocId);
 
-          await setDoc(salesDocRef, {
-            orderId: finalId, sku, product: productName, total: totalRevenue, 
-            hpp: totalHpp, qty, profit: netProfit, logisticsFee, 
-            marketplace: config.name, status: 'Proses', createdAt: transactionDate 
+          excelBatch.set(salesDocRef, {
+            orderId: orderIdValue || baseKeyForDoc, 
+            resi: resiValue || "",                
+            sku, 
+            product: productName, 
+            total: totalRevenue, 
+            hpp: totalHpp, 
+            qty, 
+            profit: netProfit, 
+            logisticsFee, 
+            marketplace: config.name, 
+            status: 'Proses', 
+            createdAt: transactionDate,
+            ...(selectedMarketplace === 'lazada' && config.cols.lazadaItemId !== undefined && { 
+              lazadaItemId: String(row[config.cols.lazadaItemId as number] || "").trim() 
+            })
           }, { merge: true });
 
-          await salesService.updateProductStock(sku, -qty, finalId);
+          // 🚀 KUNCI REKONSILIASI PENCOCOKAN HIERARKI PRIORITAS (Anti Double Potong Stok)
+          if (targetProductId) {
+            // Sterilkan string kunci excel untuk pencarian yang sangat akurat
+            const cleanExcelResi = resiValue.replace(/\s+/g, '').toUpperCase().trim();
+            const cleanExcelOrderId = orderIdValue.replace(/\s+/g, '').toUpperCase().trim();
+
+            // 🕵️‍♂️ Saringan Prioritas Bertingkat: 
+            // Prioritas 1: Wajib cari yang NOMOR RESI-nya cocok duluan
+            let warehouseMatch = shopeeWarehouse.find(w => {
+              const cleanWhResi = String(w.resi || "").replace(/\s+/g, '').toUpperCase().trim();
+              const cleanWhSku = String(w.sku || "").replace(/\s+/g, '').toUpperCase().trim();
+              return cleanExcelResi !== "" && cleanWhResi === cleanExcelResi && cleanWhSku === sku && !w.isUsed;
+            });
+
+            // Prioritas 2: Jika resi gagal cocok, baru cari cadangan berdasarkan NOMOR PESANAN (Order ID)
+            if (!warehouseMatch) {
+              warehouseMatch = shopeeWarehouse.find(w => {
+                const cleanWhOrderId = String(w.orderId || "").replace(/\s+/g, '').toUpperCase().trim();
+                const cleanWhSku = String(w.sku || "").replace(/\s+/g, '').toUpperCase().trim();
+                return cleanExcelOrderId !== "" && cleanWhOrderId === cleanExcelOrderId && cleanWhSku === sku && !w.isUsed;
+              });
+            }
+
+            if (warehouseMatch) {
+              // ✅ JALUR AMAN: Terdeteksi ada di Advance Shipment!
+              // Cukup ubah status titipan menjadi terpakai, STOK RAK FISIK UTAMA RUKO AMAN UTUH
+              excelBatch.update(doc(db, `users/${currentUser.uid}/shopee_warehouse`, warehouseMatch.id), { 
+                isUsed: true, 
+                usedAt: serverTimestamp() 
+              });
+            } else {
+              // JALUR REGULER: Pesanan baru luar titipan, potong stok di rak reguler berjalan normal
+              excelBatch.update(doc(db, `users/${currentUser.uid}/products`, targetProductId), { 
+                stock: increment(-finalQtyToDeduct) 
+              });
+            }
+          }
           addedCount++;
         }
-        alert(`Berhasil impor ${addedCount} data.`);
-      } catch (err) { alert("Gagal memproses file."); console.error(err); } 
-      finally { setIsProcessing(false); e.target.value = ''; }
+        
+        await excelBatch.commit();
+        
+        triggerDataRefresh(); 
+        alert(`✅ Sukses Besar! Berhasil impor ${addedCount} data jualan.`);
+      } catch (err) { 
+        alert("❌ Gagal memproses data file Excel. Cek kembali koordinat kolom."); 
+        console.error(err); 
+      } finally { 
+        setIsProcessing(false); 
+        e.target.value = ''; 
+      }
     };
     reader.readAsBinaryString(file);
   };
 
+  // --- HANDLER 4: INPUT MULTI-PRODUK MANUAL VIA MODAL ---
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !activeFees || isProcessing) return alert("Sistem belum siap.");
+    if (!currentUser || !activeFees || isProcessing) return alert("Sistem ruko belum siap.");
     setIsProcessing(true);
     try {
       await salesService.processMultiProductManual(manualForm, useCatalogPrice);
       setIsManualModalOpen(false);
       setManualForm({ 
-        orderId: '', source: 'Shopee', status: 'Proses', tiktokProvince: '', tiktokWeight: 1, tiktokType: 'Standard',
+        orderId: '', 
+        resi: '', 
+        source: 'Shopee', 
+        status: 'Proses', 
+        tiktokProvince: '', 
+        tiktokWeight: 1, 
+        tiktokType: 'Standard',
         items: [{ sku: '', qty: 1, manualPrice: '', manualCost: '' }] 
       });
-      alert("Pesanan tersimpan!");
-    } catch (err) { alert("Terjadi kesalahan."); } 
-    finally { setIsProcessing(false); }
+      
+      triggerDataRefresh(); 
+      alert("✅ Pesanan manual ruko berhasil tersimpan!");
+    } catch (err) { 
+      alert("❌ Terjadi kesalahan sistem saat menyimpan nota manual."); 
+    } finally { 
+      setIsProcessing(false); 
+    }
   };
 
   return {

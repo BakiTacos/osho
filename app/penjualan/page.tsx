@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { useAuth } from "../../context/AuthContext";
-import { useSalesPage } from "./hooks/useSalesPage"; // 🚀 Import Logika Baru
+import { useSalesPage } from "./hooks/useSalesPage"; 
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 
@@ -14,12 +14,12 @@ import SalesStats from "./components/SalesStats";
 import SalesTable from "./components/SalesTable";
 import ImportCard from "./components/ImportCard";
 import { ManualInputModal } from "./components/SalesModals";
-import { ManualEditModal } from "./components/ManualEditModal"; // 🚀 Modal Lokal
+import { ManualEditModal } from "./components/ManualEditModal"; 
 
 export default function PenjualanPage() {
   const { currentUser } = useAuth();
   
-  // 🚀 Panggil Otak Logika Custom Hook
+  // Ambil data kontrol dari kustom hook taktis jualan ruko
   const {
     isProcessing, useCatalogPrice, setUseCatalogPrice, isManualModalOpen, setIsManualModalOpen,
     selectedMarketplace, setSelectedMarketplace, timeFilter, setTimeFilter, statusTab, setStatusTab,
@@ -32,12 +32,16 @@ export default function PenjualanPage() {
   if (!currentUser) return null;
 
   return (
-    <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] transition-all duration-300 pb-10">
+    <div className="text-[#1E293B] ml-0 lg:ml-72 min-h-screen bg-[#F8F9FB] pb-10 space-y-4">
       
-      {/* 1. HEADER */}
-      <SalesHeader onOpenManual={() => setIsManualModalOpen(true)} />
+      {/* 1. HEADER (Suntikkan fungsi pembersih database ganda langsung ke dalam header) */}
+      <SalesHeader 
+        onOpenManual={() => setIsManualModalOpen(true)} 
+        onDirectCleanup={handleDirectDatabaseCleanup}
+        isProcessing={isProcessing}
+      />
       
-      {/* 2. FILTERS */}
+      {/* 2. FILTERS PENYARING OMSET */}
       <SalesFilters 
         timeFilter={timeFilter} setTimeFilter={setTimeFilter}
         selectedMonth={selectedMonth} setSelectedMonth={setSelectedMonth}
@@ -47,56 +51,52 @@ export default function PenjualanPage() {
         pendingCount={transactions.filter(t => t.product === "Produk Luar Katalog").length}
       />
 
-      {/* 3. CLEANUP ANNOUNCEMENT BANNER */}
-      <div className="mx-4 sm:mx-10 my-4 bg-rose-50 border border-rose-200 p-5 rounded-2xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="text-center sm:text-left">
-          <h4 className="text-sm font-black text-rose-900 uppercase tracking-wider">Sistem Pembersihan Riwayat Transaksi Ganda</h4>
-          <p className="text-xs text-rose-700 mt-0.5">Klik tombol di samping untuk memindai database, menghapus data kembar instan, dan mengembalikan kuantitas stok yang bocor.</p>
-        </div>
-        <button
-          disabled={isProcessing}
-          onClick={handleDirectDatabaseCleanup}
-          className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white text-xs font-black px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 shrink-0"
-        >
-          {isProcessing ? "Sedang Memproses..." : "🔥 HAPUS DUPLIKASI & PULIHKAN STOK NOW"}
-        </button>
-      </div>
+      {/* BANNER REKONSILIASI ROBUST LAMA RESMI DIHAPUS UTUH DARI SINI AGAR DESAIN RAMPING */}
 
-      {/* 4. STATS SUMMARY */}
+      {/* 3. STATS SUMMARY REKAP FINANSIAL */}
+      {/* 3. STATS SUMMARY REKAP FINANSIAL */}
       <SalesStats transactions={filteredTransactions} label={timeFilter} />
 
-      {/* 5. CONTENT CARD GRID */}
-      <div className="px-4 sm:px-10 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <ImportCard 
-          selectedMarketplace={selectedMarketplace}
-          setSelectedMarketplace={setSelectedMarketplace}
-          isProcessing={isProcessing}
-          onUpload={handleFileUpload}
-        />
+      {/* 🚀 PERBAIKAN STRUKTUR LAYOUT KEVIN: STACK VERTIKAL (ATAS - BAWAH) */}
+      <div className="px-4 sm:px-10 py-2 flex flex-col gap-6">
+        
+        {/* 📥 SEKTOR ATAS: Kartu Impor Excel Marketplace (Hanya muncul di Desktop, lebar penuh) */}
+        <div className="hidden md:block w-full">
+          <ImportCard 
+            selectedMarketplace={selectedMarketplace}
+            setSelectedMarketplace={setSelectedMarketplace}
+            isProcessing={isProcessing}
+            onUpload={handleFileUpload}
+          />
+        </div>
 
-        <SalesTable 
-          items={filteredTransactions}
-          selectedIds={selectedIds}
-          setSelectedIds={setSelectedIds}
-          onDeleteBulk={() => {
-            salesService.bulkDeleteTransactions(transactions, selectedIds);
-            setSelectedIds([]);
-          }}
-          onDeleteSingle={(t: any) => salesService.deleteTransaction(t)}
-          onStatusUpdate={async (id: string, status: string) => {
-            await updateDoc(doc(db, `users/${currentUser?.uid}/sales`, id), { status });
-          }}
-          onEdit={(t: any) => {
-            setEditForm({
-              id: t.id, orderId: t.orderId || '', sku: t.sku || '',
-              product: t.product || '', qty: t.qty || 1, total: t.total || 0, marketplace: t.marketplace || 'Shopee'
-            });
-            setIsEditModalOpen(true);
-          }}
-        />
+        {/* 📊 SEKTOR BAWAH: Tabel Riwayat Transaksi Jualan Utama (Lebar penuh, sangat lega!) */}
+        <div className="w-full">
+          <SalesTable 
+            items={filteredTransactions}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+            onDeleteBulk={() => {
+              salesService.bulkDeleteTransactions(transactions, selectedIds);
+              setSelectedIds([]);
+            }}
+            onDeleteSingle={(t: any) => salesService.deleteTransaction(t)}
+            onStatusUpdate={async (id: string, status: string) => {
+              await updateDoc(doc(db, `users/${currentUser?.uid}/sales`, id), { status });
+            }}
+            onEdit={(t: any) => {
+              setEditForm({
+                id: t.id, orderId: t.orderId || '', resi: t.resi || '', sku: t.sku || '',
+                product: t.product || '', qty: t.qty || 1, total: t.total || 0, marketplace: t.marketplace || 'Shopee'
+              });
+              setIsEditModalOpen(true);
+            }}
+          />
+        </div>  
       </div>
 
-      {/* 6. MODAL PENJUALAN MANUAL */}
+
+      {/* 5. MODAL PENJUALAN MANUAL MULTI-PRODUCT */}
       <ManualInputModal 
         isOpen={isManualModalOpen}
         onClose={() => setIsManualModalOpen(false)}
@@ -115,7 +115,7 @@ export default function PenjualanPage() {
         }} 
       />
 
-      {/* 7. MODAL EDIT PENDING LOKAL */}
+      {/* 6. MODAL EDIT PENDING LOKAL SINKRON SKU MAP */}
       <ManualEditModal 
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
