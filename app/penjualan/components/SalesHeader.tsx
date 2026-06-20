@@ -1,17 +1,18 @@
-// components/SalesHeader.tsx
+// app/penjualan/components/SalesHeader.tsx
 "use client";
 
 import React from 'react';
-import { Plus, Check, Trash2 } from "lucide-react";
+import { Plus, Check, Trash2, FileText } from "lucide-react";
 import { useRouter } from 'next/navigation';
 
 interface SalesHeaderProps {
   onOpenManual: () => void;
-  onDirectCleanup: () => void; // 🚀 BARU: Jembatan pemicu pembersih data ganda ruko
+  onDirectCleanup: () => void; 
+  onOpenInvoiceManual: () => void; // 🚀 BARU: Jembatan pemicu pembuatan invoice polosan dari nol
   isProcessing: boolean;
 }
 
-export default function SalesHeader({ onOpenManual, onDirectCleanup, isProcessing }: SalesHeaderProps) {
+export default function SalesHeader({ onOpenManual, onDirectCleanup, onOpenInvoiceManual, isProcessing }: SalesHeaderProps) {
   const router = useRouter();
 
   return (
@@ -24,30 +25,42 @@ export default function SalesHeader({ onOpenManual, onDirectCleanup, isProcessin
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        {/* 🚀 BARU: RELOKASI TOMBOL PEMBERSIH DATABASE SEPERTI MAU KEVIN (Ramping & Profesional) */}
+        {/* 🛠️ TOMBOL 1: Pembersih Data Duplikat */}
         <button
           type="button"
           disabled={isProcessing}
           onClick={onDirectCleanup}
-          className="bg-rose-50 text-rose-600 border border-rose-100 px-4 py-3 rounded-2xl font-black text-xs hover:bg-rose-100 transition-all flex items-center space-x-1.5 disabled:opacity-40"
+          className="bg-rose-50 text-rose-600 border border-rose-100 px-4 py-3 rounded-2xl font-black text-xs hover:bg-rose-100 transition-all flex items-center space-x-1.5 disabled:opacity-40 cursor-pointer"
         >
           <Trash2 size={15} />
           <span>{isProcessing ? "Cleaning..." : "Sapu Duplikat"}</span>
         </button>
 
+        {/* 🚀 TOMBOL 2 BARU: BUAT INVOICES MANUAL STANDALONE (Maksimal UX Jempol Mobile) */}
+        <button 
+          type="button"
+          onClick={onOpenInvoiceManual} 
+          className="bg-blue-50 text-[#0047AB] border border-blue-100 px-4 py-3 rounded-2xl font-black text-xs hover:bg-blue-100/50 transition-all flex items-center space-x-1.5 cursor-pointer"
+        >
+          <FileText size={15} strokeWidth={2.5} />
+          <span>Buat Invoices</span>
+        </button>
+
+        {/* 🛠️ TOMBOL 3: Input Penjualan Manual Buku Kas */}
         <button 
           type="button"
           onClick={onOpenManual} 
-          className="bg-white text-[#0047AB] border-2 border-[#0047AB] px-4 py-3 rounded-2xl font-black text-xs hover:bg-blue-50 transition-all flex items-center space-x-1.5"
+          className="bg-white text-[#0047AB] border-2 border-[#0047AB] px-4 py-3 rounded-2xl font-black text-xs hover:bg-blue-50 transition-all flex items-center space-x-1.5 cursor-pointer"
         >
           <Plus size={16} strokeWidth={3} />
           <span>Input Manual</span>
         </button>
 
+        {/* 🛠️ TOMBOL 4: Advance Shipment Modul */}
         <button 
           type="button"
           onClick={() => router.push('/penjualan/advanced')} 
-          className="bg-[#0047AB] text-white px-5 py-3 rounded-2xl font-black text-xs shadow-lg shadow-blue-100 hover:scale-105 transition-all flex items-center space-x-1.5"
+          className="bg-[#0047AB] text-white px-5 py-3 rounded-2xl font-black text-xs shadow-lg shadow-blue-100 hover:scale-105 transition-all flex items-center space-x-1.5 cursor-pointer"
         >
           <Plus size={16} strokeWidth={3} />
           <span>Advance Shipment</span>

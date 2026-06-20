@@ -46,6 +46,18 @@ export default function PenjualanPage() {
         onOpenManual={() => setIsManualModalOpen(true)} 
         onDirectCleanup={handleDirectDatabaseCleanup}
         isProcessing={isProcessing}
+        
+        // 🚀 KUNCI KESELARASAN: Buka modal customizer dengan cetakan blueprint kosongan ({})
+        onOpenInvoiceManual={() => {
+          setSelectedTxForInvoice({
+            orderId: "", 
+            resi: "", 
+            marketplace: "OFFLINE", 
+            recipient: "",
+            items: [{ sku: "", productName: "", qty: 1, manualPrice: 0 }]
+          });
+          setIsInvoiceCustomizerOpen(true);
+        }}
       />
       
       {/* 2. FILTERS PENYARING OMSET */}

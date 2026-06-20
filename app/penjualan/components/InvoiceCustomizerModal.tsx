@@ -119,8 +119,8 @@ export function InvoiceCustomizerModal({ isOpen, onClose, transaction }: any) {
         {/* KEPALA PANEL ADJUSTMENT */}
         <div className="flex justify-between items-center mb-6 border-b pb-4 shrink-0">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tighter text-[#0F172A]">Invoice PDF Customizer</h2>
-            <p className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Modifikasi Detail Nota Sementara Sebelum File Diterbitkan</p>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tighter text-[#0F172A]">Pembuatan Invoice</h2>
+            <p className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Isi Detail Invoice yang akan dibuat</p>
           </div>
           <button type="button" onClick={onClose} className="p-2 text-slate-400 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors"><X size={18} /></button>
         </div>
@@ -147,7 +147,7 @@ export function InvoiceCustomizerModal({ isOpen, onClose, transaction }: any) {
               <div className="flex justify-between items-center px-1">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Nomor Resi Kurir</label>
                 <button type="button" onClick={() => setShowResi(!showResi)} className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-wider transition-colors ${showResi ? 'text-blue-600' : 'text-slate-400'}`}>
-                  {showResi ? <Eye size={10}/> : <EyeOff size={10}/>} {showResi ? "Cetak" : "Sembunyi"}
+                  {showResi ? <Eye size={10}/> : <EyeOff size={10}/>} {showResi ? "Ditampilkan" : "Disembunyikan"}
                 </button>
               </div>
               <input type="text" disabled={!showResi} className={`w-full border rounded-xl py-2.5 px-3 font-black text-xs outline-none transition-all ${showResi ? 'bg-white text-slate-700' : 'bg-slate-100 text-slate-300 border-dashed border-slate-200 select-none'}`} value={invoiceForm.resi} onChange={e => setInvoiceForm({...invoiceForm, resi: e.target.value})} />
@@ -155,9 +155,9 @@ export function InvoiceCustomizerModal({ isOpen, onClose, transaction }: any) {
 
             <div className="space-y-1">
               <div className="flex justify-between items-center px-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Kanal / Kop Brand</label>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Marketplace</label>
                 <button type="button" onClick={() => setShowMarketplace(!showMarketplace)} className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-wider transition-colors ${showMarketplace ? 'text-blue-600' : 'text-slate-400'}`}>
-                  {showMarketplace ? <Eye size={10}/> : <EyeOff size={10}/>} {showMarketplace ? "Cetak" : "Sembunyi"}
+                  {showMarketplace ? <Eye size={10}/> : <EyeOff size={10}/>} {showMarketplace ? "Ditampilkan" : "Disembunyikan"}
                 </button>
               </div>
               <input type="text" disabled={!showMarketplace} className={`w-full border rounded-xl py-2.5 px-3 font-black text-xs outline-none transition-all ${showMarketplace ? 'bg-white text-[#0047AB]' : 'bg-slate-100 text-slate-300 border-dashed border-slate-200 select-none'}`} value={invoiceForm.marketplace} onChange={e => setInvoiceForm({...invoiceForm, marketplace: e.target.value})} placeholder="Shopee / TikTok" />
@@ -167,7 +167,7 @@ export function InvoiceCustomizerModal({ isOpen, onClose, transaction }: any) {
           {/* DRAF MANIPULATION TABLE */}
           <div className="space-y-3">
             <div className="flex justify-between items-center px-1">
-              <h5 className="text-[10px] sm:text-xs font-black uppercase text-[#0047AB] tracking-widest">Manipulasi Struktur Baris Barang</h5>
+              <h5 className="text-[10px] sm:text-xs font-black uppercase text-[#0047AB] tracking-widest">Informasi Produk</h5>
               <button type="button" onClick={handleAddRow} className="cursor-pointer flex items-center gap-1 text-[8px] sm:text-[9px] font-black bg-blue-50 text-[#0047AB] px-3 py-2 rounded-xl hover:bg-blue-100 transition-all">
                 <Plus size={12} strokeWidth={3}/> TAMBAH PRODUK BARU
               </button>
@@ -202,7 +202,7 @@ export function InvoiceCustomizerModal({ isOpen, onClose, transaction }: any) {
           <div className="flex items-start gap-1.5 p-3 bg-blue-50/40 border border-blue-100 rounded-xl">
             <AlertCircle size={14} className="text-[#0047AB] shrink-0 mt-0.5" />
             <p className="text-[9px] font-bold text-slate-500 leading-normal uppercase">
-              <span className="font-black text-[#0047AB]">Informasi Keamanan:</span> Perubahan nominal, nama penerima, atau visibilitas resi di dalam panel ini murni **hanya berlaku sementara** untuk manifes cetakan berkas PDF saja. Data akuntansi mutasi asli di dalam database utama dijamin tetap aman tak ternoda.
+              <span className="font-black text-[#0047AB]">Informasi Keamanan:</span> Perubahan nominal, nama penerima, atau visibilitas resi di dalam panel ini murni hanya berlaku sementara untuk pembuatan invoices saja. Data asli tidak akan terpengaruh.
             </p>
           </div>
 
