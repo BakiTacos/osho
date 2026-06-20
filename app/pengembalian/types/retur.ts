@@ -3,7 +3,7 @@
 export interface ReturOrder {
   id: string;
   orderId: string;
-  resi: string;
+  resi?: string; // Tambahkan opsional field resi
   product: string;
   sku: string;
   qty: number;
@@ -19,10 +19,20 @@ export interface ReturOrder {
   createdAt: any;
 }
 
-export interface ManualFormState {
+// 1. Form Khusus Menyusut Gudang (Internal Ruko)
+export interface AfkirFormState {
   sku: string;
   qty: number;
   reason: string;
   kondisi: "Rusak" | "Bagus";
-  marketplace: string; // 🚀 Tambahan Kolom Asal Toko
+  marketplace: string;
+}
+
+// 2. Form Khusus Paket Misterius Hasil Scan Zong (Eksternal)
+export interface MysteriousReturnFormState {
+  orderIdOrResi: string; // Wajib diisi (otomatis terisi dari hasil scan)
+  sku: string;
+  qty: number;
+  marketplace: string;
+  reason: string;
 }

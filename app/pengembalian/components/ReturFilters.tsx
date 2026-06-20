@@ -1,5 +1,6 @@
+// components/ReturFilters.tsx
 import React from 'react';
-import { Search, Filter, Upload, AlertTriangle, Loader2 } from "lucide-react";
+import { Search, Filter, Upload, AlertTriangle, PackagePlus, Loader2 } from "lucide-react";
 
 interface ReturFiltersProps {
   searchTerm: string;
@@ -8,11 +9,12 @@ interface ReturFiltersProps {
   setStatusFilter: (v: string) => void;
   isImporting: boolean;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>, mp: "shopee" | "tiktok") => void;
-  onOpenManualModal: () => void;
+  onOpenManualModal: () => void; // Untuk Afkir Internal
+  onOpenMysteriousModal: () => void; // 🚀 BARU: Untuk Paket Misterius Eksternal
 }
 
 export const ReturFilters = ({
-  searchTerm, setSearchTerm, statusFilter, setStatusFilter, isImporting, onFileUpload, onOpenManualModal
+  searchTerm, setSearchTerm, statusFilter, setStatusFilter, isImporting, onFileUpload, onOpenManualModal, onOpenMysteriousModal
 }: ReturFiltersProps) => (
   <div className="space-y-4 w-full">
     {/* BARIS UTAMA ATAS */}
@@ -47,13 +49,13 @@ export const ReturFilters = ({
       </div>
     </div>
 
-    {/* 🚀 KUNCI PERBAIKAN: HIDDEN EXCEL DI MOBILE UI & PENYATUAN INTEGRASI TOMBOL AKSI */}
+    {/* 👑 RENDER DESKTOP VIEW: TOMBOL AKSI SEJAJAR SEMPURNA */}
     <div className="hidden md:flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-xs">
       <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-2">Pusat Integrasi & Manajemen Kasus Retur</p>
       
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {/* AKSI IMPOR EXCEL INTEGRAL SHOPEE */}
-        <label className="cursor-pointer flex items-center gap-2 bg-orange-50 border border-orange-100 px-3.5 py-2 rounded-xl text-[10px] font-black text-orange-700 uppercase hover:bg-orange-100 transition-all shadow-2xs">
+        <label className="cursor-pointer flex items-center gap-2 bg-orange-50 border border-orange-100 px-3 py-2 rounded-xl text-[10px] font-black text-orange-700 uppercase hover:bg-orange-100 transition-all shadow-2xs">
           {isImporting ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
           <span>Impor Shopee</span>
           <input type="file" className="hidden" onChange={(e) => onFileUpload(e, "shopee")} accept=".xlsx, .xls" disabled={isImporting} />
@@ -66,19 +68,46 @@ export const ReturFilters = ({
           <input type="file" className="hidden" onChange={(e) => onFileUpload(e, "tiktok")} accept=".xlsx, .xls" disabled={isImporting} />
         </label>
 
-        {/* AKSI MANUAL */}
-        <button onClick={onOpenManualModal} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-700 transition-all shadow-2xs">
+        {/* 🚀 TOMBOL BARU 1: INPUT PAKET RETUR MISTERIUS MANUAL */}
+        <button 
+          onClick={onOpenMysteriousModal} 
+          type="button"
+          className="flex items-center gap-2 bg-amber-500 text-white px-3.5 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-600 transition-all shadow-2xs"
+        >
+          <PackagePlus size={13} />
+          <span>Input Paket Misterius</span>
+        </button>
+
+        {/* TOMBOL 2: INPUT MANUAL PENYUSUTAN INTERNAL GUDANG */}
+        <button 
+          onClick={onOpenManualModal} 
+          type="button"
+          className="flex items-center gap-2 bg-red-600 text-white px-3.5 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-700 transition-all shadow-2xs"
+        >
           <AlertTriangle size={13} />
-          <span>Input Barang Manual</span>
+          <span>Input Penyusutan Barang</span>
         </button>
       </div>
     </div>
 
-    {/* FLOAT ACTION TOMBOL MANUAL KHUSUS HP MOBILE */}
-    <div className="md:hidden w-full">
-      <button onClick={onOpenManualModal} className="w-full flex items-center justify-center gap-2 bg-red-600 text-white py-3 rounded-xl text-[10px] font-black uppercase shadow-sm">
-        <AlertTriangle size={14} />
-        <span>Input Barang Manual Gudang</span>
+    {/* 📱 RENDER MOBILE UI JEMPOL KILAT: DUA TOMBOL BERDAMPINGAN LEBAR */}
+    <div className="md:hidden grid grid-cols-2 gap-2 w-full">
+      <button 
+        onClick={onOpenMysteriousModal} 
+        type="button"
+        className="w-full flex items-center justify-center gap-1.5 bg-amber-500 text-white py-3 rounded-xl text-[9px] font-black uppercase shadow-xs"
+      >
+        <PackagePlus size={12} />
+        <span>Paket Misterius</span>
+      </button>
+
+      <button 
+        onClick={onOpenManualModal} 
+        type="button"
+        className="w-full flex items-center justify-center gap-1.5 bg-red-600 text-white py-3 rounded-xl text-[9px] font-black uppercase shadow-xs"
+      >
+        <AlertTriangle size={12} />
+        <span>Penyusutan Barang</span>
       </button>
     </div>
   </div>

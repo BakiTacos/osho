@@ -4,7 +4,7 @@ import {
   collection, writeBatch, doc, query, where, getDocs, serverTimestamp, increment 
 } from "firebase/firestore";
 import * as XLSX from 'xlsx';
-import { ReturOrder, ManualFormState } from "../types/retur";
+import { ReturOrder, AfkirFormState, MysteriousReturnFormState } from "../types/retur";
 
 export class ReturService {
   constructor(private uid: string) {}
@@ -98,7 +98,7 @@ export class ReturService {
   }
 
   // 🚀 PERBAIKAN: Input Manual Menggunakan Asal Marketplace Pilihan Secara Dinamis
-  public async processManualSubmit(form: ManualFormState, prod: any): Promise<void> {
+  public async processManualSubmit(form: AfkirFormState, prod: any): Promise<void> {
     const lossAmount = (Number(prod.costPrice) || 0) * form.qty;
     const todayLokal = this.getTodayString();
     const batch = writeBatch(db);
@@ -156,4 +156,33 @@ export class ReturService {
     }
     await batch.commit();
   }
+
+  // Tambahkan fungsi ini di dalam class ReturService di file ReturService.ts
+    public async processMysteriousReturn(form: MysteriousReturnFormState, prod: any): Promise<void> {
+    const lossAmount = (Number(prod.costPrice) || 0) * form.qty;
+    const todayLokal = this.getTodayString();
+    const batch = writeBatch(db);
+
+    const salesRef = doc(collection(db, `users/${this.uid}/sales`));
+
+    // Daftarkan sebagai dokumen retur berstatus Pending SKU agar bisa dievaluasi admin
+    batch.set(salesRef, {
+        orderId: form.orderIdOrResi.toUpperCase().trim(), // Menyimpan nomor resi/pesanan hasil scan luar
+        product: prod.name,
+        sku: prod.sku.toUpperCase().trim(),
+        qty: form.qty,
+        hpp: lossAmount,
+        total: 0,
+        marketplace: `${form.marketplace} (Misterius)`,
+        status: "Retur",
+        penanganan: "Pending SKU", // Masuk karantina pending biar dicek owner nanti
+        returFinal: false,
+        profit: 0,
+        date: todayLokal,
+        createdAt: serverTimestamp(),
+        catatan: `[Paket Misterius Hasil Scan] ${form.reason}`
+    });
+
+    await batch.commit();
+    }
 }
