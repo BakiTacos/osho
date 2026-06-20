@@ -14,6 +14,56 @@ export class ReturService {
     return (new Date(Date.now() - tzoffset)).toISOString().split('T')[0];
   }
 
+  // 🚀 FUNGSI BANTUAN INTERNAL: Melakukan pembalikan otomatis data titipan advanced jika terdeteksi retur kembali ke ruko
+  private async reverseAdvancedShipmentIfExist(batch: any, orderId: string, resi: string, sku: string) {
+    // Rampingkan format teks agar steril dari spasi gaib dan kapital total
+    const cleanExcelOrderId = orderId.replace(/\s+/g, '').toUpperCase().trim();
+    const cleanExcelResi = resi.replace(/\s+/g, '').toUpperCase().trim();
+    const cleanSku = sku.replace(/\s+/g, '').toUpperCase().trim();
+
+    // Saring database shopee_warehouse berdasarkan kesamaan SKU barang
+    const qWarehouse = query(
+      collection(db, `users/${this.uid}/shopee_warehouse`),
+      where("sku", "==", cleanSku)
+    );
+    
+    const whSnapshot = await getDocs(qWarehouse);
+    if (!whSnapshot.empty) {
+      // 🕵️‍♂️ STRATEGI PRIORITAS BERBALIK KEVIN:
+      // PRIORITAS 1: Buru dokumen yang nomor resinya cocok mutlak duluan
+      let matchedDocRef = null;
+      
+      whSnapshot.docs.forEach((docSnap) => {
+        const whData = docSnap.data();
+        const whResi = String(whData.resi || "").replace(/\s+/g, '').toUpperCase().trim();
+        if (cleanExcelResi !== "" && whResi === cleanExcelResi && whData.isUsed === true) {
+          matchedDocRef = docSnap.ref;
+        }
+      });
+
+      // PRIORITAS 2: Jika nomor resi luput/tidak cocok, gunakan Nomor Pesanan (Order ID) sebagai cadangan pelapis
+      if (!matchedDocRef) {
+        whSnapshot.docs.forEach((docSnap) => {
+          const whData = docSnap.data();
+          const whOrderId = String(whData.orderId || "").replace(/\s+/g, '').toUpperCase().trim();
+          if (cleanExcelOrderId !== "" && whOrderId === cleanExcelOrderId && whData.isUsed === true) {
+            matchedDocRef = docSnap.ref;
+          }
+        });
+      }
+
+      // Jika dokumen advance booking-an yang terpakai berhasil ditemukan, lepas kunci isUsed menjadi false kembali
+      if (matchedDocRef) {
+        batch.update(matchedDocRef, { 
+          isUsed: false, 
+          usedAt: null,
+          returLoggedAt: serverTimestamp(),
+          catatanRetur: "Status booking diaktifkan kembali otomatis oleh sistem karena paket terdeteksi retur masuk ruko."
+        });
+      }
+    }
+  }
+
   // 🚀 Impor Excel dengan Aturan Karantina Pending SKU
   public async processExcelImport(
     file: File, 
@@ -57,13 +107,10 @@ export class ReturService {
                 }
               });
             } else {
-              // 🚀 Deteksi keberadaan SKU di katalog lokal ruko
               const excelSku = String(row[marketplace === "shopee" ? 14 : 2] || "").trim().toUpperCase();
               const matchedProd = products.find(p => p.sku === excelSku);
 
               const newSaleRef = doc(collection(db, `users/${this.uid}/sales`));
-              
-              // Jika SKU tidak ketemu di sistem Kevin, status penanganan langsung dikarantina ke "Pending SKU"
               const penangananStatus = matchedProd ? "Proses" : "Pending SKU";
               
               if (!matchedProd) pending++; else created++;
@@ -97,7 +144,47 @@ export class ReturService {
     });
   }
 
-  // 🚀 PERBAIKAN: Input Manual Menggunakan Asal Marketplace Pilihan Secara Dinamis
+  // 🚀 FUNGSI BARU BERBASIS MULTI-MUTASI: Mengubah status tindakan retur tabel reguler via admin ruko
+  public async handleStatusChangeBatch(order: any, newStatus: string): Promise<void> {
+    const batch = writeBatch(db);
+    const salesDocRef = doc(db, `users/${this.uid}/sales`, order.id);
+    
+    const cleanSku = String(order.sku || "").replace(/\s+/g, '').toUpperCase().trim();
+    const qProd = query(collection(db, `users/${this.uid}/products`), where("sku", "==", cleanSku));
+    const prodSnap = await getDocs(qProd);
+
+    // Kunci perubahan status utama di dokumen riwayat penjualan
+    batch.update(salesDocRef, { penanganan: newStatus, returFinal: newStatus === "Selesai" || newStatus === "Rusak" });
+
+    if (newStatus === "Selesai") {
+      // Jika paket dinyatakan mendarat selamat dan kembali masuk rak produk utama ruko
+      if (!prodSnap.empty) {
+        const prodDoc = prodSnap.docs[0];
+        const prodData = prodDoc.data();
+        let targetProductId = prodDoc.id;
+        let restoreQty = Number(order.qty || 1);
+
+        if (prodData.isMapping && prodData.linkedSku) {
+          const qMain = query(collection(db, `users/${this.uid}/products`), where("sku", "==", prodData.linkedSku.replace(/\s+/g, '').toUpperCase().trim()));
+          const mainSnap = await getDocs(qMain);
+          if (!mainSnap.empty) {
+            targetProductId = mainSnap.docs[0].id;
+            restoreQty = restoreQty * (Number(prodData.multiplier) || 1);
+          }
+        }
+
+        // Pulihkan kuantitas produk reguler ke dalam inventaris ruko
+        batch.update(doc(db, `users/${this.uid}/products`, targetProductId), { stock: increment(restoreQty) });
+      }
+
+      // 🚀 EKSEKUSI PENYELARASAN ADVANCED: Batalkan booking status titipan shopee_warehouse secara paralel
+      await this.reverseAdvancedShipmentIfExist(batch, order.orderId || "", order.resi || "", order.sku || "");
+    }
+
+    await batch.commit();
+  }
+
+  // 🚀 Input Manual Menggunakan Asal Marketplace Pilihan Secara Dinamis (Afkir Internal)
   public async processManualSubmit(form: AfkirFormState, prod: any): Promise<void> {
     const lossAmount = (Number(prod.costPrice) || 0) * form.qty;
     const todayLokal = this.getTodayString();
@@ -115,7 +202,7 @@ export class ReturService {
         qty: form.qty,
         hpp: lossAmount,
         total: 0,
-        marketplace: form.marketplace, // 🚀 SEKARANG DINAMIS (Shopee / TikTok / Lazada / Gudang Offline)
+        marketplace: form.marketplace, 
         status: "Retur",
         penanganan: "Selesai", 
         returFinal: true,
@@ -144,7 +231,7 @@ export class ReturService {
         qty: form.qty,
         hpp: lossAmount,
         total: 0,
-        marketplace: form.marketplace, // 🚀 SEKARANG DINAMIS (Bukan string statis "Gudang" lagi)
+        marketplace: form.marketplace, 
         status: "Retur",
         penanganan: "Afkir",
         returFinal: true,
@@ -157,12 +244,9 @@ export class ReturService {
     await batch.commit();
   }
 
-  // Tambahkan fungsi ini di dalam class ReturService di file ReturService.ts
-    // app/inventaris/pengembalian/services/ReturService.ts
-
-// app/inventaris/pengembalian/services/ReturService.ts
-
-    public async processMysteriousReturn(form: MysteriousReturnFormState, prod: any): Promise<void> {
+  // 🚀 PERBAIKAN TOTAL: INPUT PAKET MISTERIUS MANUAL KINI KEBAL DOUBLE POTONG STOK & REVERSE BOOKING ADVANCED
+  // 🚀 PERBAIKAN FINAL: Kunci nama properti agar aman membaca type MysteriousReturnFormState ruko
+  public async processMysteriousReturn(form: MysteriousReturnFormState & { penhandling?: string; penanganan?: string }, prod: any): Promise<void> {
     const batch = writeBatch(db);
     const todayLokal = this.getTodayString();
 
@@ -170,49 +254,53 @@ export class ReturService {
     const hppAmount = Number(prod.costPrice || 0);
     const estimatedSalePrice = Number(prod.sellingPrice || 0);
     
-    // Hitung potensi profit yang batal jika kasus langsung diselesaikan
     const lostProfitPerUnit = estimatedSalePrice - hppAmount;
     const totalLostProfit = lostProfitPerUnit * form.qty;
 
-    // 🚀 PERCABANGAN LOGIKA BERDASARKAN STATUS PILIHAN ADMIN GUDANG:
-    if (form.penanganan === "Selesai") {
-        // KONDISI A: Langsung eksekusi pulihkan fisik ke rak dan potong profit bulanan
-        batch.update(prodRef, { stock: increment(form.qty) });
+    // Ambil status penanganan secara aman dari salah satu properti yang aktif di FormState Kakak
+    const finalStatusPenanganan = form.penhandling || form.penanganan || "Proses";
 
-        if (totalLostProfit > 0) {
+    if (finalStatusPenanganan === "Selesai") {
+      // Pulihkan jumlah kuantitas fisik masuk kembali ke rak ruko utama
+      batch.update(prodRef, { stock: increment(form.qty) });
+
+      if (totalLostProfit > 0) {
         const expRef = doc(collection(db, `users/${this.uid}/expenses`));
         batch.set(expRef, {
-            category: "Koreksi Profit Retur",
-            description: `Pembatalan Profit Paket Misterius [${prod.sku}] x${form.qty} - Resi/Order: ${form.orderIdOrResi}`,
-            amount: totalLostProfit,
-            paidBy: "SISTEM",
-            date: todayLokal,
-            createdAt: serverTimestamp()
+          category: "Koreksi Profit Retur",
+          description: `Pembatalan Profit Paket Misterius [${prod.sku}] x${form.qty} - Resi/Order: ${form.orderIdOrResi}`,
+          amount: totalLostProfit,
+          paidBy: "SISTEM",
+          date: todayLokal,
+          createdAt: serverTimestamp()
         });
-        }
+      }
+
+      // 🚀 EKSEKUSI SINKRONISASI JALUR ADVANCED: Deteksi dan bebaskan gembok isUsed resi Shopee Warehouse
+      await this.reverseAdvancedShipmentIfExist(batch, form.orderIdOrResi, form.orderIdOrResi, prod.sku);
     }
 
-    // Catat dokumen di tabel sales/retur sesuai status penanganan yang dipilih
     const salesRef = doc(collection(db, `users/${this.uid}/sales`));
     batch.set(salesRef, {
-        orderId: form.orderIdOrResi.toUpperCase().trim(),
-        product: prod.name,
-        sku: prod.sku.toUpperCase().trim(),
-        qty: form.qty,
-        hpp: hppAmount * form.qty,
-        total: estimatedSalePrice * form.qty,
-        marketplace: `${form.marketplace} (Misterius)`,
-        status: "Retur",
-        penanganan: form.penanganan, // 🚀 DINAMIS: Mengikuti pilihan opsi modal admin
-        returFinal: form.penanganan === "Selesai", // Hanya TRUE jika langsung selesai
-        profit: 0,
-        date: todayLokal,
-        createdAt: serverTimestamp(),
-        catatan: form.penanganan === "Selesai"
-        ? `[Paket Misterius Selesai] Fisik masuk rak. Koreksi profit Rp ${totalLostProfit.toLocaleString('id-ID')} dicatat ke pengeluaran. Ket: ${form.reason}`
-        : `[Paket Misterius Tertahan - Status: ${form.penanganan}] Fisik barang belum masuk rak gudang. Alasan: ${form.reason}`
+      orderId: form.orderIdOrResi.toUpperCase().trim(),
+      resi: form.orderIdOrResi.toUpperCase().trim(), // Duplikat penampung kunci resi sebagai pengenal andalan scanner
+      product: prod.name,
+      sku: prod.sku.toUpperCase().trim(),
+      qty: form.qty,
+      hpp: hppAmount * form.qty,
+      total: estimatedSalePrice * form.qty,
+      marketplace: `${form.marketplace} (Misterius)`,
+      status: "Retur",
+      penanganan: finalStatusPenanganan, 
+      returFinal: finalStatusPenanganan === "Selesai", 
+      profit: 0,
+      date: todayLokal,
+      createdAt: serverTimestamp(),
+      catatan: finalStatusPenanganan === "Selesai"
+        ? `[Paket Misterius Selesai] Fisik masuk rak ruko. Booking advanced dilepas. Koreksi profit Rp ${totalLostProfit.toLocaleString('id-ID')} dicatat ke pengeluaran. Ket: ${form.reason}`
+        : `[Paket Misterius Tertahan - Status: ${finalStatusPenanganan}] Fisik barang belum masuk rak. Alasan: ${form.reason}`
     });
 
     await batch.commit();
-    }
+  }
 }

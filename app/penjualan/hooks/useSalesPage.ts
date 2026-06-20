@@ -175,51 +175,86 @@ export function useSalesPage(currentUser: any) {
     setIsProcessing(true);
 
     try {
-      const seenEntries = new Set<string>();
+      // 🚀 STRATEGI BARU: Sediakan wadah penampung jejak identitas yang sudah pernah terlihat
+      const seenOrderIds = new Set<string>();
+      const seenResis = new Set<string>();
+      const seenLazadaKeys = new Set<string>();
+      
       const duplicatesToDelete: any[] = [];
 
+      // Memindai dari data paling baru mundur ke belakang (agar data lama yang dikorbankan/dihapus)
       [...transactions].reverse().forEach((t) => {
-        const cleanOrderId = String(t.orderId || "").trim().replace(/^#/, "").toLowerCase();
-        const cleanSku = String(t.sku || "").replace(/\s+/g, "").toUpperCase();
         const marketplaceName = String(t.marketplace || "").toLowerCase();
+        
+        // Bersihkan dan standarisasikan seluruh string identifier
+        const cleanOrderId = String(t.orderId || "").replace(/\s+/g, '').toUpperCase().trim();
+        const cleanResi = String(t.resi || "").replace(/\s+/g, '').toUpperCase().trim();
+        const cleanSku = String(t.sku || "").replace(/\s+/g, '').toUpperCase().trim();
         const lazadaItemIdValue = String(t.lazadaItemId || "").trim();
 
-        let uniqueKey = "";
+        // 🟢 JALUR KHUSUS 1: REKONSILIASI UNTUK LAZADA (Amankan Item Borongan)
         if (marketplaceName.includes("lazada") && lazadaItemIdValue) {
-          uniqueKey = `lazada_${cleanOrderId}_${lazadaItemIdValue}`;
-        } else {
-          uniqueKey = `general_${cleanOrderId}_${cleanSku}`;
+          const lzdUniqueKey = `${cleanOrderId}_${lazadaItemIdValue}`;
+          if (seenLazadaKeys.has(lzdUniqueKey)) {
+            duplicatesToDelete.push(t);
+          } else {
+            seenLazadaKeys.add(lzdUniqueKey);
+          }
+          return; // Lompat ke baris iterasi berikutnya
         }
 
-        if (seenEntries.has(uniqueKey)) {
-          duplicatesToDelete.push(t); 
-        } else {
-          seenEntries.add(uniqueKey); 
+        // 🚀 JALUR KHUSUS 2: REKONSILIASI SILANG SHOPEE & TIKTOK (Penjinak Transisi Resi vs Order ID)
+        if (cleanSku !== "") {
+          // Buat kunci pengecekan silang berbasis gabungan ID + SKU barangnya
+          const checkKeyByOrderId = `${cleanOrderId}_${cleanSku}`;
+          const checkKeyByResi = cleanResi !== "" ? `${cleanResi}_${cleanSku}` : null;
+
+          // 🕵️‍♂️ RADAR UTAMA: Cek apakah kombinasi OrderID_SKU atau Resi_SKU ini sudah pernah dikunci oleh dokumen lain?
+          const isDuplicateOrder = seenOrderIds.has(checkKeyByOrderId) || (checkKeyByResi !== null && seenResis.has(checkKeyByResi));
+          const isDuplicateResi = cleanResi !== "" && (seenOrderIds.has(checkKeyByResi!) || seenResis.has(checkKeyByResi!));
+
+          if (isDuplicateOrder || isDuplicateResi) {
+            // TERDETEKSI GANDA NYATA! Langsung seret masuk antrean eksekusi hapus
+            duplicatesToDelete.push(t);
+          } else {
+            // Jika benar-benar baru, tandai kedua identitasnya ke dalam daftar cek agar mengunci pergerakan baris ganda berikutnya
+            seenOrderIds.add(checkKeyByOrderId);
+            if (cleanResi !== "") {
+              seenResis.add(checkKeyByResi!);
+              
+              // Taktik Cross-Lock: masukkan juga kemungkinan jika Resi dipasang di kolom Order ID pada data lama
+              seenOrderIds.add(`${cleanResi}_${cleanSku}`);
+            }
+            if (cleanOrderId !== "") {
+              seenResis.add(`${cleanOrderId}_${cleanSku}`);
+            }
+          }
         }
       });
 
       if (duplicatesToDelete.length === 0) {
-        alert("✨ Mantap, Kev! Database ruko sudah 100% bersih dan rapi dari data ganda.");
+        alert("✨ Mantap, Kev! Database ruko sudah 100% bersih dan steril dari data ganda silang.");
         setIsProcessing(false);
         return;
       }
 
       const konfirmasi = window.confirm(
-        `⚠️ Terdeteksi ${duplicatesToDelete.length} data duplikat riil (Aman dari item borongan Lazada).\nSapu bersih dari database cloud?`
+        `⚠️ DETEKSI TRANSISI BERHASIL!\nSistem menemukan ${duplicatesToDelete.length} data duplikat akibat benturan format lama (Resi) vs format baru (Order ID).\nHapus bersih dari database cloud dan pulihkan stok rak?`
       );
       if (!konfirmasi) {
         setIsProcessing(false);
         return;
       }
 
+      // Kirim array ID dokumen ganda ke fungsi penghapusan massal batch service
       const idsToDelete = duplicatesToDelete.map(d => d.id);
       await salesService.bulkDeleteTransactions(transactions, idsToDelete);
       
-      triggerDataRefresh(); 
-      alert(`✅ Sukses Besar! ${duplicatesToDelete.length} Data duplikat berhasil disapu bersih tanpa merusak pesanan borongan.`);
+      triggerDataRefresh(); // Segarkan tampilan dashboard kasir ruko seketika
+      alert(`✅ Sukses Besar, Kev! ${duplicatesToDelete.length} Transaksi ganda akibat transisi format berhasil disapu bersih total.`);
     } catch (err) {
-      console.error("Gagal membersihkan data ganda:", err);
-      alert("❌ Terjadi kesalahan sistem saat membersihkan data ganda.");
+      console.error("Gagal melakukan pembersihan silang data ganda:", err);
+      alert("❌ Terjadi kesalahan sistem saat melakukan pembersihan silang.");
     } finally {
       setIsProcessing(false);
     }
