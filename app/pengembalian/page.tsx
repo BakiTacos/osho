@@ -9,7 +9,7 @@ import { ReturService } from "./services/ReturService";
 import { ReturStats } from "./components/ReturStats";
 import { ReturFilters } from "./components/ReturFilters";
 import { ReturManualModal } from "./components/ReturManualModal";
-import { MysteriousReturnModal } from "./components/MysteriousReturnModal"; // 🚀 IMPOR MODAL BARU
+import { MysteriousReturnModal } from "./components/MysteriousReturnModal"; 
 import { ReturDesktopTable } from "./components/ReturDesktopTable";
 import { ReturMobileGrid } from "./components/ReturMobileGrid";
 import BarcodeScanner from "./components/BarcodeScanner"; 
@@ -28,10 +28,7 @@ export default function PengembalianPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // STATE KONTROL LENSA KAMERA FULL-SCREEN
   const [isScannerActive, setIsScannerActive] = useState(false);
-
-  // STATE DUA MODAL YANG BERBEDA SEKARANG (AFKIR VS MISTERIUS)
   const [isAfkirModalOpen, setIsAfkirModalOpen] = useState(false);
   const [isMysteriousModalOpen, setIsMysteriousModalOpen] = useState(false);
 
@@ -43,27 +40,39 @@ export default function PengembalianPage() {
     orderIdOrResi: '', sku: '', qty: 1, marketplace: 'Shopee', reason: '', penanganan: 'Proses'
   });
 
-  // 🚀 LOGIKA INTI: INTEGRASI INTELEKTUAL HASIL SCAN KAMERA PWA
+  // 🚀 KUNCI PERBAIKAN: PENERAPAN INTEGRASI HYPER-SANITIZED HASIL SCAN BARCODE
   const handleBarcodeScanSuccess = (decodedText: string) => {
     setIsScannerActive(false);
 
-    const matchFound = returOrders.find(
-      order => String(order.orderId || "").toUpperCase() === decodedText.toUpperCase() ||
-              String(order.resi || "").toUpperCase() === decodedText.toUpperCase()
-    );
+    // 🌟 STERILISASI TOTAL: Kikis habis semua spasi biasa, spasi gaib Excel (\u00A0), dan paksa kapitalisasi murni
+    const hasilScanSteril = String(decodedText || "")
+      .replace(/[\s\u00A0]+/g, '')
+      .toUpperCase()
+      .trim();
+
+    if (!hasilScanSteril) return alert("❌ Barcode tidak terbaca dengan jelas. Silakan coba lagi.");
+
+    // Lakukan pencarian silang di RAM lokal dengan format string yang sudah sama-sama steril
+    const matchFound = returOrders.find((order) => {
+      const cleanOrderId = String(order.orderId || "").replace(/[\s\u00A0]+/g, '').toUpperCase().trim();
+      const cleanResi = String(order.resi || "").replace(/[\s\u00A0]+/g, '').toUpperCase().trim();
+
+      return cleanOrderId === hasilScanSteril || cleanResi === hasilScanSteril;
+    });
 
     if (matchFound) {
-      setSearchTerm(decodedText);
+      setSearchTerm(hasilScanSteril); // Isi filter pencarian dengan string steril
       setCurrentPage(1);
       alert(`📦 DATA COCOK!\nPaket terdaftar atas nama produk:\n"${matchFound.product}".\nSilakan tentukan keputusan akhir penanganan.`);
     } else {
+      // Jika zonk, lempar string steril langsung sebagai ID paket misterius baru
       setMysteriousForm({
-        orderIdOrResi: decodedText,
+        orderIdOrResi: hasilScanSteril,
         sku: '',
         qty: 1,
         marketplace: 'Shopee',
         reason: 'Paket retur fisik datang namun nomor resi pengiriman tidak ditemukan di data jualan ruko.',
-        penanganan: 'Pending SKU' // 🚀 BARU: Default masuk karantina dulu saat gagal scan kamera
+        penanganan: 'Pending SKU' 
       });
       setIsMysteriousModalOpen(true);
     }
@@ -101,16 +110,17 @@ export default function PengembalianPage() {
     try {
       await returService.processMysteriousReturn(mysteriousForm, prod);
       setIsMysteriousModalOpen(false);
-      setSearchTerm(mysteriousForm.orderIdOrResi); // Langsung arahkan filter ke data baru tersebut
+      setSearchTerm(mysteriousForm.orderIdOrResi); 
       setCurrentPage(1);
       alert(`✅ Sukses mendaftarkan paket misterius #${mysteriousForm.orderIdOrResi} ke barisan Karantina.`);
     } catch (err) { alert("❌ Gagal mendaftarkan paket."); }
   };
 
-  // ... [Fungsi handleStatusChange, filtering useMemo, dan slicing paginatedData tetap utuh sama seperti kemarin] ...
+  // --- LOGIKA FILTERING ---
   const filteredData = useMemo(() => {
     return returOrders.filter(item => {
       const matchSearch = String(item.orderId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          String(item.resi || "").toLowerCase().includes(searchTerm.toLowerCase()) || // Ikut membaca nomor resi di filter list tabel
                           String(item.product || "").toLowerCase().includes(searchTerm.toLowerCase());
       const currentStatus = item.penanganan || "Proses";
       const matchStatus = statusFilter === "Semua" ? true : currentStatus === statusFilter;
@@ -125,7 +135,12 @@ export default function PengembalianPage() {
   }, [filteredData, currentPage]);
 
   const handleStatusChange = async (order: ReturOrder, newStatus: string) => {
-    // Tetap sama seperti logika penanganan batch sebelumnya...
+    try {
+      await returService.handleStatusChangeBatch(order, newStatus);
+      alert(`✅ Status penanganan berhasil diubah menjadi ${newStatus}`);
+    } catch (err) {
+      alert("❌ Gagal memperbarui status penanganan retur.");
+    }
   };
 
   if (loading) {
@@ -146,8 +161,8 @@ export default function PengembalianPage() {
           <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">Otomatisasi Karantina SKU & Akuntansi Kerugian Riil</p>
         </div>
         
-        {/* TOMBOL LENSA KAMERA PWA MANDIRI */}
         <button 
+          type="button"
           onClick={() => setIsScannerActive(true)}
           className="flex items-center gap-2 bg-[#0047AB] text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase shadow-sm hover:bg-blue-700 transition-all cursor-pointer"
         >
@@ -174,7 +189,7 @@ export default function PengembalianPage() {
           setStatusFilter={setStatusFilter}
           isImporting={isImporting} 
           onFileUpload={handleFileUpload}
-          onOpenManualModal={() => setIsAfkirModalOpen(true)} // Membuka Modal Afkir Internal Gudang
+          onOpenManualModal={() => setIsAfkirModalOpen(true)} 
           onOpenMysteriousModal={() => {
             setMysteriousForm({
               orderIdOrResi: '',
@@ -182,7 +197,7 @@ export default function PengembalianPage() {
               qty: 1,
               marketplace: 'Shopee',
               reason: 'Input manual langsung dari gudang operasional ruko.',
-              penanganan: 'Pending SKU' // 🚀 BARU: Default pilihan teratas aman
+              penanganan: 'Pending SKU' 
             });
             setIsMysteriousModalOpen(true);
           }}
@@ -212,14 +227,12 @@ export default function PengembalianPage() {
         )}
       </div>
 
-      {/* 🚀 MODAL 1: KHUSUS PENYUSUTAN GUDANG INTERNAL */}
       <ReturManualModal 
         isOpen={isAfkirModalOpen} onClose={() => setIsAfkirModalOpen(false)}
         form={afkirForm} setForm={setAfkirForm} onSubmit={handleAfkirSubmit}
         products={products}
       />
 
-      {/* 🚀 MODAL 2: KHUSUS PAKET RETUR MISTERIUS HASIL SCAN ZONG EXTERNAL */}
       <MysteriousReturnModal
         isOpen={isMysteriousModalOpen} onClose={() => setIsMysteriousModalOpen(false)}
         form={mysteriousForm} setForm={setMysteriousForm} onSubmit={handleMysteriousSubmit}

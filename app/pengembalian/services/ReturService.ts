@@ -15,11 +15,20 @@ export class ReturService {
   }
 
   // 🚀 FUNGSI BANTUAN INTERNAL: Melakukan pembalikan otomatis data titipan advanced jika terdeteksi retur kembali ke ruko
+  // 🚀 UPGRADE RADIKAL: Fungsi penjinak spasi gaib lintas format untuk data advanced shipment
   private async reverseAdvancedShipmentIfExist(batch: any, orderId: string, resi: string, sku: string) {
-    // Rampingkan format teks agar steril dari spasi gaib dan kapital total
-    const cleanExcelOrderId = orderId.replace(/\s+/g, '').toUpperCase().trim();
-    const cleanExcelResi = resi.replace(/\s+/g, '').toUpperCase().trim();
-    const cleanSku = sku.replace(/\s+/g, '').toUpperCase().trim();
+    // Helper untuk membersihkan string dari spasi normal, spasi gaib Excel (\u00A0), dan kapital total
+    const sterilizeString = (val: any): string => {
+      if (!val) return "";
+      return String(val)
+        .replace(/[\s\u00A0]+/g, '') // Kikis habis spasi biasa DAN non-breaking space gaib Excel
+        .toUpperCase()
+        .trim();
+    };
+
+    const cleanExcelOrderId = sterilizeString(orderId);
+    const cleanExcelResi = sterilizeString(resi);
+    const cleanSku = sterilizeString(sku);
 
     // Saring database shopee_warehouse berdasarkan kesamaan SKU barang
     const qWarehouse = query(
@@ -29,37 +38,41 @@ export class ReturService {
     
     const whSnapshot = await getDocs(qWarehouse);
     if (!whSnapshot.empty) {
-      // 🕵️‍♂️ STRATEGI PRIORITAS BERBALIK KEVIN:
-      // PRIORITAS 1: Buru dokumen yang nomor resinya cocok mutlak duluan
       let matchedDocRef = null;
       
+      // PRIORITAS 1: Cocokkan nomor resi murni secara hyper-sanitized
       whSnapshot.docs.forEach((docSnap) => {
         const whData = docSnap.data();
-        const whResi = String(whData.resi || "").replace(/\s+/g, '').toUpperCase().trim();
+        const whResi = sterilizeString(whData.resi);
+        
+        // Pastikan dokumen belum dibebaskan (isUsed === true) dan resi benar-benar klop
         if (cleanExcelResi !== "" && whResi === cleanExcelResi && whData.isUsed === true) {
           matchedDocRef = docSnap.ref;
         }
       });
 
-      // PRIORITAS 2: Jika nomor resi luput/tidak cocok, gunakan Nomor Pesanan (Order ID) sebagai cadangan pelapis
+      // PRIORITAS 2: Jika nomor resi gagal tembus, gunakan Nomor Pesanan (Order ID) sebagai pelapis cadangan
       if (!matchedDocRef) {
         whSnapshot.docs.forEach((docSnap) => {
           const whData = docSnap.data();
-          const whOrderId = String(whData.orderId || "").replace(/\s+/g, '').toUpperCase().trim();
+          const whOrderId = sterilizeString(whData.orderId);
+          
           if (cleanExcelOrderId !== "" && whOrderId === cleanExcelOrderId && whData.isUsed === true) {
             matchedDocRef = docSnap.ref;
           }
         });
       }
 
-      // Jika dokumen advance booking-an yang terpakai berhasil ditemukan, lepas kunci isUsed menjadi false kembali
+      // Jika sukses terjodohkan, lepas gembok status booking-nya seketika
       if (matchedDocRef) {
         batch.update(matchedDocRef, { 
           isUsed: false, 
           usedAt: null,
           returLoggedAt: serverTimestamp(),
-          catatanRetur: "Status booking diaktifkan kembali otomatis oleh sistem karena paket terdeteksi retur masuk ruko."
+          catatanRetur: "Status booking dilepas otomatis. Radar hyper-sanitized mendeteksi kecocokan fisik paket retur kembali ke ruko."
         });
+      } else {
+        console.warn(`[Gagal Match Advanced] Resi: ${cleanExcelResi} atau OrderId: ${cleanExcelOrderId} dengan SKU: ${cleanSku} tidak ditemukan dokumen aktifnya di Shopee Warehouse.`);
       }
     }
   }
