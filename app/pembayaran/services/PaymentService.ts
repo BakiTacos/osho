@@ -1,5 +1,8 @@
+// services/PaymentService.ts
 import { db } from "../../../lib/firebase";
-import { collection, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, increment } from "firebase/firestore";
+import { 
+  collection, doc, updateDoc, deleteDoc, setDoc, serverTimestamp, increment, writeBatch , addDoc
+} from "firebase/firestore";
 
 export class PaymentService {
   constructor(private currentUser: any, private products: any[]) {}
@@ -87,42 +90,103 @@ export class PaymentService {
     }
   }
 
-  public async saveInvoice(form: any, items: any[]) {
-    // 🚀 FIX: Jangan pakai b.qty * b.price! Langsung jumlahkan Subtotal (b.price) saja.
+  // 🚀 KUNCI REFAKTORISASI 1: LOGIKA SIMPAN & EDIT INVOICE SUPREME BATCH (100% Kebal Selisih Stok)
+  public async saveInvoice(form: any, items: any[], originalInvoicesList: any[] = []) {
     const total = items.reduce((a, b) => a + Number(b.price || 0), 0);
-    
     const { id, dueDate, ...dataToSave } = form;
     const transactionDate = dueDate ? new Date(dueDate) : new Date();
 
+    const batch = writeBatch(db);
+
+    // Fungsi internal untuk menghitung konversi eceran Pcs berdasarkan unit grosir
+    const calculateConvertedQty = (qty: number, unit: string): number => {
+      const cleanUnit = String(unit).toLowerCase().trim();
+      if (cleanUnit === 'lusin') return Number(qty) * 12;
+      if (cleanUnit === 'half_lusin') return Number(qty) * 6;
+      return Number(qty);
+    };
+
     if (id) {
-      const docRef = doc(db, `users/${this.currentUser.uid}/supplier_invoices`, id);
-      await updateDoc(docRef, { 
-        ...dataToSave, dueDate, items, amount: total, createdAt: transactionDate, updatedAt: serverTimestamp() 
+      // --- SKENARIO EDIT DATA NOTA ---
+      const oldInvoice = originalInvoicesList.find(inv => inv.id === id);
+      if (!oldInvoice) throw new Error("Nota invoice lama tidak ditemukan di state memori RAM ruko.");
+
+      // 1. TAHAP PEMBALIKAN STOK: Kembalikan kuantitas lama dari nota sebelum diedit agar stok netral kembali
+      for (const oldItem of (oldInvoice.items || [])) {
+        const cleanOldSku = String(oldItem.sku || "").replace(/\s+/g, "").toUpperCase();
+        const matchedOldProd = this.products.find(p => p.sku.replace(/\s+/g, "").toUpperCase() === cleanOldSku);
+        
+        if (matchedOldProd) {
+          const oldQtyToDeduct = calculateConvertedQty(oldItem.qty, oldItem.unit);
+          const prodRef = doc(db, `users/${this.currentUser.uid}/products`, matchedOldProd.id);
+          batch.update(prodRef, { stock: increment(-oldQtyToDeduct) }); // Tarik kembali stok lama dari rak
+        }
+      }
+
+      // 2. TAHAP PENYUNTIKAN STOK BARU: Masukkan kuantitas baru hasil ketikan revisi admin
+      for (const newItem of items) {
+        const cleanNewSku = String(newItem.sku || "").replace(/\s+/g, "").toUpperCase();
+        const matchedNewProd = this.products.find(p => p.sku.replace(/\s+/g, "").toUpperCase() === cleanNewSku);
+        
+        if (matchedNewProd) {
+          const newQtyToInc = calculateConvertedQty(newItem.qty, newItem.unit);
+          const prodRef = doc(db, `users/${this.currentUser.uid}/products`, matchedNewProd.id);
+          batch.update(prodRef, { stock: increment(newQtyToInc) }); // Masukkan stok revisi terbaru ke rak
+        }
+      }
+
+      // 3. Update dokumen utama invoice
+      const invoiceDocRef = doc(db, `users/${this.currentUser.uid}/supplier_invoices`, id);
+      batch.update(invoiceDocRef, { 
+        ...dataToSave, dueDate, items, amount: total, updatedAt: serverTimestamp() 
       });
+
     } else {
-      await addDoc(collection(db, `users/${this.currentUser.uid}/supplier_invoices`), { 
+      // --- SKENARIO INPUT BARU ---
+      const invoiceCollectionRef = doc(collection(db, `users/${this.currentUser.uid}/supplier_invoices`));
+      batch.set(invoiceCollectionRef, { 
         ...dataToSave, dueDate, items, amount: total, createdAt: transactionDate, updatedAt: serverTimestamp() 
       });
       
       for (const item of items) {
-        const matched = this.products.find(p => p.sku === item.sku.toUpperCase());
+        const cleanSku = String(item.sku || "").replace(/\s+/g, "").toUpperCase();
+        const matched = this.products.find(p => p.sku.replace(/\s+/g, "").toUpperCase() === cleanSku);
+        
         if (matched) {
-          const qtyToInc = item.unit === 'lusin' ? Number(item.qty) * 12 : item.unit === 'half_lusin' ? Number(item.qty) * 6 : Number(item.qty);
-          await updateDoc(doc(db, `users/${this.currentUser.uid}/products`, matched.id), { stock: increment(qtyToInc) });
+          const qtyToInc = calculateConvertedQty(item.qty, item.unit);
+          const prodRef = doc(db, `users/${this.currentUser.uid}/products`, matched.id);
+          batch.update(prodRef, { stock: increment(qtyToInc) });
         }
       }
     }
+
+    // Tembak seluruh mutasi mutasi sekaligus ke awan cloud secara instan (Atomic)
+    await batch.commit();
   }
 
+  // 🚀 KUNCI REFAKTORISASI 2: LOGIKA HAPUS INVOICE BERBASIS ATOMIC BATCH WRITE
   public async deleteInvoice(inv: any) {
-    for (const item of inv.items) {
-      const matched = this.products.find(p => p.sku === item.sku.toUpperCase());
+    const batch = writeBatch(db);
+
+    for (const item of (inv.items || [])) {
+      const cleanSku = String(item.sku || "").replace(/\s+/g, "").toUpperCase();
+      const matched = this.products.find(p => p.sku.replace(/\s+/g, "").toUpperCase() === cleanSku);
+      
       if (matched) {
-        const qtyToDec = item.unit === 'lusin' ? Number(item.qty) * 12 : item.unit === 'half_lusin' ? Number(item.qty) * 6 : Number(item.qty);
-        await updateDoc(doc(db, `users/${this.currentUser.uid}/products`, matched.id), { stock: increment(-qtyToDec) });
+        // Karena nota kulakan dihapus, berarti barang batal dibeli -> Potong/kurangi stok fisik dari rak ruko
+        const cleanUnit = String(item.unit).toLowerCase().trim();
+        const qtyToDec = cleanUnit === 'lusin' ? Number(item.qty) * 12 : cleanUnit === 'half_lusin' ? Number(item.qty) * 6 : Number(item.qty);
+        
+        const prodRef = doc(db, `users/${this.currentUser.uid}/products`, matched.id);
+        batch.update(prodRef, { stock: increment(-qtyToDec) });
       }
     }
-    await deleteDoc(doc(db, `users/${this.currentUser.uid}/supplier_invoices`, inv.id));
+
+    // Hapus bersih dokumen tagihan supplier dari database
+    const invoiceDocRef = doc(db, `users/${this.currentUser.uid}/supplier_invoices`, inv.id);
+    batch.delete(invoiceDocRef);
+
+    await batch.commit();
   }
 
   public async toggleInvoiceStatus(inv: any) {
