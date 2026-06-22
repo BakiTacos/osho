@@ -174,8 +174,8 @@ export default function PengembalianPage() {
       {/* 📸 FULL SCREEN CAMERA INTERFACE TRIGGER */}
       {isScannerActive && (
         <BarcodeScanner 
-          onScanSuccess={handleBarcodeScanSuccess} 
-          onClose={() => setIsScannerActive(false)} 
+          onScanSuccessAction={handleBarcodeScanSuccess} 
+          onCloseAction={() => setIsScannerActive(false)} 
         />
       )}
 
