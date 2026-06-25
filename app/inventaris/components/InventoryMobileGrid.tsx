@@ -1,7 +1,7 @@
 // app/inventaris/components/InventoryMobileGrid.tsx
 import React from 'react';
 import Link from 'next/link';
-import { MoreVertical, CheckCircle2 } from 'lucide-react';
+import { MoreVertical, CheckCircle2, MapPin } from 'lucide-react';
 import { Product } from '../types/inventory';
 
 interface MobileGridProps {
@@ -34,22 +34,31 @@ export const InventoryMobileGrid = ({
         if (!estData) return null;
 
         return (
-          <div key={p.id} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between relative min-h-[160px]">
+          <div key={p.id} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between relative min-h-[175px]">
             <div>
               <div className="flex justify-between items-start gap-1">
                 <p className="text-[8px] font-black text-[#0047AB] uppercase tracking-tighter truncate max-w-[80%]">SKU: {p.sku}</p>
                 <div className="relative shrink-0">
-                  <button type="button" onClick={() => setActiveMenuId(activeMenuId === p.id ? null : p.id)} className="p-0.5 text-slate-300 hover:text-slate-600">
+                  <button type="button" onClick={() => setActiveMenuId(activeMenuId === p.id ? null : p.id)} className="p-0.5 text-slate-300 hover:text-slate-600 cursor-pointer">
                     <MoreVertical size={14} />
                   </button>
                   {activeMenuId === p.id && (
                     <div className="absolute right-0 top-5 w-24 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 text-[9px] font-black">
                       <Link href={`/inventaris/edit/${p.id}`} className="block px-2.5 py-1.5 text-slate-600 hover:bg-slate-50">EDIT</Link>
-                      <button type="button" onClick={() => onDelete(p.id)} className="w-full text-left px-2.5 py-1.5 text-red-500 hover:bg-red-50">HAPUS</button>
+                      <button type="button" onClick={() => onDelete(p.id)} className="w-full text-left px-2.5 py-1.5 text-red-500 hover:bg-red-50 cursor-pointer">HAPUS</button>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* 🚀 BARU: INDIKATOR LOKASI RAK FISIK GUDANG (Ditempatkan Taktis Sebelum Judul Barang) */}
+              <div className="flex items-center gap-1 mt-0.5 mb-1 text-slate-400">
+                <MapPin size={10} className="shrink-0 text-slate-400" />
+                <span className="text-[8px] font-black uppercase tracking-wider truncate">
+                  {p.location || "- NO RAK -"}
+                </span>
+              </div>
+
               <h4 className="text-xs font-black text-[#0F172A] uppercase leading-tight mt-0.5 line-clamp-2">{p.name}</h4>
             </div>
 
@@ -81,10 +90,10 @@ export const InventoryMobileGrid = ({
                 {editingStockId === p.id ? (
                   <div className="flex items-center space-x-0.5">
                     <input autoFocus type="number" className="w-10 p-0.5 border border-[#0047AB] rounded text-center text-xs font-black" value={tempStock} onChange={(e) => setTempStock(Number(e.target.value))} />
-                    <button type="button" onClick={() => onUpdateStock(p.id)} className="text-emerald-600"><CheckCircle2 size={14}/></button>
+                    <button type="button" onClick={() => onUpdateStock(p.id)} className="text-emerald-600 cursor-pointer"><CheckCircle2 size={14}/></button>
                   </div>
                 ) : (
-                  <button type="button" onClick={() => { setEditingStockId(p.id); setTempStock(p.stock); }} className={`text-[10px] font-black px-2 py-0.5 rounded ${p.stock <= 10 ? "bg-red-50 text-red-500 border border-red-100 animate-pulse" : "bg-slate-100 text-[#0F172A]"}`}>{p.stock} Pcs</button>
+                  <button type="button" onClick={() => { setEditingStockId(p.id); setTempStock(p.stock); }} className={`cursor-pointer text-[10px] font-black px-2 py-0.5 rounded ${p.stock <= 10 ? "bg-red-50 text-red-500 border border-red-100 animate-pulse" : "bg-slate-100 text-[#0F172A]"}`}>{p.stock} Pcs</button>
                 )}
               </div>
             )}

@@ -9,7 +9,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { 
   ArrowLeft, Save, Package, Tag, 
   Layers, CircleDollarSign, Hash, Loader2,
-  Info
+  Info, MapPin
 } from "lucide-react";
 
 export default function TambahProdukPage() {
@@ -28,6 +28,7 @@ export default function TambahProdukPage() {
     priceShopee: '',
     priceTiktok: '',
     priceLazada: '',
+    location: '', // 🚀 SINKRON STATE: Penampung draf lokasi rak
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -47,12 +48,13 @@ export default function TambahProdukPage() {
     setLoading(true);
     try {
       const productData: any = {
-        name: formData.name.toUpperCase().trim(), // Seragamkan nama varian menjadi huruf besar tegas
-        sku: formData.sku.toUpperCase().replace(/\s+/g, ''), // Buang spasi kosong pada SKU
+        name: formData.name.toUpperCase().trim(), 
+        sku: formData.sku.toUpperCase().replace(/\s+/g, ''), 
         category: formData.category,
         price: Number(formData.price) || 0,
         costPrice: Number(formData.costPrice) || 0,
         stock: Number(formData.stock) || 0,
+        location: formData.location.toUpperCase().trim(), // 🚀 SIMPAN FIRESTORE: Format huruf besar tegas bebas spasi liar
         imageUrl: "https://placehold.co/400x400?text=No+Image", 
         useMarketplacePrices: formData.useMarketplacePrices,
         createdAt: serverTimestamp(),
@@ -94,11 +96,10 @@ export default function TambahProdukPage() {
 
       {/* JUDUL UTAMA */}
       <div className="px-4 sm:px-10 mt-6">
-        <h1 className="text-3xl sm:text-4xl font-black text-[#0F172A] tracking-tighter">Tambah Produk Baru</h1>
+        <h1 className="text-3xl sm:text-4xl font-black text-[#0F172A] tracking-tighter">Tambah Baru</h1>
         <p className="text-[#64748B] mt-1 text-xs font-black uppercase tracking-widest">Daftarkan produk atau variasi baru ke dalam stok gudang</p>
       </div>
 
-      {/* 🚀 PERBAIKAN UTAMA KEVIN: MEMBUNGKUS SELURUH GRID INPUT & TOMBOL ACTION KE DALAM TAG FORM INTEGRAL */}
       <form onSubmit={handleSubmit} className="w-full">
         <div className="px-4 sm:px-10 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
           
@@ -115,8 +116,8 @@ export default function TambahProdukPage() {
               <input required name="name" value={formData.name} onChange={handleChange} type="text" placeholder="Masukkan nama barang belanjaan secara lengkap..." className="w-full bg-[#F8F9FB] border-none rounded-xl py-3.5 px-4 text-xs sm:text-sm font-bold text-[#0F172A] placeholder-slate-400 focus:ring-2 focus:ring-[#0047AB] outline-none transition-all" />
             </div>
 
-            {/* 2. SKU & KATEGORI (SEBARIS) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 2. SKU & KATEGORI & LOKASI RAK (SEBARIS SEIMBANG) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[9px] sm:text-[10px] font-black text-[#94A3B8] uppercase tracking-wider flex items-center ml-1">
                   <Hash size={13} className="mr-1.5 text-slate-400" /> Kode SKU Toko (Unik)
@@ -126,7 +127,7 @@ export default function TambahProdukPage() {
               
               <div className="space-y-1.5">
                 <label className="text-[9px] sm:text-[10px] font-black text-[#94A3B8] uppercase tracking-wider flex items-center ml-1">
-                  <Layers size={13} className="mr-1.5 text-slate-400" /> Kategori Lokasi Rumah
+                  <Layers size={13} className="mr-1.5 text-slate-400" /> Kategori
                 </label>
                 <select name="category" value={formData.category} onChange={handleChange} className="w-full bg-[#F8F9FB] border-none rounded-xl py-3.5 px-4 text-xs sm:text-sm font-bold text-[#0F172A] focus:ring-2 focus:ring-[#0047AB] cursor-pointer outline-none transition-all">
                   <option value="Dapur">Dapur</option>
@@ -137,6 +138,14 @@ export default function TambahProdukPage() {
                   <option value="Kamar Tidur">Kamar Tidur</option>
                   <option value="Lainnya">Lainnya</option>
                 </select>
+              </div>
+
+              {/* 🚀 BARU 3. INPUT LOKASI RAK FISIK GUDANG (OPSIONAL) */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] sm:text-[10px] font-black text-[#94A3B8] uppercase tracking-wider flex items-center ml-1">
+                  <MapPin size={13} className="mr-1.5 text-slate-400" /> Lokasi Rak Penyimpanan
+                </label>
+                <input name="location" value={formData.location} onChange={handleChange} type="text" placeholder="Contoh: RAK-A1" className="w-full bg-[#F8F9FB] border-none rounded-xl py-3.5 px-4 text-xs sm:text-sm font-bold text-[#0F172A] placeholder-slate-400 focus:ring-2 focus:ring-[#0047AB] outline-none uppercase transition-all" />
               </div>
             </div>
 
@@ -195,7 +204,7 @@ export default function TambahProdukPage() {
               )}
             </div>
 
-            {/* TOMBOL ACTIONS UTAMA - SEKARANG TERTUTUP AMAN DI DALAM FORM CONTAINER */}
+            {/* TOMBOL ACTIONS UTAMA */}
             <div className="pt-2 border-t border-slate-100">
               <button type="submit" disabled={loading} className="cursor-pointer w-full flex items-center justify-center space-x-2 bg-[#0047AB] text-white py-4 rounded-xl font-black text-xs uppercase shadow-md shadow-blue-100 hover:bg-[#003580] transition-all disabled:opacity-70 active:scale-98">
                 {loading ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}

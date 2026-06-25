@@ -16,4 +16,5 @@ export interface Product {
   priceTiktok?: number;
   priceLazada?: number;
   updatedAt?: any;
+  location?: string;
 }

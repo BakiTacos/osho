@@ -1,3 +1,4 @@
+// app/inventaris/edit/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -8,7 +9,7 @@ import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { 
   ArrowLeft, Save, Package, Tag, 
   Layers, CircleDollarSign, Hash, Loader2,
-  CheckCircle2, AlertCircle, CircleHelp
+  CheckCircle2, AlertCircle, CircleHelp, MapPin
 } from "lucide-react";
 
 export default function EditProdukPage() {
@@ -33,7 +34,8 @@ export default function EditProdukPage() {
     priceTiktok: '',
     priceLazada: '',
     isMapping: false,
-    linkedSku: ''
+    linkedSku: '',
+    location: '' // 🚀 SINKRON STATE: Penampung draf lokasi rak baru
   });
 
   useEffect(() => {
@@ -58,7 +60,8 @@ export default function EditProdukPage() {
             priceTiktok: data.priceTiktok?.toString() || '',
             priceLazada: data.priceLazada?.toString() || '',
             isMapping: data.isMapping || false,
-            linkedSku: data.linkedSku || ''
+            linkedSku: data.linkedSku || '',
+            location: data.location || '' // 🚀 SEDOT DATA: Tarik data lokasi rak yang tersimpan di Firebase
           });
         } else {
           alert("Produk tidak ditemukan!");
@@ -75,10 +78,12 @@ export default function EditProdukPage() {
   }, [currentUser, productId, router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target as HTMLInputElement;
+    const { name, value, type } = e.target;
+    const isCheckbox = type === 'checkbox';
+    
     setFormData({ 
       ...formData, 
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value 
+      [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value 
     });
   };
 
@@ -91,18 +96,19 @@ export default function EditProdukPage() {
       const docRef = doc(db, `users/${currentUser.uid}/products`, productId);
       
       const updateData: any = {
-        name: formData.name,
-        sku: formData.sku.toUpperCase(),
+        name: formData.name.toUpperCase().trim(), // Seragamkan huruf besar tegas saat diubah
+        sku: formData.sku.toUpperCase().replace(/\s+/g, ''),
         category: formData.category,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
+        price: Number(formData.price) || 0,
+        stock: Number(formData.stock) || 0,
+        location: formData.location.toUpperCase().trim(), // 🚀 PERBARUI DATA: Kirim lokasi baru ter-sanitasi ke Firebase
         useMarketplacePrices: formData.useMarketplacePrices,
         updatedAt: serverTimestamp()
       };
 
       // Hanya update Harga Modal jika statusnya BUKAN merupakan SKU terhubung (Mapping)
       if (!formData.isMapping) {
-        updateData.costPrice = Number(formData.costPrice);
+        updateData.costPrice = Number(formData.costPrice) || 0;
       }
 
       if (formData.useMarketplacePrices) {
@@ -134,11 +140,11 @@ export default function EditProdukPage() {
       
       {/* HEADER NAVIGASI */}
       <div className="px-4 sm:px-10 pt-6 sm:pt-8 flex items-center justify-between">
-        <button onClick={() => router.back()} className="flex items-center space-x-2 text-[#64748B] hover:text-[#0047AB] transition-colors font-bold text-sm group">
+        <button type="button" onClick={() => router.back()} className="cursor-pointer flex items-center space-x-2 text-[#64748B] hover:text-[#0047AB] transition-colors font-bold text-sm group">
           <div className="p-2 bg-white rounded-xl border border-[#E2E8F0] group-hover:border-[#0047AB] transition-all">
             <ArrowLeft size={16} />
           </div>
-          <span className="ml-14 lg:ml-0">Batal Perubahan</span>
+          <span>Batal Perubahan</span>
         </button>
       </div>
 
@@ -171,14 +177,15 @@ export default function EditProdukPage() {
               <input required name="name" value={formData.name} onChange={handleChange} type="text" placeholder="Masukkan nama lengkap barang..." className="w-full bg-[#F8F9FB] border-none rounded-xl py-3.5 px-4 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-[#0047AB] outline-none" />
             </div>
 
-            {/* 2. SKU & KATEGORI (SEBARIS) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            {/* 2. SKU, KATEGORI, & LOKASI RAK FISIK (RESPONSIVE GRID 3 KOLOM) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
               <div className="space-y-1.5">
                 <label className="text-[10px] sm:text-[11px] font-black text-[#94A3B8] uppercase tracking-widest flex items-center">
                   <Hash size={14} className="mr-2" /> Kode SKU Toko
                 </label>
                 <input required name="sku" value={formData.sku} onChange={handleChange} type="text" placeholder="Contoh: SNY-GUDANG-01" className="w-full bg-[#F8F9FB] border-none rounded-xl py-3.5 px-4 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-[#0047AB] outline-none uppercase" />
               </div>
+              
               <div className="space-y-1.5">
                 <label className="text-[10px] sm:text-[11px] font-black text-[#94A3B8] uppercase tracking-widest flex items-center">
                   <Layers size={14} className="mr-2" /> Kategori Ruangan
@@ -192,6 +199,14 @@ export default function EditProdukPage() {
                   <option value="Kamar Tidur">Kamar Tidur</option>
                   <option value="Lainnya">Lainnya</option>
                 </select>
+              </div>
+
+              {/* 🚀 BARU: INPUT EDIT LOKASI RAK FISIK GUDANG (SEIMBANG SEBARIS) */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] sm:text-[11px] font-black text-[#94A3B8] uppercase tracking-widest flex items-center">
+                  <MapPin size={14} className="mr-2" /> Lokasi Rak Gudang
+                </label>
+                <input name="location" value={formData.location} onChange={handleChange} type="text" placeholder="Contoh: RAK-B2" className="w-full bg-[#F8F9FB] border-none rounded-xl py-3.5 px-4 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-[#0047AB] outline-none uppercase" />
               </div>
             </div>
 
@@ -273,7 +288,7 @@ export default function EditProdukPage() {
 
           {/* TOMBOL SIMPAN */}
           <div className="flex items-center mt-6">
-            <button type="submit" disabled={loading} className="w-full flex items-center justify-center space-x-2 bg-[#0047AB] text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl shadow-blue-100 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-70">
+            <button type="submit" disabled={loading} className="cursor-pointer w-full flex items-center justify-center space-x-2 bg-[#0047AB] text-white py-4 rounded-2xl font-black text-xs uppercase shadow-xl shadow-blue-100 hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-70">
               {loading ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
               <span>Simpan Perubahan Data</span>
             </button>
