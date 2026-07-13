@@ -148,7 +148,10 @@ export function useInvoicingPage(currentUser: any) {
       sellerAddress: sellerProfile?.sellerAddress || "Tangerang, Banten, Indonesia",
       sellerContact: sellerProfile?.sellerContact || "Email: sny.osho@gmail.com",
       logoBase64: sellerProfile?.logoBase64 || "",
-      themeColor: sellerProfile?.themeColor || "#0047AB"
+      themeColor: sellerProfile?.themeColor || "#0047AB",
+      bankInfo: sellerProfile?.bankInfo || "Bank Central Asia (BCA)\nNo. Rekening: 8830928172\na.n. Simple and Yours",
+      notes: sellerProfile?.notes || "",
+      tax: typeof sellerProfile?.tax === 'number' ? sellerProfile.tax : 0
     });
     setFormItems([{ sku: "", productName: "", qty: 1, price: 0 }]);
     setIsModalOpen(true);
@@ -229,6 +232,21 @@ export function useInvoicingPage(currentUser: any) {
       } else {
         await updateDoc(doc(db, `users/${currentUser.uid}/customer_invoices`, form.id), docData);
       }
+
+      // 🚀 OTOMATIS SIMPAN SEBAGAI DEFAULT UNTUK DATA PENJUAL, BANK, NOTES, TAX, COLOR (Kecuali items & pembeli)
+      const profileRef = doc(db, `users/${currentUser.uid}/settings`, "seller_profile");
+      await setDoc(profileRef, {
+        sellerName: docData.sellerName,
+        sellerAddress: docData.sellerAddress,
+        sellerContact: docData.sellerContact,
+        logoBase64: docData.logoBase64,
+        themeColor: docData.themeColor,
+        bankInfo: docData.bankInfo,
+        notes: docData.notes,
+        tax: docData.tax,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
       setIsModalOpen(false);
     } catch (error) {
       console.error("Gagal menyimpan invoice:", error);
@@ -247,6 +265,9 @@ export function useInvoicingPage(currentUser: any) {
         sellerContact: (form.sellerContact || "").trim(),
         logoBase64: form.logoBase64 || "",
         themeColor: form.themeColor || "#0047AB",
+        bankInfo: (form.bankInfo || "").trim(),
+        notes: (form.notes || "").trim(),
+        tax: Number(form.tax) || 0,
         updatedAt: serverTimestamp()
       }, { merge: true });
       alert("✅ Profil penjual default berhasil diperbarui!");

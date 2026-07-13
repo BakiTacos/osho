@@ -1,9 +1,9 @@
 // app/invoicing/components/InvoiceModal.tsx
 "use client";
 
-import React, { useState } from 'react';
-import { X, Plus, Trash2, Save, Calendar, User, FileText, Image as ImageIcon, Palette, ShieldCheck, Mail, MapPin, Sparkles } from 'lucide-react';
-import { CustomerInvoiceItem } from '../services/CustomerInvoicePdfService';
+import React from 'react';
+import { X, Plus, Trash2, Save, Calendar, User, FileText, Image as ImageIcon, Palette, ShieldCheck, Mail, MapPin, Sparkles, FileDown } from 'lucide-react';
+import { CustomerInvoiceItem, CustomerInvoicePdfService } from '../services/CustomerInvoicePdfService';
 
 interface InvoiceModalProps {
   isOpen: boolean;
@@ -110,6 +110,28 @@ export function InvoiceModal({
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return "-";
     return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  // 🚀 CETAK PDF SEKALIGUS DARI DRAFT YANG SEDANG DIISI (LIVE INPUT)
+  const handleDownloadPdfCurrent = () => {
+    CustomerInvoicePdfService.generatePdf({
+      invoiceNumber: form.invoiceNumber || "DRAFT-PDF",
+      recipient: form.recipient || "Nama Pelanggan",
+      date: form.date,
+      dueDate: form.dueDate,
+      items: items,
+      discount: Number(form.discount) || 0,
+      tax: Number(form.tax) || 0,
+      subtotal: calculatedValues.subtotal,
+      total: calculatedValues.total,
+      notes: form.notes,
+      bankInfo: form.bankInfo,
+      logoBase64: form.logoBase64,
+      sellerName: form.sellerName,
+      sellerAddress: form.sellerAddress,
+      sellerContact: form.sellerContact,
+      themeColor: form.themeColor
+    });
   };
 
   return (
@@ -680,6 +702,13 @@ export function InvoiceModal({
               className="cursor-pointer flex-1 sm:flex-none px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-[#1E293B] rounded-xl font-black text-[10px] uppercase tracking-wider transition-all"
             >
               Batal
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadPdfCurrent}
+              className="cursor-pointer flex-1 sm:flex-none px-6 py-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+            >
+              <FileDown size={14} /> <span>Unduh PDF</span>
             </button>
             <button
               type="submit"
