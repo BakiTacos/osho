@@ -44,7 +44,9 @@ export function useInvoicingPage(currentUser: any) {
     sellerPhone: "", // No telp pengirim kustom
     themeColor: "#0047AB", // Default Cobalt Blue
     sellerPic: "", // Penanggung Jawab default
-    signatureBase64: "" // Tanda tangan default
+    signatureBase64: "", // Tanda tangan default
+    totalCommission: 0,
+    paymentHistory: ""
   }), [getLocalDateString]);
 
   const [form, setForm] = useState(initialFormState);
@@ -188,7 +190,9 @@ export function useInvoicingPage(currentUser: any) {
       sellerPhone: invoice.sellerPhone || "",
       themeColor: invoice.themeColor || "#0047AB",
       sellerPic: invoice.sellerPic || "",
-      signatureBase64: invoice.signatureBase64 || ""
+      signatureBase64: invoice.signatureBase64 || "",
+      totalCommission: invoice.totalCommission || 0,
+      paymentHistory: (invoice as any).paymentHistory || ""
     });
     setFormItems(
       invoice.items && invoice.items.length > 0
@@ -197,10 +201,9 @@ export function useInvoicingPage(currentUser: any) {
             productName: it.productName || "",
             qty: Number(it.qty) || 0,
             price: Number(it.price) || 0,
-            commission: Number(it.commission) || 0,
             supplier: it.supplier || ""
           }))
-        : [{ sku: "", productName: "", qty: 1, price: 0, commission: 0, supplier: "" }]
+        : [{ sku: "", productName: "", qty: 1, price: 0, supplier: "" }]
     );
     setIsModalOpen(true);
   }, []);
@@ -237,9 +240,8 @@ export function useInvoicingPage(currentUser: any) {
 
     // Hitung total komisi khusus Suparta
     const isSuparta = currentUser?.email === "suparta.technica@gmail.com";
-    const totalCommission = isSuparta
-      ? formItems.reduce((sum, item) => sum + ((Number(item.commission) || 0) * item.qty), 0)
-      : 0;
+    const totalCommission = isSuparta ? (Number(form.totalCommission) || 0) : 0;
+    const paymentHistory = isSuparta ? (form.paymentHistory || "").trim() : "";
 
     const docData = {
       invoiceNumber: form.invoiceNumber || "",
@@ -253,7 +255,6 @@ export function useInvoicingPage(currentUser: any) {
         productName: (item.productName || "").trim(),
         qty: Number(item.qty) || 0,
         price: Number(item.price) || 0,
-        commission: isSuparta ? (Number(item.commission) || 0) : 0,
         supplier: isSuparta ? (item.supplier || "").trim() : ""
       })),
       discount: Number(form.discount) || 0,
@@ -263,6 +264,7 @@ export function useInvoicingPage(currentUser: any) {
       hpp: totalHpp,
       profit: profit,
       totalCommission: totalCommission,
+      paymentHistory: paymentHistory,
       notes: (form.notes || "").trim(),
       bankInfo: (form.bankInfo || "").trim(),
       logoBase64: form.logoBase64 || "",

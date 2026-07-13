@@ -52,6 +52,7 @@ export function SupplierRecapView({ invoices }: SupplierRecapViewProps) {
             itemSupplier.toLowerCase() === selectedSupplier.toLowerCase()
           ) {
             list.push({
+              invoiceId: inv.id || "",
               invoiceNumber: inv.invoiceNumber,
               date: inv.date,
               recipient: inv.recipient,
@@ -59,7 +60,6 @@ export function SupplierRecapView({ invoices }: SupplierRecapViewProps) {
               sku: item.sku,
               qty: item.qty,
               price: item.price,
-              commission: item.commission || 0,
               supplier: item.supplier || "-",
             });
           }
@@ -72,14 +72,26 @@ export function SupplierRecapView({ invoices }: SupplierRecapViewProps) {
   // Metrics summary
   const totals = useMemo(() => {
     let totalSales = 0;
-    let totalCommission = 0;
     filteredRecapItems.forEach((item) => {
       totalSales += item.price * item.qty;
-      totalCommission += item.commission * item.qty;
     });
+
+    const uniqueInvoiceIds = new Set<string>();
+    filteredRecapItems.forEach((item) => {
+      if (item.invoiceId) uniqueInvoiceIds.add(item.invoiceId);
+    });
+
+    let totalCommission = 0;
+    uniqueInvoiceIds.forEach((id) => {
+      const inv = invoices.find((i) => i.id === id);
+      if (inv) {
+        totalCommission += Number(inv.totalCommission) || 0;
+      }
+    });
+
     const totalSetor = totalSales - totalCommission;
     return { totalSales, totalCommission, totalSetor };
-  }, [filteredRecapItems]);
+  }, [filteredRecapItems, invoices]);
 
   const handleDownloadPdf = () => {
     if (filteredRecapItems.length === 0) {
@@ -91,7 +103,8 @@ export function SupplierRecapView({ invoices }: SupplierRecapViewProps) {
       supplierTitle,
       startDate,
       endDate,
-      filteredRecapItems
+      filteredRecapItems,
+      totals.totalCommission
     );
   };
 
@@ -240,15 +253,12 @@ export function SupplierRecapView({ invoices }: SupplierRecapViewProps) {
                   <th className="py-3.5 px-4">Produk</th>
                   <th className="py-3.5 px-4 text-center">Qty</th>
                   <th className="py-3.5 px-4 text-right">Harga Jual</th>
-                  <th className="py-3.5 px-4 text-right">Komisi / Pcs</th>
-                  <th className="py-3.5 px-6 text-right">Total Setor</th>
+                  <th className="py-3.5 px-6 text-right">Subtotal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-600">
                 {filteredRecapItems.map((item, idx) => {
                   const subtotal = item.price * item.qty;
-                  const itemTotalCommission = item.commission * item.qty;
-                  const totalSetor = subtotal - itemTotalCommission;
 
                   return (
                     <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
@@ -278,11 +288,8 @@ export function SupplierRecapView({ invoices }: SupplierRecapViewProps) {
                       <td className="py-3 px-4 text-right font-black text-slate-700">
                         Rp {Math.round(item.price).toLocaleString("id-ID")}
                       </td>
-                      <td className="py-3 px-4 text-right font-black text-emerald-600">
-                        Rp {Math.round(item.commission).toLocaleString("id-ID")}
-                      </td>
-                      <td className="py-3 px-6 text-right font-black text-indigo-600">
-                        Rp {Math.round(totalSetor).toLocaleString("id-ID")}
+                      <td className="py-3 px-6 text-right font-black text-[#0047AB]">
+                        Rp {Math.round(subtotal).toLocaleString("id-ID")}
                       </td>
                     </tr>
                   );

@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { MoreVertical, Edit3, Trash2, Receipt, Calendar, FileDown } from "lucide-react";
+import { MoreVertical, Edit3, Trash2, Receipt, Calendar, FileDown, Copy } from "lucide-react";
 import { CustomerInvoice } from '../services/CustomerInvoicePdfService';
 
 interface InvoicingTableProps {
@@ -10,15 +10,56 @@ interface InvoicingTableProps {
   onEdit: (invoice: CustomerInvoice) => void;
   onDelete: (id: string, invoiceNumber: string) => void;
   onDownloadPdf: (invoice: CustomerInvoice) => void;
+  isSuparta?: boolean;
 }
 
 export function InvoicingTable({
   items,
   onEdit,
   onDelete,
-  onDownloadPdf
+  onDownloadPdf,
+  isSuparta = false
 }: InvoicingTableProps) {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  const handleCopyWaRecap = (inv: any, index: number) => {
+    // 1. Format the products list
+    const itemsText = (inv.items || []).map((it: any) => {
+      const formattedPrice = Math.round(it.price).toLocaleString('id-ID');
+      return `${it.qty} Set ${it.productName || it.sku}\n${it.qty} × ${formattedPrice}`;
+    }).join('\n');
+
+    // 2. Format additional notes / bank info
+    const notesText = inv.notes ? `${inv.notes}` : "";
+
+    // 3. Format date
+    const dateFormatted = inv.date 
+      ? new Date(inv.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) 
+      : "-";
+
+    // 4. Bank account holder/termin first line
+    const firstLineBank = inv.bankInfo ? inv.bankInfo.split('\n')[0] : "cv sss";
+
+    // 5. Commission text
+    const picName = inv.sellerPic || "Kevin";
+    const commissionText = inv.totalCommission 
+      ? `Komisi ${picName} ? Rp ${Math.round(inv.totalCommission).toLocaleString('id-ID')}`
+      : `Komisi ${picName} ?`;
+
+    // 6. Combine all lines using double-newline or single-newline matching WA format
+    let text = `${index + 1}) Jual ke ${inv.recipient} - ${inv.recipientAddress || ""}\n${itemsText}`;
+    if (notesText) {
+      text += `\n${notesText}`;
+    }
+    text += `\nTotal ${Math.round(inv.total).toLocaleString('id-ID')} (${firstLineBank})`;
+    if (inv.paymentHistory) {
+      text += `\n${inv.paymentHistory}`;
+    }
+    text += `\nDikirim Hari ini ${dateFormatted}\n${commissionText}`;
+
+    navigator.clipboard.writeText(text);
+    alert("Rekap WA berhasil disalin ke clipboard!");
+  };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
@@ -42,21 +83,29 @@ export function InvoicingTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {items.map((inv) => (
+              {items.map((inv, idx) => (
                 <tr key={inv.id} className="hover:bg-slate-50/30 text-xs sm:text-sm font-bold text-slate-600 transition-all">
                   
                   {/* Invoice ID & Recipient */}
                   <td className="px-6 py-4 sm:px-8">
-                    <p className="text-[#0F172A] font-black">#{inv.invoiceNumber}</p>
-                    <p className="text-[10px] text-slate-400 uppercase mt-0.5">{inv.recipient}</p>
-                    <p className="text-[9px] text-indigo-600 font-bold mt-1">
-                      {inv.items?.length || 0} Item • {inv.items?.reduce((sum, item) => sum + item.qty, 0) || 0} Pcs
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-white rounded-2xl border border-slate-100 text-[#0047AB] shadow-xs">
+                        <Receipt size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs sm:text-sm font-black text-[#0F172A] uppercase leading-none">
+                          #{inv.invoiceNumber}
+                        </p>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                          {inv.recipient}
+                        </p>
+                      </div>
+                    </div>
                   </td>
                   
                   {/* Dates */}
                   <td className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
                       <Calendar size={12} className="text-slate-400" />
                       <span>{formatDate(inv.date)}</span>
                     </div>
@@ -74,6 +123,16 @@ export function InvoicingTable({
                   {/* Action Menu dropdown */}
                   <td className="px-6 py-4 sm:px-8 text-right relative">
                     <div className="flex justify-end gap-2">
+                      {isSuparta && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyWaRecap(inv, idx)}
+                          title="Salin WA"
+                          className="cursor-pointer p-2 text-emerald-600 bg-emerald-50/50 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg transition-all"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => onDownloadPdf(inv)}
@@ -118,7 +177,7 @@ export function InvoicingTable({
 
         {/* MOBILE VIEW */}
         <div className="block md:hidden divide-y divide-slate-100 max-h-[60vh] overflow-y-auto no-scrollbar">
-          {items.map((inv) => (
+          {items.map((inv, idx) => (
             <div key={inv.id} className="p-4 flex flex-col gap-3 bg-white active:bg-slate-50/50 transition-all">
               
               {/* Top row */}
@@ -166,6 +225,15 @@ export function InvoicingTable({
 
                 {/* Direct Action buttons */}
                 <div className="flex items-center gap-1">
+                  {isSuparta && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyWaRecap(inv, idx)}
+                      className="p-2 text-emerald-600 bg-emerald-50/50 rounded-lg active:bg-emerald-100 flex items-center justify-center cursor-pointer"
+                    >
+                      <Copy size={13} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onDownloadPdf(inv)}

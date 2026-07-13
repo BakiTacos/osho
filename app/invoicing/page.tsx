@@ -101,6 +101,7 @@ export default function InvoicingPage() {
               onEdit={state.openEditModal}
               onDelete={state.handleDeleteInvoice}
               onDownloadPdf={(inv) => CustomerInvoicePdfService.generatePdf(inv)}
+              isSuparta={currentUser?.email === "suparta.technica@gmail.com"}
             />
           </div>
         </>

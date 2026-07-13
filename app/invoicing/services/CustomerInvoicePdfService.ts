@@ -35,6 +35,7 @@ export interface CustomerInvoice {
   sellerPic?: string; // Nama Penanggung Jawab kustom
   signatureBase64?: string; // Foto tanda tangan Base64 kustom
   totalCommission?: number; // Komisi total untuk rekap
+  paymentHistory?: string; // Riwayat pembayaran termin untuk rekap WA
   hpp?: number;
   profit?: number;
 }
@@ -455,7 +456,8 @@ export class CustomerInvoicePdfService {
     supplierName: string,
     startDateStr: string,
     endDateStr: string,
-    recapItems: any[]
+    recapItems: any[],
+    totalCommission: number
   ) {
     const doc = new jsPDF({
       orientation: "portrait",
@@ -481,7 +483,7 @@ export class CustomerInvoicePdfService {
     doc.setLineWidth(0.4);
     doc.line(12, 27, 136, 27);
 
-    // Table Data mapping
+    // Table Data mapping - Tanpa kolom komisi / setor per row
     const tableBody = recapItems.map((item, index) => [
       index + 1,
       item.invoiceNumber,
@@ -490,40 +492,38 @@ export class CustomerInvoicePdfService {
       item.productName,
       `${item.qty} Pcs`,
       `Rp ${Math.round(item.price).toLocaleString('id-ID')}`,
-      `Rp ${Math.round(item.commission * item.qty).toLocaleString('id-ID')}`,
-      `Rp ${Math.round((item.price - item.commission) * item.qty).toLocaleString('id-ID')}`
+      `Rp ${Math.round(item.price * item.qty).toLocaleString('id-ID')}`
     ]);
 
     autoTable(doc, {
       startY: 30,
       margin: { left: 12, right: 12 },
-      head: [["NO", "INV", "TGL", "PELANGGAN", "PRODUK", "QTY", "HARGA", "KOMISI", "SETOR"]],
+      head: [["NO", "INV", "TGL", "PELANGGAN", "PRODUK", "QTY", "HARGA", "SUBTOTAL"]],
       body: tableBody,
       theme: "striped",
       headStyles: {
         fillColor: [16, 185, 129], // Emerald Green aksen supplier
         textColor: [255, 255, 255],
-        fontSize: 6.5,
+        fontSize: 6.8,
         fontStyle: "bold",
         halign: "left"
       },
       bodyStyles: {
-        fontSize: 6,
+        fontSize: 6.2,
         textColor: [51, 65, 85]
       },
       columnStyles: {
         0: { cellWidth: 6, halign: "center" },
-        1: { cellWidth: 14 },
-        2: { cellWidth: 14 },
-        3: { cellWidth: 16 },
+        1: { cellWidth: 16 },
+        2: { cellWidth: 16 },
+        3: { cellWidth: 20 },
         4: { cellWidth: "auto" },
         5: { cellWidth: 10, halign: "center" },
-        6: { cellWidth: 15, halign: "right" },
-        7: { cellWidth: 13, halign: "right" },
-        8: { cellWidth: 15, halign: "right" }
+        6: { cellWidth: 18, halign: "right" },
+        7: { cellWidth: 20, halign: "right" }
       },
       styles: {
-        cellPadding: 1.2
+        cellPadding: 1.5
       }
     });
 
@@ -532,8 +532,7 @@ export class CustomerInvoicePdfService {
 
     // Summary calculations
     const totalJual = recapItems.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
-    const totalKomisi = recapItems.reduce((acc, curr) => acc + (curr.commission * curr.qty), 0);
-    const totalSetor = recapItems.reduce((acc, curr) => acc + ((curr.price - curr.commission) * curr.qty), 0);
+    const totalSetor = totalJual - totalCommission;
 
     let sumY = finalY;
     doc.setFontSize(7.5);
@@ -544,7 +543,7 @@ export class CustomerInvoicePdfService {
     sumY += 4;
     doc.text("Total Komisi (Hak Ruko):", 65, sumY);
     doc.setTextColor(16, 185, 129); // emerald-600
-    doc.text(`Rp ${Math.round(totalKomisi).toLocaleString('id-ID')}`, 136, sumY, { align: "right" });
+    doc.text(`Rp ${Math.round(totalCommission).toLocaleString('id-ID')}`, 136, sumY, { align: "right" });
 
     sumY += 5;
     doc.setTextColor(15, 23, 42);
