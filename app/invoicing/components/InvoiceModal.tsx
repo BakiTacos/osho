@@ -19,6 +19,48 @@ interface InvoiceModalProps {
   onSaveSellerProfile: () => void; // Simpan default seller profile
 }
 
+// Helper untuk kompresi gambar client-side (menjamin ukuran file kecil agar Firestore tidak crash)
+const compressImage = (file: File, maxWidth = 200, maxHeight = 200, quality = 0.7): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl);
+        } else {
+          resolve(event.target?.result as string);
+        }
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 export function InvoiceModal({
   isOpen,
   onClose,
@@ -84,25 +126,38 @@ export function InvoiceModal({
     }
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1024 * 1024) {
-        alert("Ukuran gambar terlalu besar! Maksimal ukuran logo adalah 1MB.");
-        return;
+      try {
+        const compressed = await compressImage(file, 200, 200, 0.75);
+        setForm({ ...form, logoBase64: compressed });
+      } catch (err) {
+        console.error("Gagal mengompres logo:", err);
+        alert("Gagal memproses gambar logo.");
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setForm({ ...form, logoBase64: event.target.result as string });
-        }
-      };
-      reader.readAsDataURL(file);
     }
   };
 
   const handleRemoveLogo = () => {
     setForm({ ...form, logoBase64: "" });
+  };
+
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImage(file, 200, 100, 0.7);
+        setForm({ ...form, signatureBase64: compressed });
+      } catch (err) {
+        console.error("Gagal mengompres tanda tangan:", err);
+        alert("Gagal memproses gambar tanda tangan.");
+      }
+    }
+  };
+
+  const handleRemoveSignature = () => {
+    setForm({ ...form, signatureBase64: "" });
   };
 
   const formatDate = (dateStr: string) => {
@@ -112,11 +167,11 @@ export function InvoiceModal({
     return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  // 🚀 CETAK PDF SEKALIGUS DARI DRAFT YANG SEDANG DIISI (LIVE INPUT)
   const handleDownloadPdfCurrent = () => {
     CustomerInvoicePdfService.generatePdf({
       invoiceNumber: form.invoiceNumber || "DRAFT-PDF",
       recipient: form.recipient || "Nama Pelanggan",
+      recipientAddress: form.recipientAddress || "-",
       date: form.date,
       dueDate: form.dueDate,
       items: items,
@@ -130,7 +185,9 @@ export function InvoiceModal({
       sellerName: form.sellerName,
       sellerAddress: form.sellerAddress,
       sellerContact: form.sellerContact,
-      themeColor: form.themeColor
+      themeColor: form.themeColor,
+      sellerPic: form.sellerPic,
+      signatureBase64: form.signatureBase64
     });
   };
 
@@ -145,7 +202,7 @@ export function InvoiceModal({
               {mode === "ADD" ? "Buat Invoice Baru" : "Edit Invoice Pelanggan"}
             </h2>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-              Kelola penagihan penjualan ruko secara profesional dengan live preview
+              Kelola penagihan penjualan ruko secara profesional dengan live preview & tanda tangan
             </p>
           </div>
           <button
@@ -165,7 +222,7 @@ export function InvoiceModal({
           {/* ========================================== */}
           <div className="xl:col-span-7 space-y-6">
             
-            {/* BRANDING, COLOR, & LOGO CUSTOMIZER */}
+            {/* BRANDING, COLOR, LOGO & SIGNATURE CUSTOMIZER */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100/80">
               
               {/* Logo Upload */}
@@ -190,7 +247,7 @@ export function InvoiceModal({
                 ) : (
                   <div className="relative w-full h-20 bg-white border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center hover:border-[#0047AB] transition-colors cursor-pointer p-1">
                     <ImageIcon size={18} className="text-slate-300 mb-0.5" />
-                    <span className="text-[7.5px] font-black text-slate-400 uppercase text-center">Logo (.png/.jpg)</span>
+                    <span className="text-[7.5px] font-black text-slate-400 uppercase text-center">Pilih Logo Toko</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -201,15 +258,48 @@ export function InvoiceModal({
                 )}
               </div>
 
-              {/* Theme Color Selection */}
-              <div className="md:col-span-8 space-y-1.5">
+              {/* Signature Upload */}
+              <div className="md:col-span-4 space-y-1.5">
                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                  <Palette size={12} className="text-slate-400" />
-                  <span>Warna Tema Invoice</span>
+                  <ShieldCheck size={12} className="text-slate-400" />
+                  <span>Foto Tanda Tangan</span>
                 </label>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 rounded-xl border border-slate-200/60">
-                  <div className="sm:col-span-8 flex flex-wrap gap-1 items-center">
+                {form.signatureBase64 ? (
+                  <div className="relative w-full h-20 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 group">
+                    <img src={form.signatureBase64} alt="Preview Tanda Tangan" className="max-h-full max-w-full object-contain" />
+                    <button
+                      type="button"
+                      onClick={handleRemoveSignature}
+                      className="absolute -top-2 -right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-md cursor-pointer"
+                      title="Hapus Tanda Tangan"
+                    >
+                      <X size={10} strokeWidth={3} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative w-full h-20 bg-white border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center hover:border-[#0047AB] transition-colors cursor-pointer p-1">
+                    <ShieldCheck size={18} className="text-slate-300 mb-0.5" />
+                    <span className="text-[7.5px] font-black text-slate-400 uppercase text-center">Unggah TTD</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleSignatureUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Theme Color Selection */}
+              <div className="md:col-span-4 space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                  <Palette size={12} className="text-slate-400" />
+                  <span>Warna Tema</span>
+                </label>
+                
+                <div className="grid grid-cols-1 gap-2 bg-white p-2.5 rounded-xl border border-slate-200/60 h-20 overflow-y-auto no-scrollbar">
+                  <div className="flex flex-wrap gap-1 items-center justify-center">
                     {colorPresets.map((preset) => (
                       <button
                         key={preset.hex}
@@ -224,18 +314,18 @@ export function InvoiceModal({
                     ))}
                   </div>
                   
-                  <div className="sm:col-span-4 flex items-center gap-1 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 pl-0 sm:pl-2">
+                  <div className="flex items-center gap-1 border-t border-slate-100 pt-1">
                     <input
                       type="color"
                       value={form.themeColor}
                       onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
-                      className="w-5.5 h-5.5 rounded cursor-pointer border-0 p-0 shrink-0"
+                      className="w-4 h-4 rounded cursor-pointer border-0 p-0 shrink-0"
                     />
                     <input
                       type="text"
                       value={form.themeColor}
                       onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
-                      className="w-full bg-slate-50 text-[9px] font-black text-center uppercase tracking-wide py-0.5 rounded border-none outline-none"
+                      className="w-full bg-slate-50 text-[8px] font-black text-center uppercase tracking-wide py-0.5 rounded border-none outline-none"
                     />
                   </div>
                 </div>
@@ -258,11 +348,11 @@ export function InvoiceModal({
                 </button>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
                     <ShieldCheck size={11} className="text-slate-400" />
-                    <span>Nama Penjual</span>
+                    <span>Nama Penjual / Ruko</span>
                   </label>
                   <input
                     type="text"
@@ -276,32 +366,48 @@ export function InvoiceModal({
 
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
-                    <MapPin size={11} className="text-slate-400" />
-                    <span>Alamat Toko</span>
+                    <User size={11} className="text-slate-400" />
+                    <span>Nama Penanggung Jawab (PIC)</span>
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="Tangerang, Banten"
+                    placeholder="Contoh: Kevin (Owner)"
                     className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
-                    value={form.sellerAddress}
-                    onChange={e => setForm({ ...form, sellerAddress: e.target.value })}
+                    value={form.sellerPic}
+                    onChange={e => setForm({ ...form, sellerPic: e.target.value })}
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
-                    <Mail size={11} className="text-slate-400" />
-                    <span>Kontak / Email</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="sny.osho@gmail.com"
-                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
-                    value={form.sellerContact}
-                    onChange={e => setForm({ ...form, sellerContact: e.target.value })}
-                  />
+                <div className="space-y-1 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                      <MapPin size={11} className="text-slate-400" />
+                      <span>Alamat Toko</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Tangerang, Banten"
+                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                      value={form.sellerAddress}
+                      onChange={e => setForm({ ...form, sellerAddress: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                      <Mail size={11} className="text-slate-400" />
+                      <span>Kontak / Email</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="sny.osho@gmail.com"
+                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                      value={form.sellerContact}
+                      onChange={e => setForm({ ...form, sellerContact: e.target.value })}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -334,6 +440,20 @@ export function InvoiceModal({
                   className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
                   value={form.recipient}
                   onChange={e => setForm({ ...form, recipient: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                  <MapPin size={11} />
+                  <span>Alamat Penerima (Klien)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Masukkan alamat lengkap pengiriman pelanggan..."
+                  className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                  value={form.recipientAddress}
+                  onChange={e => setForm({ ...form, recipientAddress: e.target.value })}
                 />
               </div>
 
@@ -543,7 +663,7 @@ export function InvoiceModal({
               </div>
 
               {/* MINI A5 INVOICE PAGE SIMULATOR */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs font-sans text-[#1E293B] flex flex-col justify-between min-h-[460px] relative overflow-hidden">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs font-sans text-[#1E293B] flex flex-col justify-between min-h-[480px] relative overflow-hidden">
                 
                 {/* Header Profile */}
                 <div>
@@ -577,6 +697,9 @@ export function InvoiceModal({
                     <div>
                       <span className="text-slate-400 font-bold uppercase block tracking-wider text-[7px]">Penerima Tagihan</span>
                       <span className="font-black text-slate-700 truncate block max-w-[100px]">{form.recipient || "-"}</span>
+                      {form.recipientAddress && (
+                        <span className="text-[7.5px] text-slate-500 block leading-tight truncate max-w-[100px] mt-0.5">{form.recipientAddress}</span>
+                      )}
                     </div>
                     <div className="text-right">
                       <span className="text-slate-400 font-bold uppercase block tracking-wider text-[7px]">Rincian Tanggal</span>
@@ -641,11 +764,23 @@ export function InvoiceModal({
                     </div>
                   )}
 
-                  <div className="mt-4 flex justify-between items-end text-[7px] text-slate-400">
+                  <div className="mt-4 pt-2 border-t border-slate-100 flex justify-between items-end text-[7px] text-slate-400">
                     <span>Invoice ini diterbitkan secara digital.</span>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end">
                       <span className="font-bold text-slate-600 block">Hormat Kami,</span>
-                      <span className="font-black text-slate-800 uppercase block mt-3">{form.sellerName || "Simple and Yours"}</span>
+                      
+                      {form.signatureBase64 ? (
+                        <div className="h-6 w-16 my-0.5 flex items-center justify-end">
+                          <img src={form.signatureBase64} alt="signature preview" className="max-h-full max-w-full object-contain" />
+                        </div>
+                      ) : (
+                        <div className="h-4 my-1" />
+                      )}
+
+                      <span className="font-black text-slate-800 uppercase block leading-none">{form.sellerName || "Simple and Yours"}</span>
+                      {form.sellerPic && (
+                        <span className="text-slate-500 font-bold block mt-0.5">({form.sellerPic})</span>
+                      )}
                     </div>
                   </div>
 

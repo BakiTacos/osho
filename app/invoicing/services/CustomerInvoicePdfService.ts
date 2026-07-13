@@ -13,6 +13,7 @@ export interface CustomerInvoice {
   id?: string;
   invoiceNumber: string;
   recipient: string;
+  recipientAddress?: string; // Alamat pelanggan kustom
   date: string;
   dueDate: string;
   items: CustomerInvoiceItem[];
@@ -22,11 +23,13 @@ export interface CustomerInvoice {
   total: number;
   notes?: string;
   bankInfo?: string;
-  logoBase64?: string; // Unggahan logo Base64 kustom
+  logoBase64?: string; // Logo Base64 kustom
   sellerName?: string; // Nama Penjual kustom
   sellerAddress?: string; // Alamat Penjual kustom
   sellerContact?: string; // Kontak Penjual kustom
   themeColor?: string; // Warna tema hex kustom (misal: #0047AB)
+  sellerPic?: string; // Nama Penanggung Jawab kustom
+  signatureBase64?: string; // Foto tanda tangan Base64 kustom
 }
 
 export class CustomerInvoicePdfService {
@@ -55,7 +58,6 @@ export class CustomerInvoicePdfService {
     if (base64.startsWith("data:image/webp")) {
       return "WEBP";
     }
-    // Jika ada header mime type lain, coba ekstrak
     const match = base64.match(/^data:image\/([a-zA-Z+]+);base64,/);
     if (match && match[1]) {
       const ext = match[1].toUpperCase();
@@ -69,15 +71,12 @@ export class CustomerInvoicePdfService {
   private static formatDateSafely(dateVal: any): string {
     if (!dateVal) return "-";
     try {
-      // Jika bertipe Firestore Timestamp (punya fungsi toDate)
       if (dateVal && typeof dateVal.toDate === 'function') {
         return dateVal.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
       }
-      // Jika bertipe data detik/nanodetik biasa
       if (dateVal && typeof dateVal.seconds === 'number') {
         return new Date(dateVal.seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
       }
-      // Jika berupa string tanggal
       const parsed = new Date(dateVal);
       if (!isNaN(parsed.getTime())) {
         return parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -92,7 +91,6 @@ export class CustomerInvoicePdfService {
   public static generatePdf(invoice: CustomerInvoice) {
     if (!invoice) return alert("❌ Data invoice kosong, gagal memproses.");
 
-    // 1. Inisialisasi Kertas Ukuran A5 Portrait (148mm x 210mm)
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
@@ -115,7 +113,6 @@ export class CustomerInvoicePdfService {
     if (invoice.logoBase64 && typeof invoice.logoBase64 === "string" && invoice.logoBase64.startsWith("data:image/") && invoice.logoBase64.length > 50) {
       try {
         const imageFormat = this.detectImageFormat(invoice.logoBase64);
-        // Render logo Base64 di koordinat X=12, Y=11 dengan ukuran 12x12 mm
         doc.addImage(invoice.logoBase64, imageFormat, 12, 11, 12, 12);
         startX = 27; // Geser teks identitas ke kanan jika ada logo
       } catch (err) {
@@ -170,13 +167,17 @@ export class CustomerInvoicePdfService {
     doc.text(invoice.recipient || "-", 43, 39);
     doc.setFont("Helvetica", "normal");
 
-    doc.text("Tanggal Invoice", 12, 43);
+    doc.text("Alamat Pelanggan", 12, 43);
     doc.text(":", 40, 43);
-    doc.text(dateFormatted, 43, 43);
+    doc.text(invoice.recipientAddress || "-", 43, 43);
 
-    doc.text("Jatuh Tempo", 12, 47);
+    doc.text("Tanggal Invoice", 12, 47);
     doc.text(":", 40, 47);
-    doc.text(dueDateFormatted, 43, 47);
+    doc.text(dateFormatted, 43, 47);
+
+    doc.text("Jatuh Tempo", 12, 51);
+    doc.text(":", 40, 51);
+    doc.text(dueDateFormatted, 43, 51);
 
     // --- METADATA TABEL ITEM BARANG ---
     const items = invoice.items || [];
@@ -190,13 +191,13 @@ export class CustomerInvoicePdfService {
     ]);
 
     autoTable(doc, {
-      startY: 52,
+      startY: 56,
       margin: { left: 12, right: 12 },
       head: [["NO", "SKU", "DESKRIPSI PRODUK", "QTY", "HARGA SATUAN", "SUBTOTAL"]],
       body: tableBody,
       theme: "striped",
       headStyles: {
-        fillColor: rgbColor, // Dinamis sesuai warna tema pilihan
+        fillColor: rgbColor,
         textColor: [255, 255, 255],
         fontSize: 7.5,
         fontStyle: "bold",
@@ -221,7 +222,7 @@ export class CustomerInvoicePdfService {
     });
 
     // --- RINGKASAN TOTAL AKHIR ---
-    const finalY = ((doc as any).lastAutoTable?.finalY || 60) + 6;
+    const finalY = ((doc as any).lastAutoTable?.finalY || 65) + 6;
 
     doc.setDrawColor(241, 245, 249);
     doc.line(12, finalY - 3, 136, finalY - 3);
@@ -306,12 +307,31 @@ export class CustomerInvoicePdfService {
     doc.setTextColor(71, 85, 105);
     doc.text("Hormat Kami,", 136, footerY, { align: "right" });
     
-    // Tanda Tangan Brand
+    // Tanda Tangan Gambar (jika ada)
+    let sigOffset = 0;
+    if (invoice.signatureBase64 && typeof invoice.signatureBase64 === "string" && invoice.signatureBase64.startsWith("data:image/") && invoice.signatureBase64.length > 50) {
+      try {
+        const sigFormat = this.detectImageFormat(invoice.signatureBase64);
+        doc.addImage(invoice.signatureBase64, sigFormat, 116, footerY + 1.5, 20, 8);
+        sigOffset = 9.5;
+      } catch (err) {
+        console.error("Gagal menggambar tanda tangan ke PDF:", err);
+      }
+    }
+
+    doc.setFont("Helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(15, 23, 42);
-    doc.text(sName, 136, footerY + 9, { align: "right" });
+    doc.text(sName, 136, footerY + 5.5 + sigOffset, { align: "right" });
 
-    // Simpan PDF
+    // Nama Penanggung Jawab di bawah nama brand
+    if (invoice.sellerPic) {
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text(`(${invoice.sellerPic})`, 136, footerY + 9 + sigOffset, { align: "right" });
+    }
+
     doc.save(`INVOICE-${invoice.invoiceNumber}.pdf`);
   }
 }

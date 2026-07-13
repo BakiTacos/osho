@@ -29,6 +29,7 @@ export function useInvoicingPage(currentUser: any) {
     id: "",
     invoiceNumber: "",
     recipient: "",
+    recipientAddress: "", // Alamat pelanggan kustom
     date: getLocalDateString(),
     dueDate: getLocalDateString(),
     discount: 0,
@@ -39,7 +40,9 @@ export function useInvoicingPage(currentUser: any) {
     sellerName: "Simple and Yours",
     sellerAddress: "Tangerang, Banten, Indonesia",
     sellerContact: "Email: sny.osho@gmail.com",
-    themeColor: "#0047AB" // Default Cobalt Blue
+    themeColor: "#0047AB", // Default Cobalt Blue
+    sellerPic: "", // Penanggung Jawab default
+    signatureBase64: "" // Tanda tangan default
   }), [getLocalDateString]);
 
   const [form, setForm] = useState(initialFormState);
@@ -63,6 +66,7 @@ export function useInvoicingPage(currentUser: any) {
             id: doc.id,
             invoiceNumber: data.invoiceNumber || "",
             recipient: data.recipient || "",
+            recipientAddress: data.recipientAddress || "",
             date: data.date || "",
             dueDate: data.dueDate || "",
             items: data.items || [],
@@ -76,10 +80,11 @@ export function useInvoicingPage(currentUser: any) {
             sellerName: data.sellerName || "",
             sellerAddress: data.sellerAddress || "",
             sellerContact: data.sellerContact || "",
-            themeColor: data.themeColor || "#0047AB"
+            themeColor: data.themeColor || "#0047AB",
+            sellerPic: data.sellerPic || "",
+            signatureBase64: data.signatureBase64 || ""
           } as CustomerInvoice;
         });
-        // Sort descending by date, then invoice number
         list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.invoiceNumber.localeCompare(a.invoiceNumber));
         setInvoices(list);
         setLoading(false);
@@ -121,7 +126,7 @@ export function useInvoicingPage(currentUser: any) {
     };
   }, [currentUser?.uid]);
 
-  // Generate unique invoice number with a non-obvious combination (includes date and time components)
+  // Generate unique invoice number with a non-obvious combination
   const generateInvoiceNumber = useCallback(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -129,12 +134,11 @@ export function useInvoicingPage(currentUser: any) {
     const dd = String(today.getDate()).padStart(2, "0");
     const dateStr = `${yyyy}${mm}${dd}`;
     
-    // Generate non-obvious random combination: current seconds + current milliseconds (2-digits) + random 2-digits
     const seconds = String(today.getSeconds()).padStart(2, "0");
     const ms = String(today.getMilliseconds()).padStart(3, "0").substring(0, 2);
     const rand = String(Math.floor(Math.random() * 90) + 10);
     
-    const randomCombination = `${seconds}${ms}${rand}`; // e.g. 421589
+    const randomCombination = `${seconds}${ms}${rand}`;
     return `INV-${dateStr}-${randomCombination}`;
   }, []);
 
@@ -151,7 +155,9 @@ export function useInvoicingPage(currentUser: any) {
       themeColor: sellerProfile?.themeColor || "#0047AB",
       bankInfo: sellerProfile?.bankInfo || "Bank Central Asia (BCA)\nNo. Rekening: 8830928172\na.n. Simple and Yours",
       notes: sellerProfile?.notes || "",
-      tax: typeof sellerProfile?.tax === 'number' ? sellerProfile.tax : 0
+      tax: typeof sellerProfile?.tax === 'number' ? sellerProfile.tax : 0,
+      sellerPic: sellerProfile?.sellerPic || "",
+      signatureBase64: sellerProfile?.signatureBase64 || ""
     });
     setFormItems([{ sku: "", productName: "", qty: 1, price: 0 }]);
     setIsModalOpen(true);
@@ -164,6 +170,7 @@ export function useInvoicingPage(currentUser: any) {
       id: invoice.id || "",
       invoiceNumber: invoice.invoiceNumber,
       recipient: invoice.recipient,
+      recipientAddress: invoice.recipientAddress || "",
       date: invoice.date,
       dueDate: invoice.dueDate,
       discount: invoice.discount,
@@ -174,7 +181,9 @@ export function useInvoicingPage(currentUser: any) {
       sellerName: invoice.sellerName || "Simple and Yours",
       sellerAddress: invoice.sellerAddress || "Tangerang, Banten, Indonesia",
       sellerContact: invoice.sellerContact || "Email: sny.osho@gmail.com",
-      themeColor: invoice.themeColor || "#0047AB"
+      themeColor: invoice.themeColor || "#0047AB",
+      sellerPic: invoice.sellerPic || "",
+      signatureBase64: invoice.signatureBase64 || ""
     });
     setFormItems(invoice.items && invoice.items.length > 0 ? [...invoice.items] : [{ sku: "", productName: "", qty: 1, price: 0 }]);
     setIsModalOpen(true);
@@ -201,6 +210,7 @@ export function useInvoicingPage(currentUser: any) {
     const docData = {
       invoiceNumber: form.invoiceNumber || "",
       recipient: (form.recipient || "").trim(),
+      recipientAddress: (form.recipientAddress || "").trim(),
       date: form.date || "",
       dueDate: form.dueDate || "",
       items: formItems.map(item => ({
@@ -220,6 +230,8 @@ export function useInvoicingPage(currentUser: any) {
       sellerAddress: (form.sellerAddress || "").trim(),
       sellerContact: (form.sellerContact || "").trim(),
       themeColor: form.themeColor || "#0047AB",
+      sellerPic: (form.sellerPic || "").trim(),
+      signatureBase64: form.signatureBase64 || "",
       updatedAt: serverTimestamp()
     };
 
@@ -233,7 +245,7 @@ export function useInvoicingPage(currentUser: any) {
         await updateDoc(doc(db, `users/${currentUser.uid}/customer_invoices`, form.id), docData);
       }
 
-      // 🚀 OTOMATIS SIMPAN SEBAGAI DEFAULT UNTUK DATA PENJUAL, BANK, NOTES, TAX, COLOR (Kecuali items & pembeli)
+      // 🚀 AUTOSAVE DEFAULT SELLER PROFILE (Kecuali items & data pembeli)
       const profileRef = doc(db, `users/${currentUser.uid}/settings`, "seller_profile");
       await setDoc(profileRef, {
         sellerName: docData.sellerName,
@@ -244,6 +256,8 @@ export function useInvoicingPage(currentUser: any) {
         bankInfo: docData.bankInfo,
         notes: docData.notes,
         tax: docData.tax,
+        sellerPic: docData.sellerPic,
+        signatureBase64: docData.signatureBase64,
         updatedAt: serverTimestamp()
       }, { merge: true });
 
@@ -268,6 +282,8 @@ export function useInvoicingPage(currentUser: any) {
         bankInfo: (form.bankInfo || "").trim(),
         notes: (form.notes || "").trim(),
         tax: Number(form.tax) || 0,
+        sellerPic: (form.sellerPic || "").trim(),
+        signatureBase64: form.signatureBase64 || "",
         updatedAt: serverTimestamp()
       }, { merge: true });
       alert("✅ Profil penjual default berhasil diperbarui!");
@@ -293,12 +309,10 @@ export function useInvoicingPage(currentUser: any) {
   // Filtered Invoices for Rendering
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
-      // 1. Search Query (invoice number or client name)
       const matchesSearch = 
         inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         inv.recipient.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // 2. Time Filter
       let matchesTime = true;
       const invDate = new Date(inv.date);
       const today = new Date();
