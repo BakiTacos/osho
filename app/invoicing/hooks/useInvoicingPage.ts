@@ -262,9 +262,9 @@ export function useInvoicingPage(currentUser: any) {
       }, { merge: true });
 
       setIsModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gagal menyimpan invoice:", error);
-      alert("Terjadi kesalahan saat menyimpan invoice.");
+      alert(`Terjadi kesalahan saat menyimpan invoice: ${error.message || error}`);
     }
   };
 
