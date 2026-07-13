@@ -110,7 +110,7 @@ export class CustomerInvoicePdfService {
     }
   }
 
-  // 🚀 Compressor Gambar berbasis Canvas untuk mencegah file PDF berukuran raksasa
+  // 🚀 Compressor Gambar berbasis Canvas dengan output PNG agar mempertahankan transparansi (anti background hitam)
   private static compressBase64Image(base64: string, maxDim = 150): Promise<string> {
     return new Promise((resolve) => {
       if (!base64 || base64.length < 25000) {
@@ -141,7 +141,7 @@ export class CustomerInvoicePdfService {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.7)); // Kompres menjadi JPEG 70% berkualitas tinggi namun sangat ringan
+          resolve(canvas.toDataURL("image/png")); // Output PNG untuk mempertahankan alpha transparency
         } else {
           resolve(base64);
         }
@@ -378,7 +378,7 @@ export class CustomerInvoicePdfService {
     }
 
     // ==========================================
-    // TERBILANG NOMINAL AKHIR (Dipindahkan ke bawah Informasi Pembayaran dan isinya)
+    // TERBILANG NOMINAL AKHIR
     // ==========================================
     const terbilangY = Math.max(leftY, rightY) + 5;
     doc.setFont("Helvetica", "italic");

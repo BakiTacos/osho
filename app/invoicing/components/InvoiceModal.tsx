@@ -19,8 +19,8 @@ interface InvoiceModalProps {
   onSaveSellerProfile: () => void; // Simpan default seller profile
 }
 
-// Helper untuk kompresi gambar client-side (menjamin ukuran file kecil agar Firestore tidak crash)
-const compressImage = (file: File, maxWidth = 200, maxHeight = 200, quality = 0.7): Promise<string> => {
+// Helper untuk kompresi gambar client-side (menjamin ukuran file kecil dengan output PNG agar transparan tetap ada)
+const compressImage = (file: File, maxWidth = 200, maxHeight = 200): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -49,7 +49,7 @@ const compressImage = (file: File, maxWidth = 200, maxHeight = 200, quality = 0.
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          const dataUrl = canvas.toDataURL("image/png"); // Output PNG agar transparan tetap ada (anti background hitam)
           resolve(dataUrl);
         } else {
           resolve(event.target?.result as string);
@@ -130,7 +130,7 @@ export function InvoiceModal({
     const file = e.target.files?.[0];
     if (file) {
       try {
-        const compressed = await compressImage(file, 200, 200, 0.75);
+        const compressed = await compressImage(file, 200, 200);
         setForm({ ...form, logoBase64: compressed });
       } catch (err) {
         console.error("Gagal mengompres logo:", err);
@@ -147,7 +147,7 @@ export function InvoiceModal({
     const file = e.target.files?.[0];
     if (file) {
       try {
-        const compressed = await compressImage(file, 200, 100, 0.7);
+        const compressed = await compressImage(file, 200, 100);
         setForm({ ...form, signatureBase64: compressed });
       } catch (err) {
         console.error("Gagal mengompres tanda tangan:", err);
@@ -541,7 +541,7 @@ export function InvoiceModal({
                         <div className="col-span-12 sm:col-span-6 space-y-0.5">
                           <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">Pilih dari Katalog</span>
                           <select
-                            className="w-full bg-white border border-slate-200 rounded-lg py-1 px-1.5 text-xs font-bold text-slate-500 outline-none"
+                            className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-1.5 text-xs font-bold text-slate-500 outline-none"
                             value=""
                             onChange={(e) => handleSelectProduct(idx, e.target.value)}
                           >
@@ -783,7 +783,7 @@ export function InvoiceModal({
                     </div>
                   </div>
 
-                  {/* Subtotals & footer signature preview (Side-by-side layout preview) */}
+                  {/* Subtotals & footer signature preview */}
                   <div className="mt-4 pt-3 border-t border-dashed border-slate-200">
                     <div className="grid grid-cols-12 gap-3">
                       
@@ -822,7 +822,7 @@ export function InvoiceModal({
 
                     </div>
 
-                    {/* 🚀 TERBILANG NOMINAL DI PREVIEW (Paling Bawah setelah Pembayaran & Totals) */}
+                    {/* TERBILANG NOMINAL DI PREVIEW */}
                     <div className="text-[6.8px] italic text-slate-500 text-left mt-2.5 font-bold break-words border-t border-dotted border-slate-200 pt-1">
                       Terbilang: {formatTerbilang(calculatedValues.total)}
                     </div>
