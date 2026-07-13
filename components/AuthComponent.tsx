@@ -39,9 +39,10 @@ export default function AuthComponent() {
       const user = userCredential.user;
       const token = await user.getIdToken();
       
+      const secureCookie = typeof window !== 'undefined' && window.location.protocol === 'https:';
       Cookies.set('session_token', token, { 
         expires: 30, // 🔥 Token otomatis hangus/dihapus browser setelah 30 hari
-        secure: true, // Hanya berjalan di protokol HTTPS aman
+        secure: secureCookie, // Hanya berjalan di protokol HTTPS aman (false di http://localhost)
         sameSite: 'strict' // Proteksi ketat dari pembajakan kuki luar
       });
 
@@ -54,7 +55,7 @@ export default function AuthComponent() {
 
   // 🚀 FUNGSI KELUAR SISTEM DENGAN PENGHANCUR KUKI INSTAN
   const handleLogout = async () => {
-    if (window.confirm("Apakah Kakak yakin ingin keluar dari sistem ruko?")) {
+    if (window.confirm("Apakah anda ingin keluar dari sistem?")) {
       try {
         await signOut(auth);
         Cookies.remove('session_token'); // 🔥 Hancurkan kuki detik itu juga tanpa sisa

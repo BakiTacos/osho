@@ -64,6 +64,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
       "edit": "Ubah Data Produk",
       "mapping": "Hubungan SKU Jualan",
       "penjualan": "Catatan Transaksi Penjualan",
+      "invoicing": "Manajemen Invoice Pelanggan",
       "pembayaran": "Rekonsiliasi Pembayaran",
       "retur": "Manajemen Retur Barang",
       "laporan": "Laporan Laba Rugi Toko",

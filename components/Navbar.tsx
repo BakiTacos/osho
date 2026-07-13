@@ -16,7 +16,8 @@ import {
   BoxIcon,
   MapIcon,
   Settings,
-  Home
+  Home,
+  FileText
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -33,11 +34,12 @@ export default function Sidebar() {
     }
   };
 
-  // 1. DATA MENU UTAMA UNTUK DESKTOP (LENGKAP 7 MENU)
+  // 1. DATA MENU UTAMA UNTUK DESKTOP (LENGKAP 8 MENU)
   const desktopItems = [
     { name: "Beranda", icon: LayoutDashboard, href: "/" },
     { name: "Inventaris", icon: Calculator, href: "/inventaris" },
     { name: "Penjualan", icon: LinkIcon, href: "/penjualan" },
+    { name: "Invoicing", icon: FileText, href: "/invoicing" },
     { name: "Pembayaran", icon: ListTodo, href: "/pembayaran" },
     { name: "Retur", icon: BoxIcon, href: "/pengembalian" }, 
     { name: "Laporan", icon: MapIcon, href: "/laporan" },
