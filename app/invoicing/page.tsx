@@ -75,7 +75,7 @@ export default function InvoicingPage() {
               items={state.invoices}
               onEdit={state.openEditModal}
               onDelete={state.handleDeleteInvoice}
-              onDownloadPdf={CustomerInvoicePdfService.generatePdf}
+              onDownloadPdf={(inv) => CustomerInvoicePdfService.generatePdf(inv)}
             />
           </div>
         </>

@@ -30,6 +30,7 @@ export function useInvoicingPage(currentUser: any) {
     invoiceNumber: "",
     recipient: "",
     recipientAddress: "", // Alamat pelanggan kustom
+    recipientPhone: "", // No telp penerima kustom
     date: getLocalDateString(),
     dueDate: getLocalDateString(),
     discount: 0,
@@ -40,6 +41,7 @@ export function useInvoicingPage(currentUser: any) {
     sellerName: "Simple and Yours",
     sellerAddress: "Tangerang, Banten, Indonesia",
     sellerContact: "Email: sny.osho@gmail.com",
+    sellerPhone: "", // No telp pengirim kustom
     themeColor: "#0047AB", // Default Cobalt Blue
     sellerPic: "", // Penanggung Jawab default
     signatureBase64: "" // Tanda tangan default
@@ -67,6 +69,7 @@ export function useInvoicingPage(currentUser: any) {
             invoiceNumber: data.invoiceNumber || "",
             recipient: data.recipient || "",
             recipientAddress: data.recipientAddress || "",
+            recipientPhone: data.recipientPhone || "",
             date: data.date || "",
             dueDate: data.dueDate || "",
             items: data.items || [],
@@ -80,6 +83,7 @@ export function useInvoicingPage(currentUser: any) {
             sellerName: data.sellerName || "",
             sellerAddress: data.sellerAddress || "",
             sellerContact: data.sellerContact || "",
+            sellerPhone: data.sellerPhone || "",
             themeColor: data.themeColor || "#0047AB",
             sellerPic: data.sellerPic || "",
             signatureBase64: data.signatureBase64 || ""
@@ -126,7 +130,7 @@ export function useInvoicingPage(currentUser: any) {
     };
   }, [currentUser?.uid]);
 
-  // Generate unique invoice number with a non-obvious combination
+  // Generate unique invoice number with sequential index in middle: INV-YYYYMMDD-seqIndex-random
   const generateInvoiceNumber = useCallback(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -134,13 +138,17 @@ export function useInvoicingPage(currentUser: any) {
     const dd = String(today.getDate()).padStart(2, "0");
     const dateStr = `${yyyy}${mm}${dd}`;
     
+    // Count invoices made today to insert sequence index (001, 002, etc.)
+    const todayInvoices = invoices.filter(inv => inv.invoiceNumber.startsWith(`INV-${dateStr}-`));
+    const seqIndex = String(todayInvoices.length + 1).padStart(3, "0");
+    
     const seconds = String(today.getSeconds()).padStart(2, "0");
     const ms = String(today.getMilliseconds()).padStart(3, "0").substring(0, 2);
     const rand = String(Math.floor(Math.random() * 90) + 10);
-    
     const randomCombination = `${seconds}${ms}${rand}`;
-    return `INV-${dateStr}-${randomCombination}`;
-  }, []);
+    
+    return `INV-${dateStr}-${seqIndex}-${randomCombination}`;
+  }, [invoices]);
 
   // Handle Open Create Modal
   const openCreateModal = useCallback(() => {
@@ -151,6 +159,7 @@ export function useInvoicingPage(currentUser: any) {
       sellerName: sellerProfile?.sellerName || "Simple and Yours",
       sellerAddress: sellerProfile?.sellerAddress || "Tangerang, Banten, Indonesia",
       sellerContact: sellerProfile?.sellerContact || "Email: sny.osho@gmail.com",
+      sellerPhone: sellerProfile?.sellerPhone || "",
       logoBase64: sellerProfile?.logoBase64 || "",
       themeColor: sellerProfile?.themeColor || "#0047AB",
       bankInfo: sellerProfile?.bankInfo || "Bank Central Asia (BCA)\nNo. Rekening: 8830928172\na.n. Simple and Yours",
@@ -171,6 +180,7 @@ export function useInvoicingPage(currentUser: any) {
       invoiceNumber: invoice.invoiceNumber,
       recipient: invoice.recipient,
       recipientAddress: invoice.recipientAddress || "",
+      recipientPhone: invoice.recipientPhone || "",
       date: invoice.date,
       dueDate: invoice.dueDate,
       discount: invoice.discount,
@@ -181,6 +191,7 @@ export function useInvoicingPage(currentUser: any) {
       sellerName: invoice.sellerName || "Simple and Yours",
       sellerAddress: invoice.sellerAddress || "Tangerang, Banten, Indonesia",
       sellerContact: invoice.sellerContact || "Email: sny.osho@gmail.com",
+      sellerPhone: invoice.sellerPhone || "",
       themeColor: invoice.themeColor || "#0047AB",
       sellerPic: invoice.sellerPic || "",
       signatureBase64: invoice.signatureBase64 || ""
@@ -211,6 +222,7 @@ export function useInvoicingPage(currentUser: any) {
       invoiceNumber: form.invoiceNumber || "",
       recipient: (form.recipient || "").trim(),
       recipientAddress: (form.recipientAddress || "").trim(),
+      recipientPhone: (form.recipientPhone || "").trim(),
       date: form.date || "",
       dueDate: form.dueDate || "",
       items: formItems.map(item => ({
@@ -229,6 +241,7 @@ export function useInvoicingPage(currentUser: any) {
       sellerName: (form.sellerName || "").trim(),
       sellerAddress: (form.sellerAddress || "").trim(),
       sellerContact: (form.sellerContact || "").trim(),
+      sellerPhone: (form.sellerPhone || "").trim(),
       themeColor: form.themeColor || "#0047AB",
       sellerPic: (form.sellerPic || "").trim(),
       signatureBase64: form.signatureBase64 || "",
@@ -251,6 +264,7 @@ export function useInvoicingPage(currentUser: any) {
         sellerName: docData.sellerName,
         sellerAddress: docData.sellerAddress,
         sellerContact: docData.sellerContact,
+        sellerPhone: docData.sellerPhone,
         logoBase64: docData.logoBase64,
         themeColor: docData.themeColor,
         bankInfo: docData.bankInfo,
@@ -277,6 +291,7 @@ export function useInvoicingPage(currentUser: any) {
         sellerName: (form.sellerName || "").trim(),
         sellerAddress: (form.sellerAddress || "").trim(),
         sellerContact: (form.sellerContact || "").trim(),
+        sellerPhone: (form.sellerPhone || "").trim(),
         logoBase64: form.logoBase64 || "",
         themeColor: form.themeColor || "#0047AB",
         bankInfo: (form.bankInfo || "").trim(),

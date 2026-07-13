@@ -2,8 +2,8 @@
 "use client";
 
 import React from 'react';
-import { X, Plus, Trash2, Save, Calendar, User, FileText, Image as ImageIcon, Palette, ShieldCheck, Mail, MapPin, Sparkles, FileDown } from 'lucide-react';
-import { CustomerInvoiceItem, CustomerInvoicePdfService } from '../services/CustomerInvoicePdfService';
+import { X, Plus, Trash2, Save, Calendar, User, FileText, Image as ImageIcon, Palette, ShieldCheck, Mail, MapPin, Sparkles, FileDown, Phone } from 'lucide-react';
+import { CustomerInvoiceItem, CustomerInvoicePdfService, formatTerbilang } from '../services/CustomerInvoicePdfService';
 
 interface InvoiceModalProps {
   isOpen: boolean;
@@ -173,6 +173,7 @@ export function InvoiceModal({
       invoiceNumber: form.invoiceNumber || "DRAFT-PDF",
       recipient: form.recipient || "Nama Pelanggan",
       recipientAddress: form.recipientAddress || "-",
+      recipientPhone: form.recipientPhone || "-",
       date: form.date,
       dueDate: form.dueDate,
       items: items,
@@ -186,6 +187,7 @@ export function InvoiceModal({
       sellerName: form.sellerName,
       sellerAddress: form.sellerAddress,
       sellerContact: form.sellerContact,
+      sellerPhone: form.sellerPhone,
       themeColor: form.themeColor,
       sellerPic: form.sellerPic,
       signatureBase64: form.signatureBase64
@@ -215,7 +217,7 @@ export function InvoiceModal({
           </button>
         </div>
 
-        {/* 🚀 KONTROL FORM UTAMA - PEMBUNGKUS KESELURUHAN KOLOM INPUT & TOMBOL AKSI */}
+        {/* KONTROL FORM UTAMA - PEMBUNGKUS KESELURUHAN KOLOM INPUT & TOMBOL AKSI */}
         <form onSubmit={onSubmit} className="flex flex-col justify-between flex-1 overflow-hidden">
           
           {/* TWO-COLUMN CONTENT GRID */}
@@ -382,36 +384,48 @@ export function InvoiceModal({
                     />
                   </div>
 
-                  <div className="space-y-1 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
-                        <MapPin size={11} className="text-slate-400" />
-                        <span>Alamat Toko</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Alamat Penjual"
-                        className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
-                        value={form.sellerAddress}
-                        onChange={e => setForm({ ...form, sellerAddress: e.target.value })}
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                      <Phone size={11} className="text-slate-400" />
+                      <span>No Telepon Pengirim</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nomor Telepon Pengirim"
+                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                      value={form.sellerPhone}
+                      onChange={e => setForm({ ...form, sellerPhone: e.target.value })}
+                    />
+                  </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
-                        <Mail size={11} className="text-slate-400" />
-                        <span>Kontak / Email</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Kontak Penjual"
-                        className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
-                        value={form.sellerContact}
-                        onChange={e => setForm({ ...form, sellerContact: e.target.value })}
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                      <Mail size={11} className="text-slate-400" />
+                      <span>Kontak / Email</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Kontak Penjual"
+                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                      value={form.sellerContact}
+                      onChange={e => setForm({ ...form, sellerContact: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                      <MapPin size={11} className="text-slate-400" />
+                      <span>Alamat Toko</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Alamat Penjual"
+                      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                      value={form.sellerAddress}
+                      onChange={e => setForm({ ...form, sellerAddress: e.target.value })}
+                    />
                   </div>
                 </div>
               </div>
@@ -444,6 +458,20 @@ export function InvoiceModal({
                     className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
                     value={form.recipient}
                     onChange={e => setForm({ ...form, recipient: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                    <Phone size={11} />
+                    <span>No Telepon Penerima</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Nomor Telepon Penerima"
+                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                    value={form.recipientPhone}
+                    onChange={e => setForm({ ...form, recipientPhone: e.target.value })}
                   />
                 </div>
 
@@ -704,6 +732,10 @@ export function InvoiceModal({
                         <span className="font-black text-slate-800 uppercase">{form.recipient || "-"}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-slate-400">Telp Pelanggan:</span>
+                        <span className="font-bold text-slate-700">{form.recipientPhone || "-"}</span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-slate-400">Alamat Pelanggan:</span>
                         <span className="font-bold text-slate-700 truncate max-w-[150px]">{form.recipientAddress || "-"}</span>
                       </div>
@@ -714,6 +746,10 @@ export function InvoiceModal({
                       <div className="flex justify-between">
                         <span className="text-slate-400">Jatuh Tempo:</span>
                         <span className="text-red-500 font-black">{formatDate(form.dueDate)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Referensi Hari Ini:</span>
+                        <span className="text-slate-750 font-black">{form.invoiceNumber.split("-")[2] || "001"}</span>
                       </div>
                     </div>
 
@@ -768,6 +804,11 @@ export function InvoiceModal({
                       </span>
                     </div>
 
+                    {/* 🚀 TERBILANG NOMINAL DI PREVIEW */}
+                    <div className="text-[6.5px] italic text-slate-500 text-right mt-1 font-bold break-words max-w-[200px] ml-auto">
+                      Terbilang: {formatTerbilang(calculatedValues.total)}
+                    </div>
+
                     {/* bank transfer & notes inside mini simulator */}
                     {(form.bankInfo || form.notes) && (
                       <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl mt-3 text-[7.5px] space-y-1">
@@ -791,7 +832,7 @@ export function InvoiceModal({
 
                         <span className="font-black text-slate-800 uppercase block leading-none">{form.sellerName || "Simple and Yours"}</span>
                         {form.sellerPic && (
-                          <span className="text-slate-500 font-bold block mt-0.5">({form.sellerPic})</span>
+                          <span className="text-slate-500 font-bold block mt-0.5">{form.sellerPic}</span> // 🚀 TANPA KURUNG ()
                         )}
                       </div>
                     </div>

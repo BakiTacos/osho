@@ -14,6 +14,7 @@ export interface CustomerInvoice {
   invoiceNumber: string;
   recipient: string;
   recipientAddress?: string; // Alamat pelanggan kustom
+  recipientPhone?: string; // No telp pelanggan kustom
   date: string;
   dueDate: string;
   items: CustomerInvoiceItem[];
@@ -27,14 +28,35 @@ export interface CustomerInvoice {
   sellerName?: string; // Nama Penjual kustom
   sellerAddress?: string; // Alamat Penjual kustom
   sellerContact?: string; // Kontak Penjual kustom
+  sellerPhone?: string; // Nomor telepon pengirim kustom
   themeColor?: string; // Warna tema hex kustom (misal: #0047AB)
   sellerPic?: string; // Nama Penanggung Jawab kustom
   signatureBase64?: string; // Foto tanda tangan Base64 kustom
 }
 
+// Fungsi pembantu mengeja nominal angka ke teks Bahasa Indonesia
+function kekata(n: number): string {
+  const prima = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+  if (n < 12) return prima[n];
+  if (n < 20) return kekata(n - 10) + " Belas";
+  if (n < 100) return kekata(Math.floor(n / 10)) + " Puluh " + kekata(n % 10);
+  if (n < 200) return "Seratus " + kekata(n - 100);
+  if (n < 1000) return kekata(Math.floor(n / 100)) + " Ratus " + kekata(n % 100);
+  if (n < 2000) return "Seribu " + kekata(n - 1000);
+  if (n < 1000000) return kekata(Math.floor(n / 1000)) + " Ribu " + kekata(n % 1000);
+  if (n < 1000000000) return kekata(Math.floor(n / 1000000)) + " Juta " + kekata(n % 1000000);
+  return "";
+}
+
+export function formatTerbilang(amount: number): string {
+  if (amount === 0) return "Nol Rupiah";
+  const words = kekata(Math.floor(amount));
+  return (words.trim() + " Rupiah").replace(/\s+/g, " ");
+}
+
 export class CustomerInvoicePdfService {
-  // Helper untuk mengonversi Hex Color (#RRGGBB) ke RGB array
-  private static hexToRgb(hex?: string): [number, number, number] {
+  // Helper untuk mengonversi Hex Color (#RRGGBB) ke RGB array (Dipanggil via nama kelas langsung)
+  public static hexToRgb(hex?: string): [number, number, number] {
     if (!hex) return [0, 71, 171]; // Default Cobalt Blue
     const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
     const fullHex = hex.replace(shorthandRegex, (_, r, g, b) => r + r + g + g + b + b);
@@ -47,7 +69,7 @@ export class CustomerInvoicePdfService {
   }
 
   // Helper untuk mendeteksi format gambar dari header Base64
-  private static detectImageFormat(base64?: string): string {
+  public static detectImageFormat(base64?: string): string {
     if (!base64) return "PNG";
     if (base64.startsWith("data:image/jpeg") || base64.startsWith("data:image/jpg")) {
       return "JPEG";
@@ -68,7 +90,7 @@ export class CustomerInvoicePdfService {
   }
 
   // Helper untuk memformat tanggal secara aman tanpa resiko crash
-  private static formatDateSafely(dateVal: any): string {
+  public static formatDateSafely(dateVal: any): string {
     if (!dateVal) return "-";
     try {
       if (dateVal && typeof dateVal.toDate === 'function') {
@@ -91,28 +113,27 @@ export class CustomerInvoicePdfService {
   public static generatePdf(invoice: CustomerInvoice) {
     if (!invoice) return alert("❌ Data invoice kosong, gagal memproses.");
 
+    // Gunakan inisialisasi kelas secara langsung untuk menghindari error kehilangan scope "this" saat callback
+    const dateFormatted = CustomerInvoicePdfService.formatDateSafely(invoice.date);
+    const dueDateFormatted = CustomerInvoicePdfService.formatDateSafely(invoice.dueDate);
+    const rgbColor = CustomerInvoicePdfService.hexToRgb(invoice.themeColor);
+
     const doc = new jsPDF({
       orientation: "portrait",
       unit: "mm",
       format: "a5"
     });
 
-    const dateFormatted = this.formatDateSafely(invoice.date);
-    const dueDateFormatted = this.formatDateSafely(invoice.dueDate);
-
-    // Tentukan Warna Tema
-    const rgbColor = this.hexToRgb(invoice.themeColor);
-
     // Default Branding Values
     const sName = invoice.sellerName || "Simple and Yours";
     const sAddress = invoice.sellerAddress || "Tangerang, Banten, Indonesia";
-    const sContact = invoice.sellerContact || "Email: sny.osho@gmail.com";
+    const sContact = (invoice.sellerContact || "Email: sny.osho@gmail.com") + (invoice.sellerPhone ? ` • Telp: ${invoice.sellerPhone}` : "");
 
     // --- LOGO & IDENTITAS PERUSAHAAN (Kiri Atas) ---
     let startX = 12;
     if (invoice.logoBase64 && typeof invoice.logoBase64 === "string" && invoice.logoBase64.startsWith("data:image/") && invoice.logoBase64.length > 50) {
       try {
-        const imageFormat = this.detectImageFormat(invoice.logoBase64);
+        const imageFormat = CustomerInvoicePdfService.detectImageFormat(invoice.logoBase64);
         doc.addImage(invoice.logoBase64, imageFormat, 12, 11, 12, 12);
         startX = 27; // Geser teks identitas ke kanan jika ada logo
       } catch (err) {
@@ -167,17 +188,31 @@ export class CustomerInvoicePdfService {
     doc.text(invoice.recipient || "-", 43, 39);
     doc.setFont("Helvetica", "normal");
 
-    doc.text("Alamat Pelanggan", 12, 43);
+    doc.text("Telp Pelanggan", 12, 43);
     doc.text(":", 40, 43);
-    doc.text(invoice.recipientAddress || "-", 43, 43);
+    doc.text(invoice.recipientPhone || "-", 43, 43);
 
-    doc.text("Tanggal Invoice", 12, 47);
+    doc.text("Alamat Pelanggan", 12, 47);
     doc.text(":", 40, 47);
-    doc.text(dateFormatted, 43, 47);
+    doc.text(invoice.recipientAddress || "-", 43, 47);
 
-    doc.text("Jatuh Tempo", 12, 51);
+    doc.text("Tanggal Invoice", 12, 51);
     doc.text(":", 40, 51);
-    doc.text(dueDateFormatted, 43, 51);
+    doc.text(dateFormatted, 43, 51);
+
+    doc.text("Jatuh Tempo", 12, 55);
+    doc.text(":", 40, 55);
+    doc.text(dueDateFormatted, 43, 55);
+
+    // Ekstrak Referensi Keberapa Hari Ini dari invoiceNumber (Bagian ke-3: INV-TANGGAL-SEQ-RAND)
+    const parts = invoice.invoiceNumber.split("-");
+    const seqIndex = parts.length >= 3 ? parts[2] : "001";
+
+    doc.text("Referensi Hari Ini", 12, 59);
+    doc.text(":", 40, 59);
+    doc.setFont("Helvetica", "bold");
+    doc.text(seqIndex, 43, 59);
+    doc.setFont("Helvetica", "normal");
 
     // --- METADATA TABEL ITEM BARANG ---
     const items = invoice.items || [];
@@ -191,7 +226,7 @@ export class CustomerInvoicePdfService {
     ]);
 
     autoTable(doc, {
-      startY: 56,
+      startY: 64, // Diturunkan agar tidak menimpa data metadata baru
       margin: { left: 12, right: 12 },
       head: [["NO", "SKU", "DESKRIPSI PRODUK", "QTY", "HARGA SATUAN", "SUBTOTAL"]],
       body: tableBody,
@@ -222,7 +257,7 @@ export class CustomerInvoicePdfService {
     });
 
     // --- RINGKASAN TOTAL AKHIR ---
-    const finalY = ((doc as any).lastAutoTable?.finalY || 65) + 6;
+    const finalY = ((doc as any).lastAutoTable?.finalY || 70) + 6;
 
     doc.setDrawColor(241, 245, 249);
     doc.line(12, finalY - 3, 136, finalY - 3);
@@ -260,6 +295,15 @@ export class CustomerInvoicePdfService {
     doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]); // Warna tema
     doc.text(`IDR ${Math.round(invoice.total || 0).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
 
+    // 🚀 TERBILANG NOMINAL AKHIR (Bahasa Indonesia)
+    currentY += 4.5;
+    doc.setFont("Helvetica", "italic");
+    doc.setFontSize(6.8);
+    doc.setTextColor(100, 116, 139);
+    const terbilangText = `Terbilang: ${formatTerbilang(invoice.total)}`;
+    const terbilangSplit = doc.splitTextToSize(terbilangText, 58);
+    doc.text(terbilangSplit, 136, currentY, { align: "right" });
+
     // --- CATATAN & DETAIL REKENING TRANSFER ---
     let blockY = currentY + 12;
     if (invoice.notes || invoice.bankInfo) {
@@ -291,8 +335,8 @@ export class CustomerInvoicePdfService {
       }
     }
 
-    // --- FOOTER TANDA TANGAN ---
-    const footerY = 192;
+    // --- FOOTER TANDA TANGAN (Digeser naik ke Y=168 agar tanda tangan tidak gepeng / terpotong halaman) ---
+    const footerY = 168;
     doc.setDrawColor(241, 245, 249);
     doc.line(12, footerY - 4, 136, footerY - 4);
 
@@ -307,13 +351,13 @@ export class CustomerInvoicePdfService {
     doc.setTextColor(71, 85, 105);
     doc.text("Hormat Kami,", 136, footerY, { align: "right" });
     
-    // Tanda Tangan Gambar (jika ada)
+    // Tanda Tangan Gambar (Disesuaikan rasio agar tidak gepeng)
     let sigOffset = 0;
     if (invoice.signatureBase64 && typeof invoice.signatureBase64 === "string" && invoice.signatureBase64.startsWith("data:image/") && invoice.signatureBase64.length > 50) {
       try {
-        const sigFormat = this.detectImageFormat(invoice.signatureBase64);
-        doc.addImage(invoice.signatureBase64, sigFormat, 116, footerY + 1.5, 20, 8);
-        sigOffset = 9.5;
+        const sigFormat = CustomerInvoicePdfService.detectImageFormat(invoice.signatureBase64);
+        doc.addImage(invoice.signatureBase64, sigFormat, 118, footerY + 1.5, 16, 6);
+        sigOffset = 7.5;
       } catch (err) {
         console.error("Gagal menggambar tanda tangan ke PDF:", err);
       }
@@ -324,12 +368,12 @@ export class CustomerInvoicePdfService {
     doc.setTextColor(15, 23, 42);
     doc.text(sName, 136, footerY + 5.5 + sigOffset, { align: "right" });
 
-    // Nama Penanggung Jawab di bawah nama brand
+    // Nama Penanggung Jawab (PIC) - Tanpa tanda kurung ()
     if (invoice.sellerPic) {
       doc.setFont("Helvetica", "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(71, 85, 105);
-      doc.text(`(${invoice.sellerPic})`, 136, footerY + 9 + sigOffset, { align: "right" });
+      doc.text(invoice.sellerPic, 136, footerY + 9 + sigOffset, { align: "right" });
     }
 
     doc.save(`INVOICE-${invoice.invoiceNumber}.pdf`);
