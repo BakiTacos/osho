@@ -121,7 +121,7 @@ export function useInvoicingPage(currentUser: any) {
     };
   }, [currentUser?.uid]);
 
-  // Generate unique invoice number
+  // Generate unique invoice number with a non-obvious combination (includes date and time components)
   const generateInvoiceNumber = useCallback(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -129,11 +129,14 @@ export function useInvoicingPage(currentUser: any) {
     const dd = String(today.getDate()).padStart(2, "0");
     const dateStr = `${yyyy}${mm}${dd}`;
     
-    // Count invoices made today
-    const todayInvoices = invoices.filter(inv => inv.invoiceNumber.startsWith(`INV-${dateStr}-`));
-    const runningNum = String(todayInvoices.length + 1).padStart(3, "0");
-    return `INV-${dateStr}-${runningNum}`;
-  }, [invoices]);
+    // Generate non-obvious random combination: current seconds + current milliseconds (2-digits) + random 2-digits
+    const seconds = String(today.getSeconds()).padStart(2, "0");
+    const ms = String(today.getMilliseconds()).padStart(3, "0").substring(0, 2);
+    const rand = String(Math.floor(Math.random() * 90) + 10);
+    
+    const randomCombination = `${seconds}${ms}${rand}`; // e.g. 421589
+    return `INV-${dateStr}-${randomCombination}`;
+  }, []);
 
   // Handle Open Create Modal
   const openCreateModal = useCallback(() => {
@@ -183,37 +186,37 @@ export function useInvoicingPage(currentUser: any) {
     return { subtotal, total };
   }, [formItems, form.discount, form.tax]);
 
-  // Save/Update Invoice in Firestore
+  // Save/Update Invoice in Firestore (Safeguarded against undefined values)
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser?.uid) return alert("Sesi pengguna tidak valid.");
-    if (!form.recipient.trim()) return alert("Nama pelanggan wajib diisi.");
-    if (formItems.some(item => !item.productName.trim() || item.qty <= 0 || item.price < 0)) {
+    if (!(form.recipient || "").trim()) return alert("Nama pelanggan wajib diisi.");
+    if (formItems.some(item => !(item.productName || "").trim() || item.qty <= 0 || item.price < 0)) {
       return alert("Harap isi detail produk dengan benar (Kuantitas > 0 & Harga >= 0).");
     }
 
     const docData = {
-      invoiceNumber: form.invoiceNumber,
-      recipient: form.recipient.trim(),
-      date: form.date,
-      dueDate: form.dueDate,
+      invoiceNumber: form.invoiceNumber || "",
+      recipient: (form.recipient || "").trim(),
+      date: form.date || "",
+      dueDate: form.dueDate || "",
       items: formItems.map(item => ({
-        sku: item.sku.trim().toUpperCase(),
-        productName: item.productName.trim(),
-        qty: Number(item.qty),
-        price: Number(item.price)
+        sku: (item.sku || "").trim().toUpperCase(),
+        productName: (item.productName || "").trim(),
+        qty: Number(item.qty) || 0,
+        price: Number(item.price) || 0
       })),
       discount: Number(form.discount) || 0,
       tax: Number(form.tax) || 0,
-      subtotal: calculatedValues.subtotal,
-      total: calculatedValues.total,
-      notes: form.notes.trim(),
-      bankInfo: form.bankInfo.trim(),
-      logoBase64: form.logoBase64,
-      sellerName: form.sellerName.trim(),
-      sellerAddress: form.sellerAddress.trim(),
-      sellerContact: form.sellerContact.trim(),
-      themeColor: form.themeColor,
+      subtotal: Number(calculatedValues.subtotal) || 0,
+      total: Number(calculatedValues.total) || 0,
+      notes: (form.notes || "").trim(),
+      bankInfo: (form.bankInfo || "").trim(),
+      logoBase64: form.logoBase64 || "",
+      sellerName: (form.sellerName || "").trim(),
+      sellerAddress: (form.sellerAddress || "").trim(),
+      sellerContact: (form.sellerContact || "").trim(),
+      themeColor: form.themeColor || "#0047AB",
       updatedAt: serverTimestamp()
     };
 
@@ -239,11 +242,11 @@ export function useInvoicingPage(currentUser: any) {
     try {
       const docRef = doc(db, `users/${currentUser.uid}/settings`, "seller_profile");
       await setDoc(docRef, {
-        sellerName: form.sellerName.trim(),
-        sellerAddress: form.sellerAddress.trim(),
-        sellerContact: form.sellerContact.trim(),
-        logoBase64: form.logoBase64,
-        themeColor: form.themeColor,
+        sellerName: (form.sellerName || "").trim(),
+        sellerAddress: (form.sellerAddress || "").trim(),
+        sellerContact: (form.sellerContact || "").trim(),
+        logoBase64: form.logoBase64 || "",
+        themeColor: form.themeColor || "#0047AB",
         updatedAt: serverTimestamp()
       }, { merge: true });
       alert("✅ Profil penjual default berhasil diperbarui!");

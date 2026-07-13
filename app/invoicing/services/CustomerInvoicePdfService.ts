@@ -112,7 +112,7 @@ export class CustomerInvoicePdfService {
 
     // --- LOGO & IDENTITAS PERUSAHAAN (Kiri Atas) ---
     let startX = 12;
-    if (invoice.logoBase64 && invoice.logoBase64.trim() !== "") {
+    if (invoice.logoBase64 && typeof invoice.logoBase64 === "string" && invoice.logoBase64.startsWith("data:image/") && invoice.logoBase64.length > 50) {
       try {
         const imageFormat = this.detectImageFormat(invoice.logoBase64);
         // Render logo Base64 di koordinat X=12, Y=11 dengan ukuran 12x12 mm
