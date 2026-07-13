@@ -783,44 +783,51 @@ export function InvoiceModal({
                     </div>
                   </div>
 
-                  {/* Subtotals & footer signature preview */}
+                  {/* Subtotals & footer signature preview (Side-by-side layout preview) */}
                   <div className="mt-4 pt-3 border-t border-dashed border-slate-200">
-                    <div className="flex justify-between items-center text-[8.5px] font-bold text-slate-500">
-                      <span>Subtotal:</span>
-                      <span>Rp {Math.round(calculatedValues.subtotal).toLocaleString('id-ID')}</span>
-                    </div>
-                    {form.discount > 0 && (
-                      <div className="flex justify-between items-center text-[8.5px] font-bold text-red-500">
-                        <span>Diskon:</span>
-                        <span>-Rp {Math.round(form.discount).toLocaleString('id-ID')}</span>
-                      </div>
-                    )}
-                    {form.tax > 0 && (
-                      <div className="flex justify-between items-center text-[8.5px] font-bold text-blue-500">
-                        <span>Pajak ({form.tax}%):</span>
-                        <span>+{form.tax}%</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center text-xs font-black text-[#0F172A] mt-1 pt-1 border-t border-slate-100">
-                      <span>GRAND TOTAL:</span>
-                      <span style={{ color: form.themeColor }}>
-                        Rp {Math.round(calculatedValues.total).toLocaleString('id-ID')}
-                      </span>
-                    </div>
-
-                    {/* TERBILANG NOMINAL DI PREVIEW */}
-                    <div className="text-[6.5px] italic text-slate-500 text-right mt-1 font-bold break-words max-w-[200px] ml-auto">
-                      Terbilang: {formatTerbilang(calculatedValues.total)}
-                    </div>
-
-                    {/* bank transfer & notes inside mini simulator */}
-                    {(form.bankInfo || form.notes) && (
-                      <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl mt-3 text-[7.5px] space-y-1">
+                    <div className="grid grid-cols-12 gap-3">
+                      
+                      {/* Left: bank transfer & notes inside mini simulator */}
+                      <div className="col-span-6 space-y-1 bg-slate-50 border border-slate-100 p-1.5 rounded-lg text-[7px] overflow-hidden leading-tight">
+                        <span className="font-black text-slate-500 uppercase block border-b border-slate-200 pb-0.5 text-[6.5px]">Pembayaran</span>
                         {form.bankInfo && <p className="text-slate-500 truncate"><span className="font-bold text-slate-700">Bank:</span> {form.bankInfo.replace(/\n/g, ' • ')}</p>}
                         {form.notes && <p className="text-slate-500 truncate"><span className="font-bold text-slate-700">Memo:</span> {form.notes}</p>}
                       </div>
-                    )}
 
+                      {/* Right: Subtotal block */}
+                      <div className="col-span-6 flex flex-col justify-end text-[7.5px] font-bold text-slate-500">
+                        <div className="flex justify-between items-center">
+                          <span>Subtotal:</span>
+                          <span>Rp {Math.round(calculatedValues.subtotal).toLocaleString('id-ID')}</span>
+                        </div>
+                        {form.discount > 0 && (
+                          <div className="flex justify-between items-center text-red-500 mt-0.5">
+                            <span>Diskon:</span>
+                            <span>-Rp {Math.round(form.discount).toLocaleString('id-ID')}</span>
+                          </div>
+                        )}
+                        {form.tax > 0 && (
+                          <div className="flex justify-between items-center text-blue-500 mt-0.5">
+                            <span>Pajak ({form.tax}%):</span>
+                            <span>+{form.tax}%</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-[9px] font-black text-[#0F172A] mt-1 pt-1 border-t border-slate-100">
+                          <span>TOTAL:</span>
+                          <span style={{ color: form.themeColor }}>
+                            Rp {Math.round(calculatedValues.total).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* 🚀 TERBILANG NOMINAL DI PREVIEW (Paling Bawah setelah Pembayaran & Totals) */}
+                    <div className="text-[6.8px] italic text-slate-500 text-left mt-2.5 font-bold break-words border-t border-dotted border-slate-200 pt-1">
+                      Terbilang: {formatTerbilang(calculatedValues.total)}
+                    </div>
+
+                    {/* Footer Signature */}
                     <div className="mt-4 pt-2 border-t border-slate-100 flex justify-between items-end text-[7px] text-slate-400">
                       <span>Invoice ini diterbitkan secara digital.</span>
                       <div className="text-right flex flex-col items-end">

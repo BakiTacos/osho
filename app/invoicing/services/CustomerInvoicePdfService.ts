@@ -181,7 +181,7 @@ export class CustomerInvoicePdfService {
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
 
-    // 🚀 DUA KOLOM SEJAJAR: Data Pembeli di kiri, Detail Tanggal di kanan (agar alamat panjang tidak bertabrakan)
+    // DUA KOLOM SEJAJAR: Data Pembeli di kiri, Detail Tanggal di kanan (agar alamat panjang tidak bertabrakan)
     // --- KOLOM KIRI (X=12): DETAIL PELANGGAN ---
     doc.text("Nama Pelanggan", 12, 39);
     doc.text(":", 34, 39);
@@ -249,86 +249,95 @@ export class CustomerInvoicePdfService {
       }
     });
 
-    // --- RINGKASAN TOTAL AKHIR ---
+    // --- SIDE-BY-SIDE LAYOUT: Left (Payment & Notes) vs Right (Totals) ---
     const finalY = ((doc as any).lastAutoTable?.finalY || 70) + 6;
 
+    // Draw horizontal separator line for the whole table bottom
     doc.setDrawColor(241, 245, 249);
+    doc.setLineWidth(0.4);
     doc.line(12, finalY - 3, 136, finalY - 3);
 
-    let currentY = finalY;
-
-    // Subtotal
+    // ==========================================
+    // RIGHT SIDE: Totals (Subtotal, Tax, Discount, Grand Total)
+    // ==========================================
+    let rightY = finalY;
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
-    doc.text("Subtotal", 80, currentY);
-    doc.text(`Rp ${Math.round(invoice.subtotal || 0).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
+    doc.text("Subtotal", 80, rightY);
+    doc.text(`Rp ${Math.round(invoice.subtotal || 0).toLocaleString('id-ID')}`, 136, rightY, { align: "right" });
 
-    // Discount (jika ada)
     if (invoice.discount > 0) {
-      currentY += 4;
-      doc.text("Diskon", 80, currentY);
-      doc.text(`-Rp ${Math.round(invoice.discount).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
+      rightY += 4;
+      doc.text("Diskon", 80, rightY);
+      doc.text(`-Rp ${Math.round(invoice.discount).toLocaleString('id-ID')}`, 136, rightY, { align: "right" });
     }
 
-    // Tax (jika ada)
     if (invoice.tax > 0) {
-      currentY += 4;
-      doc.text(`Pajak (${invoice.tax}%)`, 80, currentY);
+      rightY += 4;
+      doc.text(`Pajak (${invoice.tax}%)`, 80, rightY);
       const taxAmount = ((invoice.subtotal || 0) - (invoice.discount || 0)) * (invoice.tax / 100);
-      doc.text(`+Rp ${Math.round(taxAmount).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
+      doc.text(`+Rp ${Math.round(taxAmount).toLocaleString('id-ID')}`, 136, rightY, { align: "right" });
     }
 
-    // Grand Total
-    currentY += 5;
+    rightY += 5;
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(15, 23, 42);
-    doc.text("GRAND TOTAL", 80, currentY);
-    doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]); // Warna tema
-    doc.text(`IDR ${Math.round(invoice.total || 0).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
+    doc.text("GRAND TOTAL", 80, rightY);
+    doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]);
+    doc.text(`IDR ${Math.round(invoice.total || 0).toLocaleString('id-ID')}`, 136, rightY, { align: "right" });
 
-    // TERBILANG NOMINAL AKHIR (Bahasa Indonesia)
-    currentY += 4.5;
+    // ==========================================
+    // LEFT SIDE: Payment Info & Notes
+    // ==========================================
+    let leftY = finalY;
+    if (invoice.notes || invoice.bankInfo) {
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text("INFORMASI PEMBAYARAN & CATATAN", 12, leftY);
+
+      // Garis pemisah antara header dan isi (sesuai permintaan user!)
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.line(12, leftY + 1.2, 74, leftY + 1.2);
+
+      leftY += 4.5;
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(6.8);
+      doc.setTextColor(71, 85, 105);
+
+      if (invoice.bankInfo) {
+        doc.setFont("Helvetica", "bold");
+        doc.text("Transfer Bank:", 12, leftY);
+        doc.setFont("Helvetica", "normal");
+        const splitBank = doc.splitTextToSize(invoice.bankInfo, 60);
+        doc.text(splitBank, 12, leftY + 3);
+        leftY += 3 + (splitBank.length * 3);
+      }
+
+      if (invoice.notes) {
+        doc.setFont("Helvetica", "bold");
+        doc.text("Catatan:", 12, leftY);
+        doc.setFont("Helvetica", "normal");
+        const splitNotes = doc.splitTextToSize(invoice.notes, 60);
+        doc.text(splitNotes, 12, leftY + 3);
+        leftY += 3 + (splitNotes.length * 3);
+      }
+    }
+
+    // ==========================================
+    // 🚀 TERBILANG NOMINAL AKHIR (Dipindahkan ke bawah Informasi Pembayaran dan isinya)
+    // ==========================================
+    const terbilangY = Math.max(leftY, rightY) + 5;
     doc.setFont("Helvetica", "italic");
     doc.setFontSize(6.8);
     doc.setTextColor(100, 116, 139);
     const terbilangText = `Terbilang: ${formatTerbilang(invoice.total)}`;
-    const terbilangSplit = doc.splitTextToSize(terbilangText, 58);
-    doc.text(terbilangSplit, 136, currentY, { align: "right" });
+    const terbilangSplit = doc.splitTextToSize(terbilangText, 124); // Spans full width
+    doc.text(terbilangSplit, 12, terbilangY);
 
-    // --- CATATAN & DETAIL REKENING TRANSFER ---
-    let blockY = currentY + 12;
-    if (invoice.notes || invoice.bankInfo) {
-      doc.setFont("Helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(15, 23, 42);
-      doc.text("INFORMASI PEMBAYARAN & CATATAN", 12, blockY);
-
-      doc.setFont("Helvetica", "normal");
-      doc.setFontSize(7);
-      doc.setTextColor(71, 85, 105);
-
-      if (invoice.bankInfo) {
-        blockY += 4.5;
-        doc.setFont("Helvetica", "bold");
-        doc.text("Transfer Bank:", 12, blockY);
-        doc.setFont("Helvetica", "normal");
-        const splitBank = doc.splitTextToSize(invoice.bankInfo, 60);
-        doc.text(splitBank, 12, blockY + 3.5);
-      }
-
-      if (invoice.notes) {
-        blockY += 4.5;
-        doc.setFont("Helvetica", "bold");
-        doc.text("Catatan:", 76, blockY);
-        doc.setFont("Helvetica", "normal");
-        const splitNotes = doc.splitTextToSize(invoice.notes, 60);
-        doc.text(splitNotes, 76, blockY + 3.5);
-      }
-    }
-
-    // --- FOOTER TANDA TANGAN (footerY = 168) ---
+    // --- FOOTER TANDA TANGAN ---
     const footerY = 168;
     doc.setDrawColor(241, 245, 249);
     doc.line(12, footerY - 4, 136, footerY - 4);
