@@ -725,31 +725,35 @@ export function InvoiceModal({
 
                     <div className="w-full h-px bg-slate-100 my-3" />
 
-                    {/* Metadata client (Urutan & Posisi disamakan dengan cetak PDF asli) */}
-                    <div className="grid grid-cols-1 gap-1 text-[8px] bg-slate-50 p-2.5 rounded-lg border border-slate-100 font-semibold text-slate-600">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Nama Pelanggan:</span>
-                        <span className="font-black text-slate-800 uppercase">{form.recipient || "-"}</span>
+                    {/* Metadata client (Dua kolom sejajar disamakan persis dengan cetak PDF 2 kolom) */}
+                    <div className="grid grid-cols-12 gap-2 text-[8px] bg-slate-50 p-2.5 rounded-lg border border-slate-100 font-semibold text-slate-600">
+                      
+                      {/* Kolom Kiri: Detail Klien */}
+                      <div className="col-span-7 space-y-1">
+                        <div>
+                          <span className="text-slate-400 block tracking-wider text-[7px] uppercase font-bold">Nama Pelanggan:</span>
+                          <span className="font-black text-slate-800 uppercase block truncate">{form.recipient || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block tracking-wider text-[7px] uppercase font-bold">Telp Pelanggan:</span>
+                          <span className="text-slate-700 font-bold block">{form.recipientPhone || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block tracking-wider text-[7px] uppercase font-bold">Alamat Pelanggan:</span>
+                          <span className="text-slate-700 block break-words leading-tight">{form.recipientAddress || "-"}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Telp Pelanggan:</span>
-                        <span className="font-bold text-slate-700">{form.recipientPhone || "-"}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Alamat Pelanggan:</span>
-                        <span className="font-bold text-slate-700 truncate max-w-[150px]">{form.recipientAddress || "-"}</span>
-                      </div>
-                      <div className="flex justify-between mt-0.5 pt-0.5 border-t border-dashed border-slate-200">
-                        <span className="text-slate-400">Tanggal Invoice:</span>
-                        <span className="text-slate-700">{formatDate(form.date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Jatuh Tempo:</span>
-                        <span className="text-red-500 font-black">{formatDate(form.dueDate)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Referensi Hari Ini:</span>
-                        <span className="text-slate-750 font-black">{form.invoiceNumber.split("-")[2] || "001"}</span>
+
+                      {/* Kolom Kanan: Detail Transaksi */}
+                      <div className="col-span-5 border-l border-slate-200 pl-2.5 space-y-1">
+                        <div>
+                          <span className="text-slate-400 block tracking-wider text-[7px] uppercase font-bold">Tanggal Invoice:</span>
+                          <span className="text-slate-700 block font-bold">{formatDate(form.date)}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block tracking-wider text-[7px] uppercase font-bold">Jatuh Tempo:</span>
+                          <span className="text-red-500 block font-black">{formatDate(form.dueDate)}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -804,7 +808,7 @@ export function InvoiceModal({
                       </span>
                     </div>
 
-                    {/* 🚀 TERBILANG NOMINAL DI PREVIEW */}
+                    {/* TERBILANG NOMINAL DI PREVIEW */}
                     <div className="text-[6.5px] italic text-slate-500 text-right mt-1 font-bold break-words max-w-[200px] ml-auto">
                       Terbilang: {formatTerbilang(calculatedValues.total)}
                     </div>
@@ -832,7 +836,7 @@ export function InvoiceModal({
 
                         <span className="font-black text-slate-800 uppercase block leading-none">{form.sellerName || "Simple and Yours"}</span>
                         {form.sellerPic && (
-                          <span className="text-slate-500 font-bold block mt-0.5">{form.sellerPic}</span> // 🚀 TANPA KURUNG ()
+                          <span className="text-slate-500 font-bold block mt-0.5">{form.sellerPic}</span>
                         )}
                       </div>
                     </div>

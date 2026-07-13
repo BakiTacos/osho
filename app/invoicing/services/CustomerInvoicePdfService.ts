@@ -55,7 +55,7 @@ export function formatTerbilang(amount: number): string {
 }
 
 export class CustomerInvoicePdfService {
-  // Helper untuk mengonversi Hex Color (#RRGGBB) ke RGB array (Dipanggil via nama kelas langsung)
+  // Helper untuk mengonversi Hex Color (#RRGGBB) ke RGB array
   public static hexToRgb(hex?: string): [number, number, number] {
     if (!hex) return [0, 71, 171]; // Default Cobalt Blue
     const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
@@ -181,38 +181,31 @@ export class CustomerInvoicePdfService {
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
 
-    // Label Column (X=12) | Colon (X=40) | Value (X=43)
+    // 🚀 DUA KOLOM SEJAJAR: Data Pembeli di kiri, Detail Tanggal di kanan (agar alamat panjang tidak bertabrakan)
+    // --- KOLOM KIRI (X=12): DETAIL PELANGGAN ---
     doc.text("Nama Pelanggan", 12, 39);
-    doc.text(":", 40, 39);
+    doc.text(":", 34, 39);
     doc.setFont("Helvetica", "bold");
-    doc.text(invoice.recipient || "-", 43, 39);
+    doc.text(invoice.recipient || "-", 37, 39);
     doc.setFont("Helvetica", "normal");
 
     doc.text("Telp Pelanggan", 12, 43);
-    doc.text(":", 40, 43);
-    doc.text(invoice.recipientPhone || "-", 43, 43);
+    doc.text(":", 34, 43);
+    doc.text(invoice.recipientPhone || "-", 37, 43);
 
-    doc.text("Alamat Pelanggan", 12, 47);
-    doc.text(":", 40, 47);
-    doc.text(invoice.recipientAddress || "-", 43, 47);
+    doc.text("Alamat", 12, 47);
+    doc.text(":", 34, 47);
+    const addressSplit = doc.splitTextToSize(invoice.recipientAddress || "-", 40); // Batasi lebar 40mm agar rapi dan wrap kebawah
+    doc.text(addressSplit, 37, 47);
 
-    doc.text("Tanggal Invoice", 12, 51);
-    doc.text(":", 40, 51);
-    doc.text(dateFormatted, 43, 51);
+    // --- KOLOM KANAN (X=80): DETAIL TANGGAL & TRANSAKSI ---
+    doc.text("Tanggal Invoice", 80, 39);
+    doc.text(":", 104, 39);
+    doc.text(dateFormatted, 107, 39);
 
-    doc.text("Jatuh Tempo", 12, 55);
-    doc.text(":", 40, 55);
-    doc.text(dueDateFormatted, 43, 55);
-
-    // Ekstrak Referensi Keberapa Hari Ini dari invoiceNumber (Bagian ke-3: INV-TANGGAL-SEQ-RAND)
-    const parts = invoice.invoiceNumber.split("-");
-    const seqIndex = parts.length >= 3 ? parts[2] : "001";
-
-    doc.text("Referensi Hari Ini", 12, 59);
-    doc.text(":", 40, 59);
-    doc.setFont("Helvetica", "bold");
-    doc.text(seqIndex, 43, 59);
-    doc.setFont("Helvetica", "normal");
+    doc.text("Jatuh Tempo", 80, 43);
+    doc.text(":", 104, 43);
+    doc.text(dueDateFormatted, 107, 43);
 
     // --- METADATA TABEL ITEM BARANG ---
     const items = invoice.items || [];
@@ -226,7 +219,7 @@ export class CustomerInvoicePdfService {
     ]);
 
     autoTable(doc, {
-      startY: 64, // Diturunkan agar tidak menimpa data metadata baru
+      startY: 58, // Y disesuaikan agar alamat wrap kebawah dengan rapi
       margin: { left: 12, right: 12 },
       head: [["NO", "SKU", "DESKRIPSI PRODUK", "QTY", "HARGA SATUAN", "SUBTOTAL"]],
       body: tableBody,
@@ -295,7 +288,7 @@ export class CustomerInvoicePdfService {
     doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]); // Warna tema
     doc.text(`IDR ${Math.round(invoice.total || 0).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
 
-    // 🚀 TERBILANG NOMINAL AKHIR (Bahasa Indonesia)
+    // TERBILANG NOMINAL AKHIR (Bahasa Indonesia)
     currentY += 4.5;
     doc.setFont("Helvetica", "italic");
     doc.setFontSize(6.8);
@@ -335,7 +328,7 @@ export class CustomerInvoicePdfService {
       }
     }
 
-    // --- FOOTER TANDA TANGAN (Digeser naik ke Y=168 agar tanda tangan tidak gepeng / terpotong halaman) ---
+    // --- FOOTER TANDA TANGAN (footerY = 168) ---
     const footerY = 168;
     doc.setDrawColor(241, 245, 249);
     doc.line(12, footerY - 4, 136, footerY - 4);
@@ -351,13 +344,26 @@ export class CustomerInvoicePdfService {
     doc.setTextColor(71, 85, 105);
     doc.text("Hormat Kami,", 136, footerY, { align: "right" });
     
-    // Tanda Tangan Gambar (Disesuaikan rasio agar tidak gepeng)
+    // Tanda Tangan Gambar (Dihitung rasio dynamic aspek rasionya secara matang agar ANTI-GEPENG)
     let sigOffset = 0;
     if (invoice.signatureBase64 && typeof invoice.signatureBase64 === "string" && invoice.signatureBase64.startsWith("data:image/") && invoice.signatureBase64.length > 50) {
       try {
         const sigFormat = CustomerInvoicePdfService.detectImageFormat(invoice.signatureBase64);
-        doc.addImage(invoice.signatureBase64, sigFormat, 118, footerY + 1.5, 16, 6);
-        sigOffset = 7.5;
+        const props = doc.getImageProperties(invoice.signatureBase64);
+        const ratio = props.width / props.height;
+        let sigWidth = 18;
+        let sigHeight = 18 / ratio;
+        
+        // Batasi tinggi maksimum agar tanda tangan rapi
+        if (sigHeight > 8) {
+          sigHeight = 8;
+          sigWidth = 8 * ratio;
+        }
+
+        // Tepi kanan sejajar dengan X=136
+        const sigX = 136 - sigWidth;
+        doc.addImage(invoice.signatureBase64, sigFormat, sigX, footerY + 1.5, sigWidth, sigHeight);
+        sigOffset = sigHeight + 1.5;
       } catch (err) {
         console.error("Gagal menggambar tanda tangan ke PDF:", err);
       }
