@@ -1,7 +1,7 @@
 // app/invoicing/page.tsx
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from "../../context/AuthContext";
 import { useInvoicingPage } from "./hooks/useInvoicingPage";
 import { CustomerInvoicePdfService } from "./services/CustomerInvoicePdfService";
@@ -9,11 +9,13 @@ import { InvoicingSummary } from "./components/InvoicingSummary";
 import { InvoicingFilters } from "./components/InvoicingFilters";
 import { InvoicingTable } from "./components/InvoicingTable";
 import { InvoiceModal } from "./components/InvoiceModal";
-import { PlusCircle, Loader2, FileSpreadsheet } from "lucide-react";
+import { SupplierRecapView } from "./components/SupplierRecapView";
+import { PlusCircle, Loader2 } from "lucide-react";
 
 export default function InvoicingPage() {
   const { currentUser } = useAuth();
   const state = useInvoicingPage(currentUser);
+  const [activeTab, setActiveTab] = useState("Invoices");
 
   if (!currentUser) {
     return (
@@ -50,12 +52,35 @@ export default function InvoicingPage() {
         </button>
       </div>
 
+      {/* 1.5 TAB NAVIGATION FOR SUPARTA */}
+      {currentUser?.email === "suparta.technica@gmail.com" && (
+        <div className="px-4 sm:px-10 mt-6 flex gap-6 border-b border-slate-200">
+          {["Invoices", "SupplierRecap"].map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`pb-3 text-xs sm:text-sm font-bold uppercase transition-all relative ${
+                activeTab === tab ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"
+              }`}
+            >
+              {tab === "Invoices" ? "Daftar Invoice" : "Rekap Supplier"}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#0047AB]" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 2. LOADER SHIELD */}
       {state.loading ? (
         <div className="flex flex-col items-center justify-center py-32 text-slate-400 gap-2">
           <Loader2 className="animate-spin text-[#0047AB]" size={28} />
           <p className="text-[9px] font-black uppercase tracking-widest">Memuat Data Invoice...</p>
         </div>
+      ) : activeTab === "SupplierRecap" && currentUser?.email === "suparta.technica@gmail.com" ? (
+        <SupplierRecapView invoices={state.invoices} />
       ) : (
         <>
           {/* 3. METRICS SUMMARY CARDS */}
@@ -94,6 +119,7 @@ export default function InvoicingPage() {
         calculatedValues={state.calculatedValues}
         onSubmit={state.handleSaveInvoice}
         onSaveSellerProfile={state.handleSaveSellerProfile}
+        isSuparta={currentUser?.email === "suparta.technica@gmail.com"}
       />
 
     </div>

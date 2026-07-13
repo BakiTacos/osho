@@ -8,6 +8,7 @@ export function useReportData(currentUser: any, selectedMonth: number, selectedY
   const [expenses, setExpenses] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [customerInvoices, setCustomerInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,11 +18,9 @@ export function useReportData(currentUser: any, selectedMonth: number, selectedY
       try {
         setLoading(true);
 
-        // Pembatasan tanggal awal dan akhir bulan pilihan secara presisi
         const startDate = new Date(selectedYear, selectedMonth, 1);
         const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
 
-        // 🚀 ONE-TIME FETCH (MENGUTAMAKAN LOCAL CACHE DEVICE - 0% BOROS)
         const salesQuery = query(
           collection(db, `users/${currentUser.uid}/sales`),
           where("createdAt", ">=", startDate),
@@ -43,22 +42,29 @@ export function useReportData(currentUser: any, selectedMonth: number, selectedY
           orderBy("createdAt", "desc")
         );
 
+        const customerInvoicesQuery = query(
+          collection(db, `users/${currentUser.uid}/customer_invoices`),
+          where("date", ">=", startDate.toISOString().split('T')[0]),
+          where("date", "<=", endDate.toISOString().split('T')[0])
+        );
+
         const productsQuery = query(
           collection(db, `users/${currentUser.uid}/products`),
           orderBy("name", "asc")
         );
 
-        // Eksekusi penarikan data secara kolektif paralel demi akselerasi kecepatan load
-        const [salesSnap, expensesSnap, invoicesSnap, productsSnap] = await Promise.all([
+        const [salesSnap, expensesSnap, invoicesSnap, customerInvoicesSnap, productsSnap] = await Promise.all([
           getDocs(salesQuery),
           getDocs(expensesQuery),
           getDocs(invoicesQuery),
+          getDocs(customerInvoicesQuery),
           getDocs(productsQuery)
         ]);
 
         setSales(salesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setExpenses(expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setInvoices(invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setCustomerInvoices(customerInvoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       } catch (err) {
@@ -71,5 +77,5 @@ export function useReportData(currentUser: any, selectedMonth: number, selectedY
     fetchReportSnapshot();
   }, [currentUser, selectedMonth, selectedYear]);
 
-  return { sales, expenses, products, invoices, loading };
+  return { sales, expenses, products, invoices, customerInvoices, loading };
 }

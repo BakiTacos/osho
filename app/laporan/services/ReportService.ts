@@ -11,11 +11,18 @@ export class ReportService {
     expenses: any[] = [],
     products: any[] = [],
     invoices: any[] = [],
+    customerInvoices: any[] = [],
     private selectedMonth: number,
     private selectedYear: number,
     private timeRange: string
   ) {
-    this.sales = sales || [];
+    const normalizedCustomerInvoices = (customerInvoices || []).map(inv => ({
+      ...inv,
+      hpp: typeof inv.hpp === 'number' ? inv.hpp : 0,
+      profit: typeof inv.profit === 'number' ? inv.profit : inv.total,
+      createdAt: inv.createdAt || inv.date || null
+    }));
+    this.sales = [...(sales || []), ...normalizedCustomerInvoices];
     this.expenses = expenses || [];
     this.products = products || [];
     this.invoices = invoices || [];

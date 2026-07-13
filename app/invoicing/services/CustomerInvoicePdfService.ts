@@ -7,6 +7,8 @@ export interface CustomerInvoiceItem {
   productName: string;
   qty: number;
   price: number;
+  commission?: number; // Kustom khusus Suparta
+  supplier?: string; // Kustom khusus Suparta
 }
 
 export interface CustomerInvoice {
@@ -32,6 +34,9 @@ export interface CustomerInvoice {
   themeColor?: string; // Warna tema hex kustom (misal: #0047AB)
   sellerPic?: string; // Nama Penanggung Jawab kustom
   signatureBase64?: string; // Foto tanda tangan Base64 kustom
+  totalCommission?: number; // Komisi total untuk rekap
+  hpp?: number;
+  profit?: number;
 }
 
 // Fungsi pembantu mengeja nominal angka ke teks Bahasa Indonesia
@@ -110,7 +115,7 @@ export class CustomerInvoicePdfService {
     }
   }
 
-  // 🚀 Compressor Gambar berbasis Canvas dengan output PNG agar mempertahankan transparansi (anti background hitam)
+  // Compressor Gambar berbasis Canvas dengan output PNG agar mempertahankan transparansi
   private static compressBase64Image(base64: string, maxDim = 150): Promise<string> {
     return new Promise((resolve) => {
       if (!base64 || base64.length < 25000) {
@@ -443,5 +448,129 @@ export class CustomerInvoicePdfService {
     }
 
     doc.save(`INVOICE-${invoice.invoiceNumber}.pdf`);
+  }
+
+  // 🚀 FITUR KHUSUS REKAP SUPPLIER (Untuk Suparta Technica)
+  public static generateSupplierRecapPdf(
+    supplierName: string,
+    startDateStr: string,
+    endDateStr: string,
+    recapItems: any[]
+  ) {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a5"
+    });
+
+    const sName = "SUPARTA TECHNICA";
+    
+    // Header Laporan
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text("LAPORAN REKAP PENJUALAN SUPPLIER", 12, 15);
+    
+    doc.setFontSize(7.5);
+    doc.setFont("Helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Supplier: ${supplierName.toUpperCase()}`, 12, 19.5);
+    doc.text(`Periode: ${CustomerInvoicePdfService.formatDateSafely(startDateStr)} s.d. ${CustomerInvoicePdfService.formatDateSafely(endDateStr)}`, 12, 23.5);
+
+    doc.setDrawColor(241, 245, 249);
+    doc.setLineWidth(0.4);
+    doc.line(12, 27, 136, 27);
+
+    // Table Data mapping
+    const tableBody = recapItems.map((item, index) => [
+      index + 1,
+      item.invoiceNumber,
+      CustomerInvoicePdfService.formatDateSafely(item.date),
+      item.recipient,
+      item.productName,
+      `${item.qty} Pcs`,
+      `Rp ${Math.round(item.price).toLocaleString('id-ID')}`,
+      `Rp ${Math.round(item.commission * item.qty).toLocaleString('id-ID')}`,
+      `Rp ${Math.round((item.price - item.commission) * item.qty).toLocaleString('id-ID')}`
+    ]);
+
+    autoTable(doc, {
+      startY: 30,
+      margin: { left: 12, right: 12 },
+      head: [["NO", "INV", "TGL", "PELANGGAN", "PRODUK", "QTY", "HARGA", "KOMISI", "SETOR"]],
+      body: tableBody,
+      theme: "striped",
+      headStyles: {
+        fillColor: [16, 185, 129], // Emerald Green aksen supplier
+        textColor: [255, 255, 255],
+        fontSize: 6.5,
+        fontStyle: "bold",
+        halign: "left"
+      },
+      bodyStyles: {
+        fontSize: 6,
+        textColor: [51, 65, 85]
+      },
+      columnStyles: {
+        0: { cellWidth: 6, halign: "center" },
+        1: { cellWidth: 14 },
+        2: { cellWidth: 14 },
+        3: { cellWidth: 16 },
+        4: { cellWidth: "auto" },
+        5: { cellWidth: 10, halign: "center" },
+        6: { cellWidth: 15, halign: "right" },
+        7: { cellWidth: 13, halign: "right" },
+        8: { cellWidth: 15, halign: "right" }
+      },
+      styles: {
+        cellPadding: 1.2
+      }
+    });
+
+    const finalY = ((doc as any).lastAutoTable?.finalY || 40) + 6;
+    doc.line(12, finalY - 3, 136, finalY - 3);
+
+    // Summary calculations
+    const totalJual = recapItems.reduce((acc, curr) => acc + (curr.price * curr.qty), 0);
+    const totalKomisi = recapItems.reduce((acc, curr) => acc + (curr.commission * curr.qty), 0);
+    const totalSetor = recapItems.reduce((acc, curr) => acc + ((curr.price - curr.commission) * curr.qty), 0);
+
+    let sumY = finalY;
+    doc.setFontSize(7.5);
+    doc.setFont("Helvetica", "normal");
+    doc.text("Total Penjualan Kotor:", 65, sumY);
+    doc.text(`Rp ${Math.round(totalJual).toLocaleString('id-ID')}`, 136, sumY, { align: "right" });
+
+    sumY += 4;
+    doc.text("Total Komisi (Hak Ruko):", 65, sumY);
+    doc.setTextColor(16, 185, 129); // emerald-600
+    doc.text(`Rp ${Math.round(totalKomisi).toLocaleString('id-ID')}`, 136, sumY, { align: "right" });
+
+    sumY += 5;
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("Helvetica", "bold");
+    doc.text("TOTAL SETOR (SUPPLIER):", 65, sumY);
+    doc.text(`Rp ${Math.round(totalSetor).toLocaleString('id-ID')}`, 136, sumY, { align: "right" });
+
+    // Footer info
+    const footerY = 180;
+    doc.line(12, footerY - 4, 136, footerY - 4);
+    doc.setFont("Helvetica", "italic");
+    doc.setFontSize(6);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Laporan ini diterbitkan secara digital oleh sistem.", 12, footerY);
+    doc.text("Harap dicocokkan dengan catatan fisik supplier masing-masing.", 12, footerY + 2.5);
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text("Dibuat Oleh,", 136, footerY, { align: "right" });
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    doc.text(sName, 136, footerY + 12, { align: "right" });
+
+    doc.save(`REKAP-SUPPLIER-${supplierName.toUpperCase().replace(/\s+/g, "_")}-${startDateStr}_to_${endDateStr}.pdf`);
   }
 }

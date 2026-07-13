@@ -17,6 +17,7 @@ interface InvoiceModalProps {
   calculatedValues: { subtotal: number; total: number };
   onSubmit: (e: React.FormEvent) => void;
   onSaveSellerProfile: () => void; // Simpan default seller profile
+  isSuparta: boolean;
 }
 
 // Helper untuk kompresi gambar client-side (menjamin ukuran file kecil dengan output PNG agar transparan tetap ada)
@@ -72,7 +73,8 @@ export function InvoiceModal({
   products,
   calculatedValues,
   onSubmit,
-  onSaveSellerProfile
+  onSaveSellerProfile,
+  isSuparta
 }: InvoiceModalProps) {
 
   const colorPresets = [
@@ -619,6 +621,38 @@ export function InvoiceModal({
                         </div>
                       </div>
 
+                      {/* 🚀 FORM KHUSUS SUPARTA: INPUT SUPPLIER & KOMISI */}
+                      {isSuparta && (
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center border-t border-slate-100/60 pt-2 mt-1">
+                          <div className="col-span-12 sm:col-span-6 space-y-0.5">
+                            <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">Supplier</span>
+                            <input
+                              type="text"
+                              required
+                              className="w-full bg-white py-1.5 px-2 rounded-lg text-xs font-bold border outline-none text-slate-700 focus:ring-1 focus:ring-emerald-500"
+                              placeholder="Nama Supplier"
+                              value={item.supplier || ""}
+                              onChange={e => handleItemChange(idx, 'supplier', e.target.value)}
+                            />
+                          </div>
+
+                          <div className="col-span-12 sm:col-span-6 space-y-0.5">
+                            <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">Komisi Didapat per Pcs</span>
+                            <div className="flex items-center bg-white border rounded-lg px-2 py-0.5 focus-within:ring-1 focus-within:ring-emerald-500">
+                              <span className="text-[9px] font-black text-slate-400 mr-0.5">Rp</span>
+                              <input
+                                type="number"
+                                required
+                                min="0"
+                                className="w-full bg-transparent text-xs font-black text-emerald-600 outline-none"
+                                placeholder="Komisi"
+                                value={item.commission || 0}
+                                onChange={e => handleItemChange(idx, 'commission', e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -818,6 +852,12 @@ export function InvoiceModal({
                             Rp {Math.round(calculatedValues.total).toLocaleString('id-ID')}
                           </span>
                         </div>
+                        {isSuparta && (
+                          <div className="flex justify-between items-center text-[7.5px] font-black text-emerald-600 mt-0.5 border-t border-slate-100 pt-0.5">
+                            <span>KOMISI:</span>
+                            <span>Rp {items.reduce((sum, it) => sum + ((Number(it.commission) || 0) * it.qty), 0).toLocaleString('id-ID')}</span>
+                          </div>
+                        )}
                       </div>
 
                     </div>

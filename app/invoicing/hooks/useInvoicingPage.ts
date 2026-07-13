@@ -162,7 +162,7 @@ export function useInvoicingPage(currentUser: any) {
       sellerPic: sellerProfile?.sellerPic || "",
       signatureBase64: sellerProfile?.signatureBase64 || ""
     });
-    setFormItems([{ sku: "", productName: "", qty: 1, price: 0 }]);
+    setFormItems([{ sku: "", productName: "", qty: 1, price: 0, commission: 0, supplier: "" }]);
     setIsModalOpen(true);
   }, [generateInvoiceNumber, initialFormState, sellerProfile]);
 
@@ -190,7 +190,18 @@ export function useInvoicingPage(currentUser: any) {
       sellerPic: invoice.sellerPic || "",
       signatureBase64: invoice.signatureBase64 || ""
     });
-    setFormItems(invoice.items && invoice.items.length > 0 ? [...invoice.items] : [{ sku: "", productName: "", qty: 1, price: 0 }]);
+    setFormItems(
+      invoice.items && invoice.items.length > 0
+        ? invoice.items.map((it: any) => ({
+            sku: it.sku || "",
+            productName: it.productName || "",
+            qty: Number(it.qty) || 0,
+            price: Number(it.price) || 0,
+            commission: Number(it.commission) || 0,
+            supplier: it.supplier || ""
+          }))
+        : [{ sku: "", productName: "", qty: 1, price: 0, commission: 0, supplier: "" }]
+    );
     setIsModalOpen(true);
   }, []);
 
@@ -212,6 +223,24 @@ export function useInvoicingPage(currentUser: any) {
       return alert("Harap isi detail produk dengan benar (Kuantitas > 0 & Harga >= 0).");
     }
 
+    // Hitung HPP dan Profit
+    const totalHpp = formItems.reduce((sum, item) => {
+      const prod = products.find(
+        p => p.sku?.toUpperCase() === item.sku?.toUpperCase() || p.name?.toLowerCase() === item.productName?.toLowerCase()
+      );
+      const cost = prod ? (Number(prod.costPrice || prod.capitalPrice) || 0) : 0;
+      return sum + (cost * item.qty);
+    }, 0);
+
+    const revenue = Math.max(0, calculatedValues.subtotal - Number(form.discount));
+    const profit = Math.max(0, revenue - totalHpp);
+
+    // Hitung total komisi khusus Suparta
+    const isSuparta = currentUser?.email === "suparta.technica@gmail.com";
+    const totalCommission = isSuparta
+      ? formItems.reduce((sum, item) => sum + ((Number(item.commission) || 0) * item.qty), 0)
+      : 0;
+
     const docData = {
       invoiceNumber: form.invoiceNumber || "",
       recipient: (form.recipient || "").trim(),
@@ -223,12 +252,17 @@ export function useInvoicingPage(currentUser: any) {
         sku: (item.sku || "").trim().toUpperCase(),
         productName: (item.productName || "").trim(),
         qty: Number(item.qty) || 0,
-        price: Number(item.price) || 0
+        price: Number(item.price) || 0,
+        commission: isSuparta ? (Number(item.commission) || 0) : 0,
+        supplier: isSuparta ? (item.supplier || "").trim() : ""
       })),
       discount: Number(form.discount) || 0,
       tax: Number(form.tax) || 0,
       subtotal: Number(calculatedValues.subtotal) || 0,
       total: Number(calculatedValues.total) || 0,
+      hpp: totalHpp,
+      profit: profit,
+      totalCommission: totalCommission,
       notes: (form.notes || "").trim(),
       bankInfo: (form.bankInfo || "").trim(),
       logoBase64: form.logoBase64 || "",

@@ -21,12 +21,12 @@ export default function LaporanPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
 
-  const { sales, expenses, products, invoices, loading } = useReportData(currentUser, selectedMonth, selectedYear);
+  const { sales, expenses, products, invoices, customerInvoices, loading } = useReportData(currentUser, selectedMonth, selectedYear);
 
   const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   const years = [2024, 2025, 2026];
 
-  const reportService = new ReportService(sales, expenses, products, invoices, selectedMonth, selectedYear, timeRange);
+  const reportService = new ReportService(sales, expenses, products, invoices, customerInvoices, selectedMonth, selectedYear, timeRange);
   const deepDetail = reportService.getDeepFinancialDetail();
 
   const financialSummary = reportService.getFinancialSummary();
