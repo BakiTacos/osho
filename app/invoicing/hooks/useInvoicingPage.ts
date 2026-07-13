@@ -130,7 +130,7 @@ export function useInvoicingPage(currentUser: any) {
     };
   }, [currentUser?.uid]);
 
-  // Generate unique invoice number with sequential index in middle: INV-YYYYMMDD-seqIndex-random
+  // Generate unique invoice number: INV-YYYYMMDD-random (e.g. INV-20260713-398271)
   const generateInvoiceNumber = useCallback(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -138,17 +138,11 @@ export function useInvoicingPage(currentUser: any) {
     const dd = String(today.getDate()).padStart(2, "0");
     const dateStr = `${yyyy}${mm}${dd}`;
     
-    // Count invoices made today to insert sequence index (001, 002, etc.)
-    const todayInvoices = invoices.filter(inv => inv.invoiceNumber.startsWith(`INV-${dateStr}-`));
-    const seqIndex = String(todayInvoices.length + 1).padStart(3, "0");
+    // Generate 6-digit random code
+    const randomPart = Math.floor(100000 + Math.random() * 900000);
     
-    const seconds = String(today.getSeconds()).padStart(2, "0");
-    const ms = String(today.getMilliseconds()).padStart(3, "0").substring(0, 2);
-    const rand = String(Math.floor(Math.random() * 90) + 10);
-    const randomCombination = `${seconds}${ms}${rand}`;
-    
-    return `INV-${dateStr}-${seqIndex}-${randomCombination}`;
-  }, [invoices]);
+    return `INV-${dateStr}-${randomPart}`;
+  }, []);
 
   // Handle Open Create Modal
   const openCreateModal = useCallback(() => {

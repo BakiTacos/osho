@@ -110,10 +110,61 @@ export class CustomerInvoicePdfService {
     }
   }
 
-  public static generatePdf(invoice: CustomerInvoice) {
+  // 🚀 Compressor Gambar berbasis Canvas untuk mencegah file PDF berukuran raksasa
+  private static compressBase64Image(base64: string, maxDim = 150): Promise<string> {
+    return new Promise((resolve) => {
+      if (!base64 || base64.length < 25000) {
+        // Jika file sudah kecil (< 25KB), tidak usah dikompres ulang
+        return resolve(base64);
+      }
+      const img = new Image();
+      img.src = base64;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.7)); // Kompres menjadi JPEG 70% berkualitas tinggi namun sangat ringan
+        } else {
+          resolve(base64);
+        }
+      };
+      img.onerror = () => resolve(base64);
+    });
+  }
+
+  // DIUBAH MENJADI ASYNC AGAR DAPAT MELAKUKAN KOMPRESI ASYNC PADA GAMBAR
+  public static async generatePdf(invoice: CustomerInvoice) {
     if (!invoice) return alert("❌ Data invoice kosong, gagal memproses.");
 
-    // Gunakan inisialisasi kelas secara langsung untuk menghindari error kehilangan scope "this" saat callback
+    // Kompresi aset Base64 secara asinkron agar ukuran file PDF tetap sangat kecil (<100KB)
+    let logoBase64 = invoice.logoBase64 || "";
+    let signatureBase64 = invoice.signatureBase64 || "";
+
+    if (logoBase64) {
+      logoBase64 = await CustomerInvoicePdfService.compressBase64Image(logoBase64, 150);
+    }
+    if (signatureBase64) {
+      signatureBase64 = await CustomerInvoicePdfService.compressBase64Image(signatureBase64, 150);
+    }
+
     const dateFormatted = CustomerInvoicePdfService.formatDateSafely(invoice.date);
     const dueDateFormatted = CustomerInvoicePdfService.formatDateSafely(invoice.dueDate);
     const rgbColor = CustomerInvoicePdfService.hexToRgb(invoice.themeColor);
@@ -131,10 +182,10 @@ export class CustomerInvoicePdfService {
 
     // --- LOGO & IDENTITAS PERUSAHAAN (Kiri Atas) ---
     let startX = 12;
-    if (invoice.logoBase64 && typeof invoice.logoBase64 === "string" && invoice.logoBase64.startsWith("data:image/") && invoice.logoBase64.length > 50) {
+    if (logoBase64 && logoBase64.startsWith("data:image/") && logoBase64.length > 50) {
       try {
-        const imageFormat = CustomerInvoicePdfService.detectImageFormat(invoice.logoBase64);
-        doc.addImage(invoice.logoBase64, imageFormat, 12, 11, 12, 12);
+        const imageFormat = CustomerInvoicePdfService.detectImageFormat(logoBase64);
+        doc.addImage(logoBase64, imageFormat, 12, 11, 12, 12);
         startX = 27; // Geser teks identitas ke kanan jika ada logo
       } catch (err) {
         console.error("Gagal menggambar logo ke PDF:", err);
@@ -298,7 +349,7 @@ export class CustomerInvoicePdfService {
       doc.setTextColor(15, 23, 42);
       doc.text("INFORMASI PEMBAYARAN & CATATAN", 12, leftY);
 
-      // Garis pemisah antara header dan isi (sesuai permintaan user!)
+      // Garis pemisah antara header dan isi
       doc.setDrawColor(226, 232, 240); // slate-200
       doc.line(12, leftY + 1.2, 74, leftY + 1.2);
 
@@ -327,7 +378,7 @@ export class CustomerInvoicePdfService {
     }
 
     // ==========================================
-    // 🚀 TERBILANG NOMINAL AKHIR (Dipindahkan ke bawah Informasi Pembayaran dan isinya)
+    // TERBILANG NOMINAL AKHIR (Dipindahkan ke bawah Informasi Pembayaran dan isinya)
     // ==========================================
     const terbilangY = Math.max(leftY, rightY) + 5;
     doc.setFont("Helvetica", "italic");
@@ -355,10 +406,10 @@ export class CustomerInvoicePdfService {
     
     // Tanda Tangan Gambar (Dihitung rasio dynamic aspek rasionya secara matang agar ANTI-GEPENG)
     let sigOffset = 0;
-    if (invoice.signatureBase64 && typeof invoice.signatureBase64 === "string" && invoice.signatureBase64.startsWith("data:image/") && invoice.signatureBase64.length > 50) {
+    if (signatureBase64 && signatureBase64.startsWith("data:image/") && signatureBase64.length > 50) {
       try {
-        const sigFormat = CustomerInvoicePdfService.detectImageFormat(invoice.signatureBase64);
-        const props = doc.getImageProperties(invoice.signatureBase64);
+        const sigFormat = CustomerInvoicePdfService.detectImageFormat(signatureBase64);
+        const props = doc.getImageProperties(signatureBase64);
         const ratio = props.width / props.height;
         let sigWidth = 18;
         let sigHeight = 18 / ratio;
@@ -371,7 +422,7 @@ export class CustomerInvoicePdfService {
 
         // Tepi kanan sejajar dengan X=136
         const sigX = 136 - sigWidth;
-        doc.addImage(invoice.signatureBase64, sigFormat, sigX, footerY + 1.5, sigWidth, sigHeight);
+        doc.addImage(signatureBase64, sigFormat, sigX, footerY + 1.5, sigWidth, sigHeight);
         sigOffset = sigHeight + 1.5;
       } catch (err) {
         console.error("Gagal menggambar tanda tangan ke PDF:", err);
