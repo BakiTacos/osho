@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Save, Calendar, User, FileText, Settings2, Percent } from 'lucide-react';
+import { X, Plus, Trash2, Save, Calendar, User, FileText, Image as ImageIcon, Palette, ShieldCheck, Mail, MapPin } from 'lucide-react';
 import { CustomerInvoiceItem } from '../services/CustomerInvoicePdfService';
 
 interface InvoiceModalProps {
@@ -31,7 +31,14 @@ export function InvoiceModal({
   onSubmit
 }: InvoiceModalProps) {
 
-  const [activeCatalogRow, setActiveCatalogRow] = useState<number | null>(null);
+  const colorPresets = [
+    { name: "Cobalt Blue", hex: "#0047AB" },
+    { name: "Emerald Green", hex: "#10B981" },
+    { name: "Ruby Red", hex: "#EF4444" },
+    { name: "Charcoal Black", hex: "#1E293B" },
+    { name: "Royal Purple", hex: "#7C3AED" },
+    { name: "Deep Wine", hex: "#991B1B" }
+  ];
 
   if (!isOpen) return null;
 
@@ -72,8 +79,29 @@ export function InvoiceModal({
         price: selectedProd.price || 0
       };
       setItems(newItems);
-      setActiveCatalogRow(null);
     }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validasi ukuran (maks 1MB agar tidak melampaui limit payload Firestore)
+      if (file.size > 1024 * 1024) {
+        alert("Ukuran gambar terlalu besar! Maksimal ukuran logo adalah 1MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setForm({ ...form, logoBase64: event.target.result as string });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setForm({ ...form, logoBase64: "" });
   };
 
   return (
@@ -102,6 +130,138 @@ export function InvoiceModal({
         {/* FORM CONTAINER */}
         <form onSubmit={onSubmit} className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-0.5">
           
+          {/* BRANDING, COLOR, & LOGO CUSTOMIZER (BARU & PREMIUM) */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 p-4 sm:p-6 rounded-3xl border border-slate-100">
+            
+            {/* Kustomisasi Logo */}
+            <div className="md:col-span-4 space-y-2">
+              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                <ImageIcon size={12} className="text-slate-400" />
+                <span>Logo Toko Penjual</span>
+              </label>
+              
+              {form.logoBase64 ? (
+                <div className="relative w-full h-24 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 group">
+                  <img src={form.logoBase64} alt="Preview Logo" className="max-h-full max-w-full object-contain" />
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="absolute -top-2 -right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-md cursor-pointer"
+                    title="Hapus Logo"
+                  >
+                    <X size={12} strokeWidth={3} />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative w-full h-24 bg-white border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center hover:border-[#0047AB] transition-colors cursor-pointer p-2">
+                  <ImageIcon size={22} className="text-slate-300 mb-1" />
+                  <span className="text-[9px] font-black text-slate-400 uppercase text-center">Pilih Gambar (Maks 1MB)</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Kustomisasi Warna Tema */}
+            <div className="md:col-span-8 space-y-2">
+              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                <Palette size={12} className="text-slate-400" />
+                <span>Warna Tema Invoice (PDF)</span>
+              </label>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-white p-3.5 rounded-xl border border-slate-200/60">
+                <div className="sm:col-span-8 flex flex-wrap gap-1.5 items-center">
+                  {colorPresets.map((preset) => (
+                    <button
+                      key={preset.hex}
+                      type="button"
+                      onClick={() => setForm({ ...form, themeColor: preset.hex })}
+                      className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${
+                        form.themeColor === preset.hex ? "scale-110 ring-2 ring-slate-400" : "opacity-80 hover:opacity-100"
+                      }`}
+                      style={{ backgroundColor: preset.hex }}
+                      title={preset.name}
+                    />
+                  ))}
+                </div>
+                
+                <div className="sm:col-span-4 flex items-center gap-1 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 pl-0 sm:pl-3">
+                  <input
+                    type="color"
+                    value={form.themeColor}
+                    onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
+                    className="w-6 h-6 rounded-md border-0 cursor-pointer p-0 shrink-0"
+                  />
+                  <input
+                    type="text"
+                    value={form.themeColor}
+                    onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
+                    className="w-full bg-slate-50 text-[10px] font-black text-center uppercase tracking-wide py-1 rounded border-none outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* EDITABLE SELLER INFORMATION */}
+          <div className="space-y-3 bg-slate-50/50 p-4 sm:p-6 rounded-3xl border border-slate-100">
+            <h5 className="text-[10px] font-black uppercase text-[#0047AB] tracking-widest">
+              Informasi Pengirim (Penjual)
+            </h5>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                  <ShieldCheck size={12} className="text-slate-400" />
+                  <span>Nama Penjual / Ruko</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Simple and Yours"
+                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
+                  value={form.sellerName}
+                  onChange={e => setForm({ ...form, sellerName: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                  <MapPin size={12} className="text-slate-400" />
+                  <span>Alamat Penjual</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Tangerang, Banten, Indonesia"
+                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
+                  value={form.sellerAddress}
+                  onChange={e => setForm({ ...form, sellerAddress: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                  <Mail size={12} className="text-slate-400" />
+                  <span>Kontak / Email Penjual</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="sny.osho@gmail.com"
+                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
+                  value={form.sellerContact}
+                  onChange={e => setForm({ ...form, sellerContact: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+
           {/* CLIENT & METADATA SECTION */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50/50 p-4 sm:p-6 rounded-3xl border border-slate-100">
             {/* Invoice Number */}
@@ -135,23 +295,8 @@ export function InvoiceModal({
               />
             </div>
 
-            {/* Status Selector */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                <Settings2 size={12} className="text-slate-400" />
-                <span>Status Pembayaran</span>
-              </label>
-              <select
-                className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-black text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                value={form.status}
-                onChange={e => setForm({ ...form, status: e.target.value })}
-              >
-                <option value="DRAFT">DRAFT</option>
-                <option value="BELUM BAYAR">BELUM BAYAR</option>
-                <option value="LUNAS">LUNAS</option>
-                <option value="JATUH TEMPO">JATUH TEMPO</option>
-              </select>
-            </div>
+            {/* Spacer / Reserved */}
+            <div className="hidden sm:block"></div>
 
             {/* Date Pickers */}
             <div className="space-y-1">
@@ -328,7 +473,7 @@ export function InvoiceModal({
 
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                    <span>Pajak PPN</span> <Percent size={10} className="text-slate-400" />
+                    <span>Pajak PPN</span> <Palette size={10} className="text-slate-400" />
                   </label>
                   <select
                     className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-black text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
@@ -411,7 +556,7 @@ export function InvoiceModal({
               </div>
               <div className="mt-1">
                 <span className="text-[10px] font-black text-slate-500 uppercase">GRAND TOTAL:</span>
-                <span className="text-lg font-black text-[#0047AB] ml-2">
+                <span className="text-lg font-black text-[#0047AB] ml-2" style={{ color: form.themeColor }}>
                   Rp {Math.round(calculatedValues.total).toLocaleString('id-ID')}
                 </span>
               </div>
@@ -428,6 +573,7 @@ export function InvoiceModal({
               <button
                 type="submit"
                 className="cursor-pointer flex-[2] sm:flex-none px-8 py-3.5 bg-[#0047AB] hover:bg-blue-800 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md shadow-blue-100 transition-all flex items-center justify-center gap-1.5"
+                style={{ backgroundColor: form.themeColor }}
               >
                 <Save size={14} /> <span>{mode === "ADD" ? "Simpan Invoice" : "Perbarui Invoice"}</span>
               </button>

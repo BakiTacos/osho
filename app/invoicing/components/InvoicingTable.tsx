@@ -2,14 +2,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { MoreVertical, Edit3, Trash2, Receipt, Calendar, FileDown, Eye } from "lucide-react";
+import { MoreVertical, Edit3, Trash2, Receipt, Calendar, FileDown } from "lucide-react";
 import { CustomerInvoice } from '../services/CustomerInvoicePdfService';
 
 interface InvoicingTableProps {
   items: CustomerInvoice[];
   onEdit: (invoice: CustomerInvoice) => void;
   onDelete: (id: string, invoiceNumber: string) => void;
-  onToggleStatus: (id: string, status: string) => void;
   onDownloadPdf: (invoice: CustomerInvoice) => void;
 }
 
@@ -17,23 +16,9 @@ export function InvoicingTable({
   items,
   onEdit,
   onDelete,
-  onToggleStatus,
   onDownloadPdf
 }: InvoicingTableProps) {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case "LUNAS":
-        return "bg-emerald-50 text-emerald-600 border border-emerald-100";
-      case "BELUM BAYAR":
-        return "bg-amber-50 text-amber-600 border border-amber-100";
-      case "JATUH TEMPO":
-        return "bg-red-50 text-red-600 border border-red-100";
-      default: // DRAFT
-        return "bg-slate-50 text-slate-500 border border-slate-100";
-    }
-  };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
@@ -52,7 +37,6 @@ export function InvoicingTable({
               <tr>
                 <th className="px-6 py-4 sm:px-8">Invoice / Pelanggan</th>
                 <th className="px-4 py-4 sm:px-6">Tanggal & Jatuh Tempo</th>
-                <th className="px-4 py-4 sm:px-6">Status</th>
                 <th className="px-4 py-4 sm:px-6 text-right">Total Tagihan</th>
                 <th className="px-6 py-4 sm:px-8 text-right">Aksi</th>
               </tr>
@@ -80,18 +64,6 @@ export function InvoicingTable({
                       <Calendar size={12} className="text-red-300" />
                       <span>Jatuh Tempo: {formatDate(inv.dueDate)}</span>
                     </div>
-                  </td>
-
-                  {/* Status Badge */}
-                  <td className="px-4 py-4 sm:px-6">
-                    <button
-                      type="button"
-                      onClick={() => inv.id && onToggleStatus(inv.id, inv.status)}
-                      title="Klik untuk mengubah status"
-                      className={`cursor-pointer px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-tight transition-all active:scale-95 ${getStatusStyle(inv.status)}`}
-                    >
-                      {inv.status}
-                    </button>
                   </td>
 
                   {/* Grand Total */}
@@ -167,14 +139,6 @@ export function InvoicingTable({
                     </span>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => inv.id && onToggleStatus(inv.id, inv.status)}
-                  className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest shrink-0 transition-all active:scale-95 ${getStatusStyle(inv.status)}`}
-                >
-                  {inv.status}
-                </button>
               </div>
 
               {/* Dates */}

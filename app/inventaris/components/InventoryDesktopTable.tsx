@@ -18,12 +18,13 @@ interface DesktopTableProps {
   onUpdateStock: (id: string) => void;
   onDelete: (id: string) => void;
   viewMode: "semua" | "harga" | "stok";
+  selectedProfits: string[];
 }
 
 export const InventoryDesktopTable = ({ 
   items, inventoryService, activeMenuId, setActiveMenuId, 
   editingStockId, setEditingStockId, tempStock, setTempStock, 
-  onUpdateStock, onDelete, viewMode 
+  onUpdateStock, onDelete, viewMode, selectedProfits 
 }: DesktopTableProps) => {
   
   const showHarga = viewMode === "semua" || viewMode === "harga";
@@ -50,9 +51,18 @@ export const InventoryDesktopTable = ({
                 <>
                   <th className="px-6 py-5 text-right">Harga Modal</th>
                   <th className="px-6 py-5 text-right">Harga Jual</th>
-                  <th className="px-4 py-5 text-center bg-orange-50/20 border-x border-orange-100/50">Profit Shopee</th>
-                  <th className="px-4 py-5 text-center bg-slate-50 border-x border-slate-100">Profit TikTok (Zonasi)</th>
-                  <th className="px-4 py-5 text-center bg-blue-50/20 border-x border-blue-100/50">Profit Lazada</th>
+                  {selectedProfits.includes("shopee") && (
+                    <th className="px-4 py-5 text-center bg-orange-50/20 border-x border-orange-100/50">Profit Shopee</th>
+                  )}
+                  {selectedProfits.includes("tiktok") && (
+                    <th className="px-4 py-5 text-center bg-slate-50 border-x border-slate-100">Profit TikTok (Zonasi)</th>
+                  )}
+                  {selectedProfits.includes("lazada") && (
+                    <th className="px-4 py-5 text-center bg-blue-50/20 border-x border-blue-100/50">Profit Lazada</th>
+                  )}
+                  {selectedProfits.includes("offline") && (
+                    <th className="px-4 py-5 text-center bg-indigo-50/20 border-x border-indigo-100/50">Profit Offline</th>
+                  )}
                 </>
               )}
               {showStok && <th className="px-6 py-5 text-center">Stok Gudang</th>}
@@ -90,55 +100,78 @@ export const InventoryDesktopTable = ({
                       <td className="px-6 py-5 text-right font-black text-xs text-[#0F172A]">Rp {(estData.actualCost * estData.multiplier).toLocaleString('id-ID')}</td>
                       <td className="px-6 py-5 text-right font-black text-xs text-[#0F172A]">Rp {p.price.toLocaleString('id-ID')}</td>
                       
-                      <td className="px-4 py-5 text-center text-xs font-black">
-                        {estData.results["shopee"] ? (
-                          <div className="flex flex-col items-center">
-                            <span className={estData.results["shopee"].netProfit > 0 ? "text-emerald-600" : "text-red-500"}>
-                              Rp {Math.round(estData.results["shopee"].netProfit).toLocaleString('id-ID')}
-                            </span>
-                            <span className="text-[9px] font-black text-slate-400 mt-0.5">({renderMargin(estData.results["shopee"])})</span>
-                          </div>
-                        ) : <span className="text-slate-300 italic">N/A</span>}
-                      </td>
-
-                      <td className="px-4 py-5 text-center bg-slate-50 border-x border-slate-100 relative group/tk">
-                        <div className="flex flex-col gap-1.5 justify-center items-center">
-                          <div className="flex flex-col items-center text-[11px]">
-                            {txLokal ? (
-                              <>
-                                <span className={txLokal.netProfit > 0 ? "text-emerald-600 font-black" : "text-red-500 font-black"}>
-                                  Lokal: Rp {Math.round(txLokal.netProfit).toLocaleString('id-ID')}
-                                </span>
-                                <span className="text-[9px] font-black text-slate-400">({renderMargin(txLokal)})</span>
-                              </>
-                            ) : <span className="text-slate-300 italic">Lokal: N/A</span>}
-                          </div>
-
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/tk:block w-64 bg-[#0F172A] text-white p-4 rounded-2xl shadow-xl z-[120] pointer-events-none text-left">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-700 pb-1 text-center">Rincian Komparasi Regional Lengkap</p>
-                            <div className="space-y-1.5">
-                              {inventoryService.getTikTokRegionBreakdown(p).map((reg: any, idx: number) => (
-                                <div key={idx} className="flex justify-between items-center text-[10px]">
-                                  <span className="text-slate-400 uppercase tracking-tight">{reg.regionName}</span>
-                                  <span className={`font-black ${reg.netProfit > 0 ? "text-emerald-400" : "text-red-400"}`}>Rp {Math.round(reg.netProfit).toLocaleString('id-ID')}</span>
-                                </div>
-                              ))}
+                      {selectedProfits.includes("shopee") && (
+                        <td className="px-4 py-5 text-center text-xs font-black">
+                          {estData.results["shopee"] ? (
+                            <div className="flex flex-col items-center">
+                              <span className={estData.results["shopee"].netProfit > 0 ? "text-emerald-600" : "text-red-500"}>
+                                Rp {Math.round(estData.results["shopee"].netProfit).toLocaleString('id-ID')}
+                              </span>
+                              <span className="text-[9px] font-black text-slate-400 mt-0.5">({renderMargin(estData.results["shopee"])})</span>
                             </div>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-[#0F172A] rotate-45 -mt-1"></div>
-                          </div>
-                        </div>
-                      </td>
+                          ) : <span className="text-slate-300 italic">N/A</span>}
+                        </td>
+                      )}
 
-                      <td className="px-4 py-5 text-center text-xs font-black">
-                        {estData.results["lazada"] ? (
-                          <div className="flex flex-col items-center">
-                            <span className={estData.results["lazada"].netProfit > 0 ? "text-emerald-600" : "text-red-500"}>
-                              Rp {Math.round(estData.results["lazada"].netProfit).toLocaleString('id-ID')}
-                            </span>
-                            <span className="text-[9px] font-black text-slate-400 mt-0.5">({renderMargin(estData.results["lazada"])})</span>
+                      {selectedProfits.includes("tiktok") && (
+                        <td className="px-4 py-5 text-center bg-slate-50 border-x border-slate-100 relative group/tk">
+                          <div className="flex flex-col gap-1.5 justify-center items-center">
+                            <div className="flex flex-col items-center text-[11px]">
+                              {txLokal ? (
+                                <>
+                                  <span className={txLokal.netProfit > 0 ? "text-emerald-600 font-black" : "text-red-500 font-black"}>
+                                    Lokal: Rp {Math.round(txLokal.netProfit).toLocaleString('id-ID')}
+                                  </span>
+                                  <span className="text-[9px] font-black text-slate-400">({renderMargin(txLokal)})</span>
+                                </>
+                              ) : <span className="text-slate-300 italic">Lokal: N/A</span>}
+                            </div>
+
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/tk:block w-64 bg-[#0F172A] text-white p-4 rounded-2xl shadow-xl z-[120] pointer-events-none text-left">
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-700 pb-1 text-center">Rincian Komparasi Regional Lengkap</p>
+                              <div className="space-y-1.5">
+                                {inventoryService.getTikTokRegionBreakdown(p).map((reg: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between items-center text-[10px]">
+                                    <span className="text-slate-400 uppercase tracking-tight">{reg.regionName}</span>
+                                    <span className={`font-black ${reg.netProfit > 0 ? "text-emerald-400" : "text-red-400"}`}>Rp {Math.round(reg.netProfit).toLocaleString('id-ID')}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-[#0F172A] rotate-45 -mt-1"></div>
+                            </div>
                           </div>
-                        ) : <span className="text-slate-300 italic">N/A</span>}
-                      </td>
+                        </td>
+                      )}
+
+                      {selectedProfits.includes("lazada") && (
+                        <td className="px-4 py-5 text-center text-xs font-black">
+                          {estData.results["lazada"] ? (
+                            <div className="flex flex-col items-center">
+                              <span className={estData.results["lazada"].netProfit > 0 ? "text-emerald-600" : "text-red-500"}>
+                                Rp {Math.round(estData.results["lazada"].netProfit).toLocaleString('id-ID')}
+                              </span>
+                              <span className="text-[9px] font-black text-slate-400 mt-0.5">({renderMargin(estData.results["lazada"])})</span>
+                            </div>
+                          ) : <span className="text-slate-300 italic">N/A</span>}
+                        </td>
+                      )}
+
+                      {selectedProfits.includes("offline") && (
+                        <td className="px-4 py-5 text-center text-xs font-black bg-indigo-50/10 border-x border-indigo-100/30">
+                          {(() => {
+                            const offlineProfit = p.price - (estData.actualCost * estData.multiplier);
+                            const offlineMargin = p.price > 0 ? (offlineProfit / p.price) * 100 : 0;
+                            return (
+                              <div className="flex flex-col items-center">
+                                <span className={offlineProfit > 0 ? "text-emerald-600" : "text-red-500"}>
+                                  Rp {Math.round(offlineProfit).toLocaleString('id-ID')}
+                                </span>
+                                <span className="text-[9px] font-black text-slate-400 mt-0.5">({Math.round(offlineMargin)}%)</span>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                      )}
                     </>
                   )}
 

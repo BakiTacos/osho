@@ -15,7 +15,6 @@ export interface CustomerInvoice {
   recipient: string;
   date: string;
   dueDate: string;
-  status: "DRAFT" | "BELUM BAYAR" | "LUNAS" | "JATUH TEMPO";
   items: CustomerInvoiceItem[];
   discount: number; // Nominal discount
   tax: number; // Percentage tax
@@ -23,9 +22,27 @@ export interface CustomerInvoice {
   total: number;
   notes?: string;
   bankInfo?: string;
+  logoBase64?: string; // Unggahan logo Base64 kustom
+  sellerName?: string; // Nama Penjual kustom
+  sellerAddress?: string; // Alamat Penjual kustom
+  sellerContact?: string; // Kontak Penjual kustom
+  themeColor?: string; // Warna tema hex kustom (misal: #0047AB)
 }
 
 export class CustomerInvoicePdfService {
+  // Helper untuk mengonversi Hex Color (#RRGGBB) ke RGB array
+  private static hexToRgb(hex?: string): [number, number, number] {
+    if (!hex) return [0, 71, 171]; // Default Cobalt Blue
+    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    const fullHex = hex.replace(shorthandRegex, (_, r, g, b) => r + r + g + g + b + b);
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+    return result ? [
+      parseInt(result[1], 16),
+      parseInt(result[2], 16),
+      parseInt(result[3], 16)
+    ] : [0, 71, 171];
+  }
+
   public static generatePdf(invoice: CustomerInvoice) {
     if (!invoice) return alert("❌ Data invoice kosong, gagal memproses.");
 
@@ -36,79 +53,83 @@ export class CustomerInvoicePdfService {
       format: "a5"
     });
 
-    const brandName = "Simple and Yours";
     const dateFormatted = new Date(invoice.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     const dueDateFormatted = new Date(invoice.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
+    // Tentukan Warna Tema
+    const rgbColor = this.hexToRgb(invoice.themeColor);
+
+    // Default Branding Values
+    const sName = invoice.sellerName || "Simple and Yours";
+    const sAddress = invoice.sellerAddress || "Tangerang, Banten, Indonesia";
+    const sContact = invoice.sellerContact || "Email: sny.osho@gmail.com";
+
     // --- LOGO & IDENTITAS PERUSAHAAN (Kiri Atas) ---
+    let startX = 12;
+    if (invoice.logoBase64) {
+      try {
+        // Render logo Base64 di koordinat X=12, Y=11 dengan ukuran 12x12 mm
+        doc.addImage(invoice.logoBase64, "JPEG", 12, 11, 12, 12);
+        startX = 27; // Geser teks identitas ke kanan jika ada logo
+      } catch (err) {
+        console.error("Gagal menggambar logo ke PDF:", err);
+      }
+    }
+
     doc.setFont("Helvetica", "bold");
-    doc.setFontSize(14);
+    doc.setFontSize(13);
     doc.setTextColor(15, 23, 42); // slate-900
-    doc.text(brandName, 12, 16);
+    doc.text(sName, startX, 15);
 
     doc.setFontSize(7.5);
     doc.setFont("Helvetica", "normal");
     doc.setTextColor(148, 163, 184); // slate-400
-    doc.text("Penyedia Home Hardware & Perlengkapan Rumah Tangga", 12, 21);
-    doc.text("Tangerang, Banten, Indonesia", 12, 24.5);
+    doc.text(sAddress, startX, 19.5);
     
-    doc.setTextColor(0, 71, 171); // Cobalt Blue
+    doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]); // Aksen warna tema
     doc.setFont("Helvetica", "bold");
-    doc.text("Email: sny.osho@gmail.com", 12, 28);
+    doc.text(sContact, startX, 23.5);
 
     // --- JUDUL DOKUMEN & NOMOR INVOICE (Kanan Atas) ---
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(13);
-    doc.setTextColor(0, 71, 171); 
-    doc.text("INVOICE", 136, 16, { align: "right" });
+    doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]); 
+    doc.text("INVOICE", 136, 15, { align: "right" });
 
     doc.setFontSize(8);
     doc.setFont("Helvetica", "bold");
     doc.setTextColor(71, 85, 105); 
-    doc.text(`#${invoice.invoiceNumber}`, 136, 21, { align: "right" });
-
-    // Status Badge (Kanan Atas di bawah nomor invoice)
-    const statusText = invoice.status.toUpperCase();
-    let badgeColor = [71, 85, 105]; // grey
-    if (statusText === "LUNAS") badgeColor = [16, 185, 129]; // emerald
-    if (statusText === "BELUM BAYAR") badgeColor = [245, 158, 11]; // amber
-    if (statusText === "JATUH TEMPO") badgeColor = [239, 68, 68]; // red
-    if (statusText === "DRAFT") badgeColor = [100, 116, 139]; // slate
-
-    doc.setFontSize(7);
-    doc.setFont("Helvetica", "bold");
-    doc.setTextColor(badgeColor[0], badgeColor[1], badgeColor[2]);
-    doc.text(`STATUS: ${statusText}`, 136, 26, { align: "right" });
+    doc.text(`#${invoice.invoiceNumber}`, 136, 20, { align: "right" });
 
     // Garis Pembatas
     doc.setDrawColor(241, 245, 249); 
     doc.setLineWidth(0.4);
-    doc.line(12, 31, 136, 31);
+    doc.line(12, 28, 136, 28);
 
     // --- METADATA TRANSAKSI & PENERIMA ---
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(15, 23, 42);
-    doc.text("INFORMASI TAGIHAN", 12, 37);
+    doc.text("INFORMASI TAGIHAN", 12, 34);
 
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
 
     // Label Column (X=12) | Colon (X=40) | Value (X=43)
-    doc.text("Nama Pelanggan", 12, 42);
-    doc.text(":", 40, 42);
+    doc.text("Nama Pelanggan", 12, 39);
+    doc.text(":", 40, 39);
     doc.setFont("Helvetica", "bold");
-    doc.text(invoice.recipient || "-", 43, 42);
+    doc.text(invoice.recipient || "-", 43, 39);
     doc.setFont("Helvetica", "normal");
 
-    doc.text("Tanggal Invoice", 12, 46);
-    doc.text(":", 40, 46);
-    doc.text(dateFormatted, 43, 46);
+    doc.text("Tanggal Invoice", 12, 43);
+    doc.text(":", 40, 43);
+    doc.text(dateFormatted, 43, 43);
 
-    doc.text("Jatuh Tempo", 12, 50);
-    doc.text(":", 40, 50);
-    doc.text(dueDateFormatted, 43, 50);
+    doc.text("Jatuh Tempo", 12, 47);
+    doc.text(":", 40, 47);
+    doc.text(dueDateFormatted, 43, 47);
 
     // --- METADATA TABEL ITEM BARANG ---
     const tableBody = invoice.items.map((item, index) => [
@@ -121,13 +142,13 @@ export class CustomerInvoicePdfService {
     ]);
 
     autoTable(doc, {
-      startY: 55,
+      startY: 52,
       margin: { left: 12, right: 12 },
       head: [["NO", "SKU", "DESKRIPSI PRODUK", "QTY", "HARGA SATUAN", "SUBTOTAL"]],
       body: tableBody,
       theme: "striped",
       headStyles: {
-        fillColor: [0, 71, 171], 
+        fillColor: rgbColor, // Dinamis sesuai warna tema pilihan
         textColor: [255, 255, 255],
         fontSize: 7.5,
         fontStyle: "bold",
@@ -152,7 +173,7 @@ export class CustomerInvoicePdfService {
     });
 
     // --- RINGKASAN TOTAL AKHIR ---
-    const finalY = ((doc as any).lastAutoTable?.finalY || 65) + 6;
+    const finalY = ((doc as any).lastAutoTable?.finalY || 60) + 6;
 
     doc.setDrawColor(241, 245, 249);
     doc.line(12, finalY - 3, 136, finalY - 3);
@@ -187,7 +208,7 @@ export class CustomerInvoicePdfService {
     doc.setFontSize(8.5);
     doc.setTextColor(15, 23, 42);
     doc.text("GRAND TOTAL", 80, currentY);
-    doc.setTextColor(0, 71, 171);
+    doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]); // Warna tema
     doc.text(`IDR ${Math.round(invoice.total).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
 
     // --- CATATAN & DETAIL REKENING TRANSFER ---
@@ -230,7 +251,7 @@ export class CustomerInvoicePdfService {
     doc.setFontSize(6.5);
     doc.setTextColor(148, 163, 184);
     doc.text("Terima kasih atas kerja sama dan kepercayaan Anda.", 12, footerY);
-    doc.text("Halaman ini sah diterbitkan secara digital oleh sistem ruko SNY.", 12, footerY + 2.5);
+    doc.text(`Halaman ini sah diterbitkan secara digital oleh ${sName}.`, 12, footerY + 2.5);
 
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(7.5);
@@ -240,7 +261,7 @@ export class CustomerInvoicePdfService {
     // Tanda Tangan Brand
     doc.setFontSize(8);
     doc.setTextColor(15, 23, 42);
-    doc.text("Simple and Yours", 136, footerY + 9, { align: "right" });
+    doc.text(sName, 136, footerY + 9, { align: "right" });
 
     // Simpan PDF
     doc.save(`INVOICE-${invoice.invoiceNumber}.pdf`);

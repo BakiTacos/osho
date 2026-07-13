@@ -60,6 +60,7 @@ export default function InventarisPage() {
   
   const [viewMode, setViewMode] = useState<"semua" | "harga" | "stok">("semua");
   const [showScrollButtons, setShowScrollButtons] = useState(false);
+  const [selectedProfits, setSelectedProfits] = useState<string[]>(["shopee", "tiktok", "lazada", "offline"]);
 
   // 🚀 PERBAIKAN 2: State Kendali Notifikasi Kilat Toast
   const [toast, setToast] = useState<ToastState>({ show: false, message: "", type: "success" });
@@ -196,8 +197,8 @@ export default function InventarisPage() {
       <InventoryStats totalProducts={stats.totalProducts} lowStockCount={stats.lowStockCount} outOfStockCount={stats.outOfStockCount} />
 
       {/* KONTROL SELECTOR FILTER MODE JEMPOL KILAT */}
-      <div className="px-4 sm:px-10 mt-6">
-        <div className="flex bg-white p-1 rounded-xl border border-slate-200 max-w-md shadow-xs">
+      <div className="px-4 sm:px-10 mt-6 flex flex-col md:flex-row gap-4 items-start md:items-center">
+        <div className="flex bg-white p-1 rounded-xl border border-slate-200 w-full md:max-w-xs shadow-xs">
           {[
             { id: "semua", label: "Lihat Semua" },
             { id: "harga", label: "Mode Harga" },
@@ -215,6 +216,30 @@ export default function InventarisPage() {
             </button>
           ))}
         </div>
+
+        {/* 🚀 OPSI CHECKBOX ESTIMASI PROFIT MARKETPLACE & OFFLINE */}
+        {viewMode !== "stok" && (
+          <div className="flex flex-wrap items-center bg-white py-2 px-4 rounded-xl border border-slate-200 gap-4 shadow-xs text-[10px] sm:text-xs font-black text-slate-600">
+            <span className="text-[8px] sm:text-[9px] uppercase tracking-wider text-slate-400">Tampilkan Profit:</span>
+            {["shopee", "tiktok", "lazada", "offline"].map((mp) => (
+              <label key={mp} className="flex items-center gap-1.5 cursor-pointer uppercase select-none">
+                <input
+                  type="checkbox"
+                  checked={selectedProfits.includes(mp)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedProfits([...selectedProfits, mp]);
+                    } else {
+                      setSelectedProfits(selectedProfits.filter(x => x !== mp));
+                    }
+                  }}
+                  className="rounded border-slate-300 text-[#0047AB] focus:ring-[#0047AB]"
+                />
+                <span>{mp}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* BAR PENCARIAN & URUTAN DATA */}
@@ -238,6 +263,7 @@ export default function InventarisPage() {
           tempStock={tempStock} setTempStock={setTempStock}
           onUpdateStock={handleUpdateStock} onDelete={handleDelete}
           viewMode={viewMode}
+          selectedProfits={selectedProfits}
         />
 
         {/* Render Desktop */}
@@ -248,6 +274,7 @@ export default function InventarisPage() {
           tempStock={tempStock} setTempStock={setTempStock}
           onUpdateStock={handleUpdateStock} onDelete={handleDelete}
           viewMode={viewMode}
+          selectedProfits={selectedProfits}
         />
 
         {/* NAVIGATION PAGINATION CONTROL */}

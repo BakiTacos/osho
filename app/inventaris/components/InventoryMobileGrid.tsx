@@ -16,12 +16,13 @@ interface MobileGridProps {
   onUpdateStock: (id: string) => void;
   onDelete: (id: string) => void;
   viewMode: "semua" | "harga" | "stok";
+  selectedProfits: string[];
 }
 
 export const InventoryMobileGrid = ({ 
   items, inventoryService, activeMenuId, setActiveMenuId, 
   editingStockId, setEditingStockId, tempStock, setTempStock, 
-  onUpdateStock, onDelete, viewMode 
+  onUpdateStock, onDelete, viewMode, selectedProfits 
 }: MobileGridProps) => {
 
   const showHarga = viewMode === "semua" || viewMode === "harga";
@@ -70,7 +71,18 @@ export const InventoryMobileGrid = ({
                   <div className="flex justify-between"><span className="text-slate-400 font-bold">Jual:</span><span className="text-[#0F172A] font-black">Rp {p.price.toLocaleString('id-ID')}</span></div>
                 </div>
                 <div className="space-y-1 bg-white border border-slate-100 p-1.5 rounded-xl text-[9px] font-black">
-                  {['shopee', 'tiktok', 'lazada'].map((mp) => {
+                  {["shopee", "tiktok", "lazada", "offline"].filter(mp => selectedProfits.includes(mp)).map((mp) => {
+                    if (mp === "offline") {
+                      const offlineProfit = p.price - (estData.actualCost * estData.multiplier);
+                      return (
+                        <div key={mp} className="flex justify-between items-center gap-1">
+                          <span className="text-slate-400 uppercase text-[8px]">offline:</span>
+                          <span className={offlineProfit > 0 ? "text-emerald-600" : "text-red-500"}>
+                            Rp {Math.round(offlineProfit).toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                      );
+                    }
                     const mpData = estData.results[mp];
                     return (
                       <div key={mp} className="flex justify-between items-center gap-1">

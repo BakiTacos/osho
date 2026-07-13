@@ -61,15 +61,12 @@ export default function InvoicingPage() {
           {/* 3. METRICS SUMMARY CARDS */}
           <InvoicingSummary stats={state.statistics} />
 
-          {/* 4. SEARCH & STATUS FILTERS */}
+          {/* 4. SEARCH & FILTERS */}
           <InvoicingFilters
             searchQuery={state.searchQuery}
             setSearchQuery={state.setSearchQuery}
-            statusFilter={state.statusFilter}
-            setStatusFilter={state.setStatusFilter}
             timeFilter={state.timeFilter}
             setTimeFilter={state.setTimeFilter}
-            invoiceCount={state.invoices.length}
           />
 
           {/* 5. INVOICE LIST TABLE */}
@@ -78,7 +75,6 @@ export default function InvoicingPage() {
               items={state.invoices}
               onEdit={state.openEditModal}
               onDelete={state.handleDeleteInvoice}
-              onToggleStatus={state.toggleInvoiceStatus}
               onDownloadPdf={CustomerInvoicePdfService.generatePdf}
             />
           </div>

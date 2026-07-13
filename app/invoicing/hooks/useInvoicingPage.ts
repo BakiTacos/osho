@@ -13,7 +13,6 @@ export function useInvoicingPage(currentUser: any) {
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL"); // ALL, DRAFT, BELUM BAYAR, LUNAS, JATUH TEMPO
   const [timeFilter, setTimeFilter] = useState("SEMUA"); // SEMUA, HARI INI, BULAN INI
 
   // Modal & Form States
@@ -31,11 +30,15 @@ export function useInvoicingPage(currentUser: any) {
     recipient: "",
     date: getLocalDateString(),
     dueDate: getLocalDateString(),
-    status: "BELUM BAYAR" as "DRAFT" | "BELUM BAYAR" | "LUNAS" | "JATUH TEMPO",
     discount: 0,
     tax: 0,
     notes: "",
-    bankInfo: "Bank Central Asia (BCA)\nNo. Rekening: 8830928172\na.n. Simple and Yours"
+    bankInfo: "Bank Central Asia (BCA)\nNo. Rekening: 8830928172\na.n. Simple and Yours",
+    logoBase64: "", // Kustom Base64
+    sellerName: "Simple and Yours",
+    sellerAddress: "Tangerang, Banten, Indonesia",
+    sellerContact: "Email: sny.osho@gmail.com",
+    themeColor: "#0047AB" // Default Cobalt Blue
   }), [getLocalDateString]);
 
   const [form, setForm] = useState(initialFormState);
@@ -61,14 +64,18 @@ export function useInvoicingPage(currentUser: any) {
             recipient: data.recipient || "",
             date: data.date || "",
             dueDate: data.dueDate || "",
-            status: data.status || "BELUM BAYAR",
             items: data.items || [],
             discount: Number(data.discount) || 0,
             tax: Number(data.tax) || 0,
             subtotal: Number(data.subtotal) || 0,
             total: Number(data.total) || 0,
             notes: data.notes || "",
-            bankInfo: data.bankInfo || ""
+            bankInfo: data.bankInfo || "",
+            logoBase64: data.logoBase64 || "",
+            sellerName: data.sellerName || "",
+            sellerAddress: data.sellerAddress || "",
+            sellerContact: data.sellerContact || "",
+            themeColor: data.themeColor || "#0047AB"
           } as CustomerInvoice;
         });
         // Sort descending by date, then invoice number
@@ -133,11 +140,15 @@ export function useInvoicingPage(currentUser: any) {
       recipient: invoice.recipient,
       date: invoice.date,
       dueDate: invoice.dueDate,
-      status: invoice.status,
       discount: invoice.discount,
       tax: invoice.tax,
       notes: invoice.notes || "",
-      bankInfo: invoice.bankInfo || ""
+      bankInfo: invoice.bankInfo || "",
+      logoBase64: invoice.logoBase64 || "",
+      sellerName: invoice.sellerName || "Simple and Yours",
+      sellerAddress: invoice.sellerAddress || "Tangerang, Banten, Indonesia",
+      sellerContact: invoice.sellerContact || "Email: sny.osho@gmail.com",
+      themeColor: invoice.themeColor || "#0047AB"
     });
     setFormItems(invoice.items && invoice.items.length > 0 ? [...invoice.items] : [{ sku: "", productName: "", qty: 1, price: 0 }]);
     setIsModalOpen(true);
@@ -166,7 +177,6 @@ export function useInvoicingPage(currentUser: any) {
       recipient: form.recipient.trim(),
       date: form.date,
       dueDate: form.dueDate,
-      status: form.status,
       items: formItems.map(item => ({
         sku: item.sku.trim().toUpperCase(),
         productName: item.productName.trim(),
@@ -179,6 +189,11 @@ export function useInvoicingPage(currentUser: any) {
       total: calculatedValues.total,
       notes: form.notes.trim(),
       bankInfo: form.bankInfo.trim(),
+      logoBase64: form.logoBase64,
+      sellerName: form.sellerName.trim(),
+      sellerAddress: form.sellerAddress.trim(),
+      sellerContact: form.sellerContact.trim(),
+      themeColor: form.themeColor,
       updatedAt: serverTimestamp()
     };
 
@@ -195,23 +210,6 @@ export function useInvoicingPage(currentUser: any) {
     } catch (error) {
       console.error("Gagal menyimpan invoice:", error);
       alert("Terjadi kesalahan saat menyimpan invoice.");
-    }
-  };
-
-  // Toggle Invoice Status
-  const toggleInvoiceStatus = async (id: string, currentStatus: string) => {
-    if (!currentUser?.uid) return;
-    const statuses: Array<"DRAFT" | "BELUM BAYAR" | "LUNAS" | "JATUH TEMPO"> = ["DRAFT", "BELUM BAYAR", "LUNAS", "JATUH TEMPO"];
-    const currentIndex = statuses.indexOf(currentStatus as any);
-    const nextStatus = statuses[(currentIndex + 1) % statuses.length];
-
-    try {
-      await updateDoc(doc(db, `users/${currentUser.uid}/customer_invoices`, id), {
-        status: nextStatus,
-        updatedAt: serverTimestamp()
-      });
-    } catch (error) {
-      console.error("Gagal memperbarui status invoice:", error);
     }
   };
 
@@ -236,10 +234,7 @@ export function useInvoicingPage(currentUser: any) {
         inv.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         inv.recipient.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // 2. Status Filter
-      const matchesStatus = statusFilter === "ALL" || inv.status === statusFilter;
-
-      // 3. Time Filter
+      // 2. Time Filter
       let matchesTime = true;
       const invDate = new Date(inv.date);
       const today = new Date();
@@ -250,42 +245,25 @@ export function useInvoicingPage(currentUser: any) {
         matchesTime = invDate.getMonth() === today.getMonth() && invDate.getFullYear() === today.getFullYear();
       }
 
-      return matchesSearch && matchesStatus && matchesTime;
+      return matchesSearch && matchesTime;
     });
-  }, [invoices, searchQuery, statusFilter, timeFilter]);
+  }, [invoices, searchQuery, timeFilter]);
 
   // Overall Statistics
   const statistics = useMemo(() => {
     let totalInvoiced = 0;
-    let totalPaid = 0;
-    let paidCount = 0;
-    let totalUnpaid = 0;
-    let unpaidCount = 0;
-    let totalOverdue = 0;
-    let overdueCount = 0;
+    let totalInvoicesCount = invoices.length;
 
     invoices.forEach((inv) => {
       totalInvoiced += inv.total;
-      if (inv.status === "LUNAS") {
-        totalPaid += inv.total;
-        paidCount++;
-      } else if (inv.status === "BELUM BAYAR") {
-        totalUnpaid += inv.total;
-        unpaidCount++;
-      } else if (inv.status === "JATUH TEMPO") {
-        totalOverdue += inv.total;
-        overdueCount++;
-      }
     });
+
+    const averageInvoiceValue = totalInvoicesCount > 0 ? totalInvoiced / totalInvoicesCount : 0;
 
     return {
       totalInvoiced,
-      totalPaid,
-      paidCount,
-      totalUnpaid,
-      unpaidCount,
-      totalOverdue,
-      overdueCount
+      totalInvoicesCount,
+      averageInvoiceValue
     };
   }, [invoices]);
 
@@ -295,8 +273,6 @@ export function useInvoicingPage(currentUser: any) {
     loading,
     searchQuery,
     setSearchQuery,
-    statusFilter,
-    setStatusFilter,
     timeFilter,
     setTimeFilter,
     isModalOpen,
@@ -310,7 +286,6 @@ export function useInvoicingPage(currentUser: any) {
     setFormItems,
     calculatedValues,
     handleSaveInvoice,
-    toggleInvoiceStatus,
     handleDeleteInvoice,
     statistics
   };
