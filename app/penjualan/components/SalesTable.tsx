@@ -14,8 +14,7 @@ export default function SalesTable({
   onDeleteBulk, 
   onDeleteSingle, 
   onStatusUpdate, 
-  onEdit,
-  onGenerateInvoice 
+  onEdit
 }: any) {
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedRow, setExpandedRow] = useState<string | null>(null); 
@@ -137,18 +136,7 @@ export default function SalesTable({
                       {/* LACI LAYER DROPDOWN DESKTOP */}
                       {activeMenuId === t.id && (
                         <div className="absolute right-12 top-12 w-38 bg-white border border-slate-100 rounded-xl shadow-xl z-20 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 text-left">
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              onGenerateInvoice && onGenerateInvoice(t);
-                              setActiveMenuId(null);
-                            }} 
-                            className="w-full flex items-center gap-2 px-4 py-2.5 text-[10px] font-black text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-left"
-                          >
-                            <FileText size={12} className="text-[#0047AB] shrink-0" />
-                            <span className="uppercase">Buat Invoices</span>
-                          </button>
-                          
+
                           <button 
                             type="button"
                             onClick={() => {
@@ -207,13 +195,6 @@ export default function SalesTable({
                   </div>
                   
                   <div className="flex items-center gap-1 shrink-0">
-                    <button 
-                      type="button" 
-                      onClick={() => onGenerateInvoice && onGenerateInvoice(t)} 
-                      className="p-2 text-[#0047AB] bg-blue-50/70 rounded-lg active:bg-blue-100 flex items-center justify-center transition-all cursor-pointer"
-                    >
-                      <FileText size={13} strokeWidth={2.5} />
-                    </button>
 
                     {t.product === "Produk Luar Katalog" && (
                       <button 

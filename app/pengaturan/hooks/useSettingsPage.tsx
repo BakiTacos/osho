@@ -7,6 +7,7 @@ import { AdminFeesSettings } from "../types/settings";
 
 export function useSettingsPage(currentUser: any) {
   const [feeSettings, setFeeSettings] = useState<AdminFeesSettings | null>(null);
+  const [modules, setModules] = useState<Record<string, boolean> | null>(null);
   const [fetching, setFetching] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -18,8 +19,12 @@ export function useSettingsPage(currentUser: any) {
 
     const loadSettings = async () => {
       try {
-        const data = await settingsService.getAdminFees();
-        setFeeSettings(data);
+        const [feesData, modulesData] = await Promise.all([
+          settingsService.getAdminFees(),
+          settingsService.getActiveModules()
+        ]);
+        setFeeSettings(feesData);
+        setModules(modulesData);
       } catch (error) {
         console.error("Gagal memuat domain settings:", error);
       } finally {
@@ -39,6 +44,14 @@ export function useSettingsPage(currentUser: any) {
         copy[marketplace].programs[index].enabled = !copy[marketplace].programs[index].enabled;
       }
       return copy;
+    });
+  }, []);
+
+  // Handler toggle modul
+  const toggleModule = useCallback((key: string) => {
+    setModules((prev) => {
+      if (!prev) return null;
+      return { ...prev, [key]: !prev[key] };
     });
   }, []);
 
@@ -66,11 +79,18 @@ export function useSettingsPage(currentUser: any) {
 
   // Fungsi eksekusi simpan massal
   const saveConfiguration = async () => {
-    if (!currentUser?.uid || !feeSettings || isSaving) return;
+    if (!currentUser?.uid || isSaving) return;
     setIsSaving(true);
     try {
-      await settingsService.saveAdminFees(feeSettings);
-      alert("✅ Pengaturan Biaya Program Berhasil Disimpan!");
+      const promises: Promise<any>[] = [];
+      if (feeSettings) {
+        promises.push(settingsService.saveAdminFees(feeSettings));
+      }
+      if (modules) {
+        promises.push(settingsService.saveActiveModules(modules));
+      }
+      await Promise.all(promises);
+      alert("✅ Pengaturan Berhasil Disimpan!");
     } catch (error) {
       console.error(error);
       alert("❌ Gagal menyimpan konfigurasi ke cloud server ruko.");
@@ -81,9 +101,11 @@ export function useSettingsPage(currentUser: any) {
 
   return {
     feeSettings,
+    modules,
     fetching,
     isSaving,
     toggleProgram,
+    toggleModule,
     handleBaseFeeChange,
     calculateTotalFee,
     saveConfiguration

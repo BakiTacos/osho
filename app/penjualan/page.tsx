@@ -1,7 +1,7 @@
 // app/penjualan/page.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from "../../context/AuthContext";
 import { useSalesPage } from "./hooks/useSalesPage"; 
 import { doc, updateDoc } from "firebase/firestore";
@@ -16,9 +16,6 @@ import ImportCard from "./components/ImportCard";
 import { ManualInputModal } from "./components/SalesModals";
 import { ManualEditModal } from "./components/ManualEditModal"; 
 
-// 🚀 EMBED MODULAR MONOLITH: Suntikkan modal customizer invoice baru ruko
-import { InvoiceCustomizerModal } from "./components/InvoiceCustomizerModal";
-
 export default function PenjualanPage() {
   const { currentUser } = useAuth();
   
@@ -32,10 +29,6 @@ export default function PenjualanPage() {
     handleEditPendingSubmit, handleDirectDatabaseCleanup, handleFileUpload, handleManualSubmit
   } = useSalesPage(currentUser);
 
-  // 🚀 STATE PENGUNCI DRAF INVOICE LOKAL MEMORI RAM
-  const [isInvoiceCustomizerOpen, setIsInvoiceCustomizerOpen] = useState(false);
-  const [selectedTxForInvoice, setSelectedTxForInvoice] = useState<any>(null);
-
   if (!currentUser) return null;
 
   return (
@@ -46,18 +39,6 @@ export default function PenjualanPage() {
         onOpenManual={() => setIsManualModalOpen(true)} 
         onDirectCleanup={handleDirectDatabaseCleanup}
         isProcessing={isProcessing}
-        
-        // 🚀 KUNCI KESELARASAN: Buka modal customizer dengan cetakan blueprint kosongan ({})
-        onOpenInvoiceManual={() => {
-          setSelectedTxForInvoice({
-            orderId: "", 
-            resi: "", 
-            marketplace: "OFFLINE", 
-            recipient: "",
-            items: [{ sku: "", productName: "", qty: 1, manualPrice: 0 }]
-          });
-          setIsInvoiceCustomizerOpen(true);
-        }}
       />
       
       {/* 2. FILTERS PENYARING OMSET */}
@@ -107,11 +88,6 @@ export default function PenjualanPage() {
               });
               setIsEditModalOpen(true);
             }}
-            // 🚀 SUNTIKKAN PROPERTI BARU KE DALAM TABLE AGAR TOMBOL "BUAT INVOICES" JALAN PERSISI
-            onGenerateInvoice={(t: any) => {
-              setSelectedTxForInvoice(t);
-              setIsInvoiceCustomizerOpen(true);
-            }}
           />
         </div>  
       </div>
@@ -144,16 +120,6 @@ export default function PenjualanPage() {
         isProcessing={isProcessing}
         onSubmit={handleEditPendingSubmit}
       />
-
-      {/* 🚀 7. MODAL CUSTOMIZER INVOICE GENERATOR (INTERAKTIF FLYOUT) */}
-      <InvoiceCustomizerModal 
-          isOpen={isInvoiceCustomizerOpen}
-          onClose={() => {
-            setIsInvoiceCustomizerOpen(false);
-            setSelectedTxForInvoice(null);
-          }}
-          transaction={selectedTxForInvoice}
-        />
 
     </div>
   );

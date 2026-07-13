@@ -44,9 +44,7 @@ export function useInvoicingPage(currentUser: any) {
     sellerPhone: "", // No telp pengirim kustom
     themeColor: "#0047AB", // Default Cobalt Blue
     sellerPic: "", // Penanggung Jawab default
-    signatureBase64: "", // Tanda tangan default
-    totalCommission: 0,
-    paymentHistory: ""
+    signatureBase64: "" // Tanda tangan default
   }), [getLocalDateString]);
 
   const [form, setForm] = useState(initialFormState);
@@ -190,9 +188,7 @@ export function useInvoicingPage(currentUser: any) {
       sellerPhone: invoice.sellerPhone || "",
       themeColor: invoice.themeColor || "#0047AB",
       sellerPic: invoice.sellerPic || "",
-      signatureBase64: invoice.signatureBase64 || "",
-      totalCommission: invoice.totalCommission || 0,
-      paymentHistory: (invoice as any).paymentHistory || ""
+      signatureBase64: invoice.signatureBase64 || ""
     });
     setFormItems(
       invoice.items && invoice.items.length > 0
@@ -200,10 +196,9 @@ export function useInvoicingPage(currentUser: any) {
             sku: it.sku || "",
             productName: it.productName || "",
             qty: Number(it.qty) || 0,
-            price: Number(it.price) || 0,
-            supplier: it.supplier || ""
+            price: Number(it.price) || 0
           }))
-        : [{ sku: "", productName: "", qty: 1, price: 0, supplier: "" }]
+        : [{ sku: "", productName: "", qty: 1, price: 0 }]
     );
     setIsModalOpen(true);
   }, []);
@@ -238,11 +233,6 @@ export function useInvoicingPage(currentUser: any) {
     const revenue = Math.max(0, calculatedValues.subtotal - Number(form.discount));
     const profit = Math.max(0, revenue - totalHpp);
 
-    // Hitung total komisi khusus Suparta
-    const isSuparta = currentUser?.email === "suparta.technica@gmail.com";
-    const totalCommission = isSuparta ? (Number(form.totalCommission) || 0) : 0;
-    const paymentHistory = isSuparta ? (form.paymentHistory || "").trim() : "";
-
     const docData = {
       invoiceNumber: form.invoiceNumber || "",
       recipient: (form.recipient || "").trim(),
@@ -254,8 +244,7 @@ export function useInvoicingPage(currentUser: any) {
         sku: (item.sku || "").trim().toUpperCase(),
         productName: (item.productName || "").trim(),
         qty: Number(item.qty) || 0,
-        price: Number(item.price) || 0,
-        supplier: isSuparta ? (item.supplier || "").trim() : ""
+        price: Number(item.price) || 0
       })),
       discount: Number(form.discount) || 0,
       tax: Number(form.tax) || 0,
@@ -263,8 +252,6 @@ export function useInvoicingPage(currentUser: any) {
       total: Number(calculatedValues.total) || 0,
       hpp: totalHpp,
       profit: profit,
-      totalCommission: totalCommission,
-      paymentHistory: paymentHistory,
       notes: (form.notes || "").trim(),
       bankInfo: (form.bankInfo || "").trim(),
       logoBase64: form.logoBase64 || "",

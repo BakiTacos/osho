@@ -41,4 +41,43 @@ export class SettingsService {
       updatedAt: serverTimestamp()
     });
   }
+
+  /**
+   * Mengambil data modul aktif dari Firestore.
+   */
+  public async getActiveModules(): Promise<Record<string, boolean>> {
+    if (!this.uid) throw new Error("UID pengguna tidak valid.");
+    
+    const docRef = doc(db, `users/${this.uid}/settings`, "modules");
+    const docSnap = await getDoc(docRef);
+    
+    const defaultModules = {
+      inventaris: true,
+      penjualan: true,
+      invoicing: true,
+      pembayaran: true,
+      retur: true,
+      laporan: true
+    };
+    
+    if (docSnap.exists()) {
+      return { ...defaultModules, ...docSnap.data() };
+    } else {
+      await setDoc(docRef, defaultModules);
+      return defaultModules;
+    }
+  }
+
+  /**
+   * Menyimpan data modul aktif ke Firestore.
+   */
+  public async saveActiveModules(modules: Record<string, boolean>): Promise<void> {
+    if (!this.uid) throw new Error("UID pengguna tidak valid.");
+    
+    const docRef = doc(db, `users/${this.uid}/settings`, "modules");
+    await setDoc(docRef, {
+      ...modules,
+      updatedAt: serverTimestamp()
+    });
+  }
 }

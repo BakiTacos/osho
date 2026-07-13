@@ -8,11 +8,10 @@ import { useRouter } from 'next/navigation';
 interface SalesHeaderProps {
   onOpenManual: () => void;
   onDirectCleanup: () => void; 
-  onOpenInvoiceManual: () => void; // 🚀 BARU: Jembatan pemicu pembuatan invoice polosan dari nol
   isProcessing: boolean;
 }
 
-export default function SalesHeader({ onOpenManual, onDirectCleanup, onOpenInvoiceManual, isProcessing }: SalesHeaderProps) {
+export default function SalesHeader({ onOpenManual, onDirectCleanup, isProcessing }: SalesHeaderProps) {
   const router = useRouter();
 
   return (
@@ -34,16 +33,6 @@ export default function SalesHeader({ onOpenManual, onDirectCleanup, onOpenInvoi
         >
           <Trash2 size={15} />
           <span>{isProcessing ? "Cleaning..." : "Sapu Duplikat"}</span>
-        </button>
-
-        {/* 🚀 TOMBOL 2 BARU: BUAT INVOICES MANUAL STANDALONE (Maksimal UX Jempol Mobile) */}
-        <button 
-          type="button"
-          onClick={onOpenInvoiceManual} 
-          className="bg-blue-50 text-[#0047AB] border border-blue-100 px-4 py-3 rounded-2xl font-black text-xs hover:bg-blue-100/50 transition-all flex items-center space-x-1.5 cursor-pointer"
-        >
-          <FileText size={15} strokeWidth={2.5} />
-          <span>Buat Invoices</span>
         </button>
 
         {/* 🛠️ TOMBOL 3: Input Penjualan Manual Buku Kas */}

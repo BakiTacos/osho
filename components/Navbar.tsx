@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import { auth, db } from "../lib/firebase";
 import { signOut } from "firebase/auth";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc } from "firebase/firestore";
 import { 
   LayoutDashboard, 
   Calculator, 
@@ -32,6 +32,29 @@ export default function Sidebar() {
   
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpenDrawer, setIsOpenDrawer] = useState(false);
+  const [activeModules, setActiveModules] = useState<Record<string, boolean>>({
+    inventaris: true,
+    penjualan: true,
+    invoicing: true,
+    pembayaran: true,
+    retur: true,
+    laporan: true
+  });
+
+  // listen to active modules settings in real-time
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+
+    const unsub = onSnapshot(doc(db, `users/${currentUser.uid}/settings`, "modules"), (docSnap) => {
+      if (docSnap.exists()) {
+        setActiveModules(docSnap.data() as Record<string, boolean>);
+      }
+    }, (err) => {
+      console.error("Gagal memuat pengaturan modul aktif:", err);
+    });
+
+    return () => unsub();
+  }, [currentUser?.uid]);
 
   // listen to products stock in real-time
   useEffect(() => {
@@ -103,6 +126,17 @@ export default function Sidebar() {
     { name: "Pengaturan", icon: Settings, href: "/pengaturan" },
   ];
 
+  const filteredDesktopItems = desktopItems.filter(item => {
+    if (item.name === "Beranda" || item.name === "Pengaturan") return true;
+    if (item.name === "Inventaris") return activeModules.inventaris !== false;
+    if (item.name === "Penjualan") return activeModules.penjualan !== false;
+    if (item.name === "Invoicing") return activeModules.invoicing !== false;
+    if (item.name === "Pembayaran") return activeModules.pembayaran !== false;
+    if (item.name === "Retur") return activeModules.retur !== false;
+    if (item.name === "Laporan") return activeModules.laporan !== false;
+    return true;
+  });
+
   // 2. DATA SELEKSI UNTUK MOBILE (4 MENU UTAMA OPERASIONAL GUDANG)
   const mobileNavItems = [
     { icon: Home, href: "/", name: "Beranda" },
@@ -110,6 +144,14 @@ export default function Sidebar() {
     { icon: LinkIcon, href: "/penjualan", name: "Penjualan" },
     { icon: BoxIcon, href: "/pengembalian", name: "Retur" },
   ];
+
+  const filteredMobileItems = mobileNavItems.filter(item => {
+    if (item.name === "Beranda") return true;
+    if (item.name === "Stok") return activeModules.inventaris !== false;
+    if (item.name === "Penjualan") return activeModules.penjualan !== false;
+    if (item.name === "Retur") return activeModules.retur !== false;
+    return true;
+  });
 
   return (
     <>
@@ -141,7 +183,7 @@ export default function Sidebar() {
 
         {/* Navigation Items */}
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto no-scrollbar">
-          {desktopItems.map((item) => {
+          {filteredDesktopItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link 
@@ -193,7 +235,7 @@ export default function Sidebar() {
       {/* 📱 STICKY BOTTOM NAVBAR APP-STYLE (HP) */}
       {/* ========================================= */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 w-full z-50 bg-white border-t border-[#E2E8F0] shadow-[0_-4px_24px_rgba(0,0,0,0.04)] flex items-center justify-between px-4 py-2 pb-safe">
-        {mobileNavItems.map((item) => {
+        {filteredMobileItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link 
