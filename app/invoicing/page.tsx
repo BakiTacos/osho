@@ -93,6 +93,7 @@ export default function InvoicingPage() {
         products={state.products}
         calculatedValues={state.calculatedValues}
         onSubmit={state.handleSaveInvoice}
+        onSaveSellerProfile={state.handleSaveSellerProfile}
       />
 
     </div>

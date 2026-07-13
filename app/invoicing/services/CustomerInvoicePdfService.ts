@@ -43,6 +43,52 @@ export class CustomerInvoicePdfService {
     ] : [0, 71, 171];
   }
 
+  // Helper untuk mendeteksi format gambar dari header Base64
+  private static detectImageFormat(base64?: string): string {
+    if (!base64) return "PNG";
+    if (base64.startsWith("data:image/jpeg") || base64.startsWith("data:image/jpg")) {
+      return "JPEG";
+    }
+    if (base64.startsWith("data:image/png")) {
+      return "PNG";
+    }
+    if (base64.startsWith("data:image/webp")) {
+      return "WEBP";
+    }
+    // Jika ada header mime type lain, coba ekstrak
+    const match = base64.match(/^data:image\/([a-zA-Z+]+);base64,/);
+    if (match && match[1]) {
+      const ext = match[1].toUpperCase();
+      if (ext === "JPG") return "JPEG";
+      return ext;
+    }
+    return "PNG";
+  }
+
+  // Helper untuk memformat tanggal secara aman tanpa resiko crash
+  private static formatDateSafely(dateVal: any): string {
+    if (!dateVal) return "-";
+    try {
+      // Jika bertipe Firestore Timestamp (punya fungsi toDate)
+      if (dateVal && typeof dateVal.toDate === 'function') {
+        return dateVal.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      // Jika bertipe data detik/nanodetik biasa
+      if (dateVal && typeof dateVal.seconds === 'number') {
+        return new Date(dateVal.seconds * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      // Jika berupa string tanggal
+      const parsed = new Date(dateVal);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      return String(dateVal);
+    } catch (e) {
+      console.error("Gagal memformat tanggal invoice:", e);
+      return String(dateVal);
+    }
+  }
+
   public static generatePdf(invoice: CustomerInvoice) {
     if (!invoice) return alert("❌ Data invoice kosong, gagal memproses.");
 
@@ -53,8 +99,8 @@ export class CustomerInvoicePdfService {
       format: "a5"
     });
 
-    const dateFormatted = new Date(invoice.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-    const dueDateFormatted = new Date(invoice.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    const dateFormatted = this.formatDateSafely(invoice.date);
+    const dueDateFormatted = this.formatDateSafely(invoice.dueDate);
 
     // Tentukan Warna Tema
     const rgbColor = this.hexToRgb(invoice.themeColor);
@@ -66,10 +112,11 @@ export class CustomerInvoicePdfService {
 
     // --- LOGO & IDENTITAS PERUSAHAAN (Kiri Atas) ---
     let startX = 12;
-    if (invoice.logoBase64) {
+    if (invoice.logoBase64 && invoice.logoBase64.trim() !== "") {
       try {
+        const imageFormat = this.detectImageFormat(invoice.logoBase64);
         // Render logo Base64 di koordinat X=12, Y=11 dengan ukuran 12x12 mm
-        doc.addImage(invoice.logoBase64, "JPEG", 12, 11, 12, 12);
+        doc.addImage(invoice.logoBase64, imageFormat, 12, 11, 12, 12);
         startX = 27; // Geser teks identitas ke kanan jika ada logo
       } catch (err) {
         console.error("Gagal menggambar logo ke PDF:", err);
@@ -132,13 +179,14 @@ export class CustomerInvoicePdfService {
     doc.text(dueDateFormatted, 43, 47);
 
     // --- METADATA TABEL ITEM BARANG ---
-    const tableBody = invoice.items.map((item, index) => [
+    const items = invoice.items || [];
+    const tableBody = items.map((item, index) => [
       index + 1,
-      String(item.sku).toUpperCase(),
-      item.productName,
-      `${item.qty} Pcs`,
-      `Rp ${Math.round(item.price).toLocaleString('id-ID')}`,
-      `Rp ${Math.round(item.price * item.qty).toLocaleString('id-ID')}`
+      String(item.sku || "").toUpperCase(),
+      item.productName || "Produk",
+      `${item.qty || 0} Pcs`,
+      `Rp ${Math.round(item.price || 0).toLocaleString('id-ID')}`,
+      `Rp ${Math.round((item.price || 0) * (item.qty || 0)).toLocaleString('id-ID')}`
     ]);
 
     autoTable(doc, {
@@ -185,7 +233,7 @@ export class CustomerInvoicePdfService {
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
     doc.text("Subtotal", 80, currentY);
-    doc.text(`Rp ${Math.round(invoice.subtotal).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
+    doc.text(`Rp ${Math.round(invoice.subtotal || 0).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
 
     // Discount (jika ada)
     if (invoice.discount > 0) {
@@ -198,7 +246,7 @@ export class CustomerInvoicePdfService {
     if (invoice.tax > 0) {
       currentY += 4;
       doc.text(`Pajak (${invoice.tax}%)`, 80, currentY);
-      const taxAmount = (invoice.subtotal - invoice.discount) * (invoice.tax / 100);
+      const taxAmount = ((invoice.subtotal || 0) - (invoice.discount || 0)) * (invoice.tax / 100);
       doc.text(`+Rp ${Math.round(taxAmount).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
     }
 
@@ -209,7 +257,7 @@ export class CustomerInvoicePdfService {
     doc.setTextColor(15, 23, 42);
     doc.text("GRAND TOTAL", 80, currentY);
     doc.setTextColor(rgbColor[0], rgbColor[1], rgbColor[2]); // Warna tema
-    doc.text(`IDR ${Math.round(invoice.total).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
+    doc.text(`IDR ${Math.round(invoice.total || 0).toLocaleString('id-ID')}`, 136, currentY, { align: "right" });
 
     // --- CATATAN & DETAIL REKENING TRANSFER ---
     let blockY = currentY + 12;

@@ -2,13 +2,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { collection, onSnapshot, doc, deleteDoc, addDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, doc, deleteDoc, addDoc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { CustomerInvoice, CustomerInvoiceItem } from "../services/CustomerInvoicePdfService";
 
 export function useInvoicingPage(currentUser: any) {
   const [invoices, setInvoices] = useState<CustomerInvoice[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [sellerProfile, setSellerProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Filter States
@@ -34,7 +35,7 @@ export function useInvoicingPage(currentUser: any) {
     tax: 0,
     notes: "",
     bankInfo: "Bank Central Asia (BCA)\nNo. Rekening: 8830928172\na.n. Simple and Yours",
-    logoBase64: "", // Kustom Base64
+    logoBase64: "", // Kustom Base64 logo
     sellerName: "Simple and Yours",
     sellerAddress: "Tangerang, Banten, Indonesia",
     sellerContact: "Email: sny.osho@gmail.com",
@@ -46,7 +47,7 @@ export function useInvoicingPage(currentUser: any) {
     { sku: "", productName: "", qty: 1, price: 0 }
   ]);
 
-  // Load Invoices & Products Real-time
+  // Load Invoices, Products, & Seller Settings Real-time
   useEffect(() => {
     if (!currentUser?.uid) return;
 
@@ -100,9 +101,23 @@ export function useInvoicingPage(currentUser: any) {
       }
     );
 
+    // 3. Fetch Seller Settings Document
+    const unsubSellerSettings = onSnapshot(
+      doc(db, `users/${currentUser.uid}/settings`, "seller_profile"),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setSellerProfile(docSnap.data());
+        }
+      },
+      (error) => {
+        console.error("Gagal memuat profil default penjual:", error);
+      }
+    );
+
     return () => {
       unsubInvoices();
       unsubProducts();
+      unsubSellerSettings();
     };
   }, [currentUser?.uid]);
 
@@ -125,11 +140,16 @@ export function useInvoicingPage(currentUser: any) {
     setModalMode("ADD");
     setForm({
       ...initialFormState,
-      invoiceNumber: generateInvoiceNumber()
+      invoiceNumber: generateInvoiceNumber(),
+      sellerName: sellerProfile?.sellerName || "Simple and Yours",
+      sellerAddress: sellerProfile?.sellerAddress || "Tangerang, Banten, Indonesia",
+      sellerContact: sellerProfile?.sellerContact || "Email: sny.osho@gmail.com",
+      logoBase64: sellerProfile?.logoBase64 || "",
+      themeColor: sellerProfile?.themeColor || "#0047AB"
     });
     setFormItems([{ sku: "", productName: "", qty: 1, price: 0 }]);
     setIsModalOpen(true);
-  }, [generateInvoiceNumber, initialFormState]);
+  }, [generateInvoiceNumber, initialFormState, sellerProfile]);
 
   // Handle Open Edit Modal
   const openEditModal = useCallback((invoice: CustomerInvoice) => {
@@ -213,6 +233,26 @@ export function useInvoicingPage(currentUser: any) {
     }
   };
 
+  // Save Seller Profile to Settings separately
+  const handleSaveSellerProfile = async () => {
+    if (!currentUser?.uid) return alert("Sesi pengguna tidak valid.");
+    try {
+      const docRef = doc(db, `users/${currentUser.uid}/settings`, "seller_profile");
+      await setDoc(docRef, {
+        sellerName: form.sellerName.trim(),
+        sellerAddress: form.sellerAddress.trim(),
+        sellerContact: form.sellerContact.trim(),
+        logoBase64: form.logoBase64,
+        themeColor: form.themeColor,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      alert("✅ Profil penjual default berhasil diperbarui!");
+    } catch (error) {
+      console.error("Gagal menyimpan profil penjual:", error);
+      alert("❌ Gagal menyimpan profil penjual.");
+    }
+  };
+
   // Delete Invoice
   const handleDeleteInvoice = async (id: string, invoiceNumber: string) => {
     if (!currentUser?.uid) return;
@@ -286,6 +326,7 @@ export function useInvoicingPage(currentUser: any) {
     setFormItems,
     calculatedValues,
     handleSaveInvoice,
+    handleSaveSellerProfile,
     handleDeleteInvoice,
     statistics
   };

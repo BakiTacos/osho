@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Save, Calendar, User, FileText, Image as ImageIcon, Palette, ShieldCheck, Mail, MapPin } from 'lucide-react';
+import { X, Plus, Trash2, Save, Calendar, User, FileText, Image as ImageIcon, Palette, ShieldCheck, Mail, MapPin, Sparkles } from 'lucide-react';
 import { CustomerInvoiceItem } from '../services/CustomerInvoicePdfService';
 
 interface InvoiceModalProps {
@@ -16,6 +16,7 @@ interface InvoiceModalProps {
   products: any[];
   calculatedValues: { subtotal: number; total: number };
   onSubmit: (e: React.FormEvent) => void;
+  onSaveSellerProfile: () => void; // Simpan default seller profile
 }
 
 export function InvoiceModal({
@@ -28,7 +29,8 @@ export function InvoiceModal({
   setItems,
   products,
   calculatedValues,
-  onSubmit
+  onSubmit,
+  onSaveSellerProfile
 }: InvoiceModalProps) {
 
   const colorPresets = [
@@ -85,7 +87,6 @@ export function InvoiceModal({
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validasi ukuran (maks 1MB agar tidak melampaui limit payload Firestore)
       if (file.size > 1024 * 1024) {
         alert("Ukuran gambar terlalu besar! Maksimal ukuran logo adalah 1MB.");
         return;
@@ -104,18 +105,25 @@ export function InvoiceModal({
     setForm({ ...form, logoBase64: "" });
   };
 
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "-";
+    return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-4xl rounded-t-[32px] sm:rounded-[40px] p-5 sm:p-8 max-h-[94vh] overflow-y-auto shadow-2xl flex flex-col justify-between no-scrollbar">
+      <div className="bg-white w-full max-w-6xl rounded-t-[32px] sm:rounded-[40px] p-5 sm:p-8 max-h-[94vh] overflow-y-auto shadow-2xl flex flex-col justify-between no-scrollbar">
         
         {/* MODAL HEADER */}
-        <div className="flex justify-between items-center mb-6 border-b pb-4 shrink-0">
+        <div className="flex justify-between items-center mb-5 border-b pb-4 shrink-0">
           <div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tighter text-[#0F172A]">
               {mode === "ADD" ? "Buat Invoice Baru" : "Edit Invoice Pelanggan"}
             </h2>
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-              Kelola penagihan penjualan ruko secara profesional
+              Kelola penagihan penjualan ruko secara profesional dengan live preview
             </p>
           </div>
           <button
@@ -127,460 +135,561 @@ export function InvoiceModal({
           </button>
         </div>
 
-        {/* FORM CONTAINER */}
-        <form onSubmit={onSubmit} className="space-y-6 flex-1 overflow-y-auto no-scrollbar pr-0.5">
+        {/* TWO-COLUMN CONTENT GRID */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start overflow-y-auto no-scrollbar flex-1 pr-0.5 pb-2">
           
-          {/* BRANDING, COLOR, & LOGO CUSTOMIZER (BARU & PREMIUM) */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 p-4 sm:p-6 rounded-3xl border border-slate-100">
+          {/* ========================================== */}
+          {/* 📝 LEFT COLUMN: INTERACTIVE FORM EDITOR     */}
+          {/* ========================================== */}
+          <div className="xl:col-span-7 space-y-6">
             
-            {/* Kustomisasi Logo */}
-            <div className="md:col-span-4 space-y-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                <ImageIcon size={12} className="text-slate-400" />
-                <span>Logo Toko Penjual</span>
-              </label>
+            {/* BRANDING, COLOR, & LOGO CUSTOMIZER */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-100/80">
               
-              {form.logoBase64 ? (
-                <div className="relative w-full h-24 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 group">
-                  <img src={form.logoBase64} alt="Preview Logo" className="max-h-full max-w-full object-contain" />
-                  <button
-                    type="button"
-                    onClick={handleRemoveLogo}
-                    className="absolute -top-2 -right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-md cursor-pointer"
-                    title="Hapus Logo"
-                  >
-                    <X size={12} strokeWidth={3} />
-                  </button>
+              {/* Logo Upload */}
+              <div className="md:col-span-4 space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                  <ImageIcon size={12} className="text-slate-400" />
+                  <span>Logo Ruko</span>
+                </label>
+                
+                {form.logoBase64 ? (
+                  <div className="relative w-full h-20 bg-white border border-slate-200 rounded-xl flex items-center justify-center p-2 group">
+                    <img src={form.logoBase64} alt="Preview Logo" className="max-h-full max-w-full object-contain" />
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="absolute -top-2 -right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-md cursor-pointer"
+                      title="Hapus Logo"
+                    >
+                      <X size={10} strokeWidth={3} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative w-full h-20 bg-white border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center hover:border-[#0047AB] transition-colors cursor-pointer p-1">
+                    <ImageIcon size={18} className="text-slate-300 mb-0.5" />
+                    <span className="text-[7.5px] font-black text-slate-400 uppercase text-center">Logo (.png/.jpg)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Theme Color Selection */}
+              <div className="md:col-span-8 space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
+                  <Palette size={12} className="text-slate-400" />
+                  <span>Warna Tema Invoice</span>
+                </label>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 rounded-xl border border-slate-200/60">
+                  <div className="sm:col-span-8 flex flex-wrap gap-1 items-center">
+                    {colorPresets.map((preset) => (
+                      <button
+                        key={preset.hex}
+                        type="button"
+                        onClick={() => setForm({ ...form, themeColor: preset.hex })}
+                        className={`w-5.5 h-5.5 rounded-full border transition-all cursor-pointer ${
+                          form.themeColor === preset.hex ? "scale-110 ring-2 ring-slate-400" : "opacity-80 hover:opacity-100"
+                        }`}
+                        style={{ backgroundColor: preset.hex }}
+                        title={preset.name}
+                      />
+                    ))}
+                  </div>
+                  
+                  <div className="sm:col-span-4 flex items-center gap-1 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 pl-0 sm:pl-2">
+                    <input
+                      type="color"
+                      value={form.themeColor}
+                      onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
+                      className="w-5.5 h-5.5 rounded cursor-pointer border-0 p-0 shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={form.themeColor}
+                      onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
+                      className="w-full bg-slate-50 text-[9px] font-black text-center uppercase tracking-wide py-0.5 rounded border-none outline-none"
+                    />
+                  </div>
                 </div>
-              ) : (
-                <div className="relative w-full h-24 bg-white border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center hover:border-[#0047AB] transition-colors cursor-pointer p-2">
-                  <ImageIcon size={22} className="text-slate-300 mb-1" />
-                  <span className="text-[9px] font-black text-slate-400 uppercase text-center">Pilih Gambar (Maks 1MB)</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </div>
-              )}
+              </div>
+
             </div>
 
-            {/* Kustomisasi Warna Tema */}
-            <div className="md:col-span-8 space-y-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                <Palette size={12} className="text-slate-400" />
-                <span>Warna Tema Invoice (PDF)</span>
-              </label>
+            {/* SELLER (Pengirim) CONFIGURATION */}
+            <div className="space-y-3 bg-slate-50/50 p-4 sm:p-5 rounded-2xl border border-slate-100">
+              <div className="flex justify-between items-center">
+                <h5 className="text-[9px] font-black uppercase text-[#0047AB] tracking-widest">
+                  Data Pengirim (Profil Penjual)
+                </h5>
+                <button
+                  type="button"
+                  onClick={onSaveSellerProfile}
+                  className="cursor-pointer text-[8px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-1"
+                >
+                  <Save size={10} /> Simpan sebagai Default
+                </button>
+              </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 bg-white p-3.5 rounded-xl border border-slate-200/60">
-                <div className="sm:col-span-8 flex flex-wrap gap-1.5 items-center">
-                  {colorPresets.map((preset) => (
-                    <button
-                      key={preset.hex}
-                      type="button"
-                      onClick={() => setForm({ ...form, themeColor: preset.hex })}
-                      className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${
-                        form.themeColor === preset.hex ? "scale-110 ring-2 ring-slate-400" : "opacity-80 hover:opacity-100"
-                      }`}
-                      style={{ backgroundColor: preset.hex }}
-                      title={preset.name}
-                    />
-                  ))}
-                </div>
-                
-                <div className="sm:col-span-4 flex items-center gap-1 border-t sm:border-t-0 sm:border-l border-slate-100 pt-2 sm:pt-0 pl-0 sm:pl-3">
-                  <input
-                    type="color"
-                    value={form.themeColor}
-                    onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
-                    className="w-6 h-6 rounded-md border-0 cursor-pointer p-0 shrink-0"
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                    <ShieldCheck size={11} className="text-slate-400" />
+                    <span>Nama Penjual</span>
+                  </label>
                   <input
                     type="text"
-                    value={form.themeColor}
-                    onChange={(e) => setForm({ ...form, themeColor: e.target.value })}
-                    className="w-full bg-slate-50 text-[10px] font-black text-center uppercase tracking-wide py-1 rounded border-none outline-none"
+                    required
+                    placeholder="Simple and Yours"
+                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                    value={form.sellerName}
+                    onChange={e => setForm({ ...form, sellerName: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                    <MapPin size={11} className="text-slate-400" />
+                    <span>Alamat Toko</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Tangerang, Banten"
+                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                    value={form.sellerAddress}
+                    onChange={e => setForm({ ...form, sellerAddress: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                    <Mail size={11} className="text-slate-400" />
+                    <span>Kontak / Email</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="sny.osho@gmail.com"
+                    className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                    value={form.sellerContact}
+                    onChange={e => setForm({ ...form, sellerContact: e.target.value })}
                   />
                 </div>
               </div>
             </div>
 
-          </div>
-
-          {/* EDITABLE SELLER INFORMATION */}
-          <div className="space-y-3 bg-slate-50/50 p-4 sm:p-6 rounded-3xl border border-slate-100">
-            <h5 className="text-[10px] font-black uppercase text-[#0047AB] tracking-widest">
-              Informasi Pengirim (Penjual)
-            </h5>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* CLIENT & METADATA SECTION */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/50 p-4 sm:p-5 rounded-2xl border border-slate-100">
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                  <ShieldCheck size={12} className="text-slate-400" />
-                  <span>Nama Penjual / Ruko</span>
+                <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                  <FileText size={11} />
+                  <span>Nomor Invoice</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Simple and Yours"
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                  value={form.sellerName}
-                  onChange={e => setForm({ ...form, sellerName: e.target.value })}
+                  className="w-full bg-slate-100 border border-slate-200 rounded-lg py-2 px-2.5 font-black text-xs text-slate-500 cursor-not-allowed outline-none"
+                  value={form.invoiceNumber}
+                  readOnly
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                  <MapPin size={12} className="text-slate-400" />
-                  <span>Alamat Penjual</span>
+                <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                  <User size={11} />
+                  <span>Nama Pelanggan (Klien)</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Tangerang, Banten, Indonesia"
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                  value={form.sellerAddress}
-                  onChange={e => setForm({ ...form, sellerAddress: e.target.value })}
+                  placeholder="Masukkan nama pembeli..."
+                  className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                  value={form.recipient}
+                  onChange={e => setForm({ ...form, recipient: e.target.value })}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                  <Mail size={12} className="text-slate-400" />
-                  <span>Kontak / Email Penjual</span>
+                <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                  <Calendar size={11} />
+                  <span>Tanggal Invoice</span>
                 </label>
                 <input
-                  type="text"
+                  type="date"
                   required
-                  placeholder="sny.osho@gmail.com"
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                  value={form.sellerContact}
-                  onChange={e => setForm({ ...form, sellerContact: e.target.value })}
+                  className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                  value={form.date}
+                  onChange={e => setForm({ ...form, date: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-400 uppercase ml-1 flex items-center gap-1">
+                  <Calendar size={11} />
+                  <span>Tanggal Jatuh Tempo</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  className="w-full bg-white border border-slate-200 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                  value={form.dueDate}
+                  onChange={e => setForm({ ...form, dueDate: e.target.value })}
                 />
               </div>
             </div>
-          </div>
 
-          {/* CLIENT & METADATA SECTION */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50/50 p-4 sm:p-6 rounded-3xl border border-slate-100">
-            {/* Invoice Number */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                <FileText size={12} className="text-slate-400" />
-                <span>Nomor Invoice</span>
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full bg-slate-100 border border-slate-200 rounded-xl py-2.5 px-3 font-black text-xs text-slate-500 cursor-not-allowed outline-none"
-                value={form.invoiceNumber}
-                readOnly
-              />
-            </div>
+            {/* PRODUCTS GRID LIST */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center px-1">
+                <h5 className="text-[9px] font-black uppercase text-[#0047AB] tracking-widest">
+                  Daftar Item Tagihan
+                </h5>
+                <button
+                  type="button"
+                  onClick={handleAddItemRow}
+                  className="cursor-pointer flex items-center gap-1 text-[8px] font-black bg-blue-50 text-[#0047AB] px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-all"
+                >
+                  <Plus size={10} strokeWidth={3} /> TAMBAH BARIS
+                </button>
+              </div>
 
-            {/* Client Recipient Name */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                <User size={12} className="text-slate-400" />
-                <span>Nama Pelanggan (Klien)</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Masukkan nama pembeli..."
-                className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                value={form.recipient}
-                onChange={e => setForm({ ...form, recipient: e.target.value })}
-              />
-            </div>
+              <div className="space-y-2.5 max-h-[250px] overflow-y-auto no-scrollbar pr-0.5">
+                {items.map((item, idx) => (
+                  <div key={idx} className="flex flex-col gap-2 bg-slate-50/40 p-3.5 rounded-xl border border-slate-100">
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                      <div className="col-span-12 sm:col-span-6 space-y-0.5">
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">Pilih dari Katalog</span>
+                        <select
+                          className="w-full bg-white border border-slate-200 rounded-lg py-1 px-1.5 text-xs font-bold text-slate-500 outline-none"
+                          value=""
+                          onChange={(e) => handleSelectProduct(idx, e.target.value)}
+                        >
+                          <option value="">-- Pilih produk dari katalog --</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              [{p.sku || "NO SKU"}] {p.name} - Rp{p.price?.toLocaleString()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-            {/* Spacer / Reserved */}
-            <div className="hidden sm:block"></div>
+                      <div className="col-span-12 sm:col-span-3 space-y-0.5">
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">SKU</span>
+                        <input
+                          type="text"
+                          required
+                          className="w-full bg-white py-1 px-2 rounded-lg text-xs font-black border uppercase outline-none text-slate-700"
+                          placeholder="SKU"
+                          value={item.sku}
+                          onChange={e => handleItemChange(idx, 'sku', e.target.value)}
+                        />
+                      </div>
 
-            {/* Date Pickers */}
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                <Calendar size={12} className="text-slate-400" />
-                <span>Tanggal Invoice</span>
-              </label>
-              <input
-                type="date"
-                required
-                className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                value={form.date}
-                onChange={e => setForm({ ...form, date: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                <Calendar size={12} className="text-slate-400" />
-                <span>Tanggal Jatuh Tempo</span>
-              </label>
-              <input
-                type="date"
-                required
-                className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-bold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                value={form.dueDate}
-                onChange={e => setForm({ ...form, dueDate: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* PRODUCTS GRID LIST */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-center px-1">
-              <h5 className="text-[10px] sm:text-xs font-black uppercase text-[#0047AB] tracking-widest">
-                Daftar Item Invoice
-              </h5>
-              <button
-                type="button"
-                onClick={handleAddItemRow}
-                className="cursor-pointer flex items-center gap-1 text-[8px] sm:text-[9px] font-black bg-blue-50 text-[#0047AB] px-3 py-2 rounded-xl hover:bg-blue-100 transition-all"
-              >
-                <Plus size={12} strokeWidth={3} /> TAMBAH PRODUK BARU
-              </button>
-            </div>
-
-            {/* ITEMS LOOP */}
-            <div className="space-y-3 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5">
-              {items.map((item, idx) => (
-                <div key={idx} className="flex flex-col gap-2 bg-slate-50/40 p-4 rounded-2xl border border-slate-100">
-                  
-                  {/* Row 1: Catalog Selector */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                    <div className="col-span-12 sm:col-span-6 space-y-1">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                        Pilih dari Katalog (Opsional)
-                      </span>
-                      <select
-                        className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-xs font-bold text-slate-500 outline-none"
-                        value=""
-                        onChange={(e) => handleSelectProduct(idx, e.target.value)}
-                      >
-                        <option value="">-- Ketik manual atau pilih produk --</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            [{p.sku || "NO SKU"}] {p.name} - Rp{p.price?.toLocaleString()}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="col-span-12 sm:col-span-3 flex justify-end mt-2 sm:mt-0">
+                        <button
+                          type="button"
+                          disabled={items.length === 1}
+                          onClick={() => handleRemoveItemRow(idx)}
+                          className="cursor-pointer flex items-center gap-1 py-1 px-2.5 bg-red-50 text-red-500 rounded-lg text-[8.5px] font-black uppercase hover:bg-red-100 disabled:opacity-20 transition-all"
+                        >
+                          <Trash2 size={10} /> Hapus
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="col-span-12 sm:col-span-3 space-y-1">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                        Kode SKU
-                      </span>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-white py-1.5 px-2 rounded-lg text-xs font-black border uppercase outline-none text-slate-700"
-                        placeholder="SKU"
-                        value={item.sku}
-                        onChange={e => handleItemChange(idx, 'sku', e.target.value)}
-                      />
-                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                      <div className="col-span-12 sm:col-span-6 space-y-0.5">
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">Nama Produk</span>
+                        <input
+                          type="text"
+                          required
+                          className="w-full bg-white py-1 px-2 rounded-lg text-xs font-bold border outline-none text-slate-700"
+                          placeholder="Nama barang..."
+                          value={item.productName}
+                          onChange={e => handleItemChange(idx, 'productName', e.target.value)}
+                        />
+                      </div>
 
-                    <div className="col-span-12 sm:col-span-3 flex justify-end">
-                      <button
-                        type="button"
-                        disabled={items.length === 1}
-                        onClick={() => handleRemoveItemRow(idx)}
-                        className="cursor-pointer flex items-center gap-1 py-1.5 px-3 bg-red-50 text-red-500 rounded-lg text-[9px] font-black uppercase hover:bg-red-100 disabled:opacity-20 transition-all"
-                      >
-                        <Trash2 size={12} /> Hapus Baris
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Row 2: Manual input, Qty, Price, Subtotal */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center mt-1">
-                    <div className="col-span-12 sm:col-span-6 space-y-1">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                        Nama Barang di Invoice
-                      </span>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-white py-1.5 px-2 rounded-lg text-xs font-bold border outline-none text-slate-700"
-                        placeholder="Nama Produk..."
-                        value={item.productName}
-                        onChange={e => handleItemChange(idx, 'productName', e.target.value)}
-                      />
-                    </div>
-
-                    <div className="col-span-4 sm:col-span-2 space-y-1">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                        Kuantitas
-                      </span>
-                      <input
-                        type="number"
-                        required
-                        min="1"
-                        className="w-full bg-white py-1.5 px-2 rounded-lg text-xs font-black text-center border outline-none text-slate-700"
-                        value={item.qty}
-                        onChange={e => handleItemChange(idx, 'qty', e.target.value)}
-                      />
-                    </div>
-
-                    <div className="col-span-8 sm:col-span-4 space-y-1">
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                        Harga Jual Satuan
-                      </span>
-                      <div className="flex items-center bg-white border rounded-lg px-2">
-                        <span className="text-[10px] font-black text-slate-400 mr-1">Rp</span>
+                      <div className="col-span-4 sm:col-span-2 space-y-0.5">
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">Qty</span>
                         <input
                           type="number"
                           required
-                          min="0"
-                          className="w-full bg-transparent py-1.5 text-xs font-black text-[#0047AB] outline-none"
-                          placeholder="Harga"
-                          value={item.price}
-                          onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                          min="1"
+                          className="w-full bg-white py-1 px-1 rounded-lg text-xs font-black text-center border outline-none text-slate-700"
+                          value={item.qty}
+                          onChange={e => handleItemChange(idx, 'qty', e.target.value)}
                         />
                       </div>
+
+                      <div className="col-span-8 sm:col-span-4 space-y-0.5">
+                        <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block ml-0.5">Harga</span>
+                        <div className="flex items-center bg-white border rounded-lg px-2 py-0.5">
+                          <span className="text-[9px] font-black text-slate-400 mr-0.5">Rp</span>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            className="w-full bg-transparent text-xs font-black text-[#0047AB] outline-none"
+                            value={item.price}
+                            onChange={e => handleItemChange(idx, 'price', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* DISCOUNTS, TAXES, NOTES & BANK REK */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+              <div className="space-y-3">
+                <h5 className="text-[9px] font-black uppercase text-[#0047AB] tracking-widest">PPN & Diskon</h5>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Diskon (Rp)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-xs font-black text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                      value={form.discount}
+                      onChange={e => setForm({ ...form, discount: e.target.value === "" ? 0 : Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Pajak PPN</label>
+                    <select
+                      className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-xs font-black text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB]"
+                      value={form.tax}
+                      onChange={e => setForm({ ...form, tax: Number(e.target.value) })}
+                    >
+                      <option value={0}>0%</option>
+                      <option value={10}>10%</option>
+                      <option value={11}>11%</option>
+                      <option value={12}>12%</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Rekening Pembayaran</label>
+                  <textarea
+                    rows={2}
+                    className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB] resize-none"
+                    value={form.bankInfo}
+                    onChange={e => setForm({ ...form, bankInfo: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h5 className="text-[9px] font-black uppercase text-[#0047AB] tracking-widest">Catatan Memo</h5>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Memo Invoice</label>
+                  <textarea
+                    rows={5}
+                    className="w-full bg-white border border-slate-200 rounded-lg py-1.5 px-2 text-[10px] font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-[#0047AB] resize-none"
+                    placeholder="Ketikan memo pembeli..."
+                    value={form.notes}
+                    onChange={e => setForm({ ...form, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ========================================== */}
+          {/* 🖥️ RIGHT COLUMN: STICKY LIVE PREVIEW        */}
+          {/* ========================================== */}
+          <div className="xl:col-span-5 border-l border-slate-100 pl-4 hidden xl:block sticky top-2 max-h-[78vh] overflow-y-auto no-scrollbar">
+            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200/50 flex flex-col gap-3">
+              
+              {/* Preview Header Alert */}
+              <div className="flex items-center gap-1.5 text-[8.5px] font-black text-[#0047AB] uppercase tracking-widest bg-blue-50/70 py-1.5 px-3 rounded-lg border border-blue-100/50">
+                <Sparkles size={12} className="animate-pulse" />
+                <span>Live Preview Tampilan Cetak PDF</span>
+              </div>
+
+              {/* MINI A5 INVOICE PAGE SIMULATOR */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs font-sans text-[#1E293B] flex flex-col justify-between min-h-[460px] relative overflow-hidden">
+                
+                {/* Header Profile */}
+                <div>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex items-center gap-2">
+                      {form.logoBase64 ? (
+                        <div className="w-8 h-8 rounded border border-slate-100 flex items-center justify-center p-0.5 overflow-hidden shrink-0">
+                          <img src={form.logoBase64} alt="logo preview" className="max-h-full max-w-full object-contain" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-slate-300 shrink-0">
+                          <ImageIcon size={14} />
+                        </div>
+                      )}
+                      <div>
+                        <h4 className="text-xs font-black uppercase leading-tight truncate max-w-[130px]">{form.sellerName || "Simple and Yours"}</h4>
+                        <p className="text-[7px] text-slate-400 truncate max-w-[130px]">{form.sellerAddress || "Alamat Toko"}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <h4 className="text-xs font-black uppercase tracking-tight" style={{ color: form.themeColor }}>INVOICE</h4>
+                      <p className="text-[7.5px] font-black text-slate-500">#{form.invoiceNumber || "INV-NEW"}</p>
+                    </div>
+                  </div>
+
+                  <div className="w-full h-px bg-slate-100 my-3" />
+
+                  {/* Metadata client */}
+                  <div className="grid grid-cols-2 gap-2 text-[8px] bg-slate-50 p-2 rounded-lg">
+                    <div>
+                      <span className="text-slate-400 font-bold uppercase block tracking-wider text-[7px]">Penerima Tagihan</span>
+                      <span className="font-black text-slate-700 truncate block max-w-[100px]">{form.recipient || "-"}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-slate-400 font-bold uppercase block tracking-wider text-[7px]">Rincian Tanggal</span>
+                      <span className="text-slate-500 font-semibold block leading-tight">Inv: {formatDate(form.date)}</span>
+                      <span className="text-red-500 font-black block leading-tight mt-0.5">Tempo: {formatDate(form.dueDate)}</span>
+                    </div>
+                  </div>
+
+                  {/* Items preview list */}
+                  <div className="mt-4">
+                    <div className="grid grid-cols-12 text-[7.5px] font-black text-white uppercase py-1 px-2 rounded" style={{ backgroundColor: form.themeColor }}>
+                      <span className="col-span-7">Deskripsi Produk</span>
+                      <span className="col-span-2 text-center">Qty</span>
+                      <span className="col-span-3 text-right">Subtotal</span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 max-h-[140px] overflow-y-auto no-scrollbar text-[8.5px] mt-1">
+                      {items.map((it, idx) => (
+                        <div key={idx} className="grid grid-cols-12 py-1.5 px-2 font-semibold">
+                          <div className="col-span-7 truncate pr-1">
+                            <span className="font-black uppercase text-[7px] block text-slate-400">[{it.sku || "SKU"}]</span>
+                            <span className="truncate block font-bold">{it.productName || "Nama Produk"}</span>
+                          </div>
+                          <span className="col-span-2 text-center font-black mt-1">{it.qty} Pcs</span>
+                          <span className="col-span-3 text-right font-black mt-1">Rp {Math.round(it.qty * it.price).toLocaleString('id-ID')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subtotals & footer signature preview */}
+                <div className="mt-4 pt-3 border-t border-dashed border-slate-200">
+                  <div className="flex justify-between items-center text-[8.5px] font-bold text-slate-500">
+                    <span>Subtotal:</span>
+                    <span>Rp {Math.round(calculatedValues.subtotal).toLocaleString('id-ID')}</span>
+                  </div>
+                  {form.discount > 0 && (
+                    <div className="flex justify-between items-center text-[8.5px] font-bold text-red-500">
+                      <span>Diskon:</span>
+                      <span>-Rp {Math.round(form.discount).toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                  {form.tax > 0 && (
+                    <div className="flex justify-between items-center text-[8.5px] font-bold text-blue-500">
+                      <span>Pajak ({form.tax}%):</span>
+                      <span>+{form.tax}%</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-xs font-black text-[#0F172A] mt-1 pt-1 border-t border-slate-100">
+                    <span>GRAND TOTAL:</span>
+                    <span style={{ color: form.themeColor }}>
+                      Rp {Math.round(calculatedValues.total).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+
+                  {/* notes preview inside mini box */}
+                  {(form.bankInfo || form.notes) && (
+                    <div className="bg-slate-50 border border-slate-100 p-2 rounded-xl mt-3 text-[7.5px] space-y-1">
+                      {form.bankInfo && <p className="text-slate-500 truncate"><span className="font-bold text-slate-700">Bank:</span> {form.bankInfo.replace(/\n/g, ' • ')}</p>}
+                      {form.notes && <p className="text-slate-500 truncate"><span className="font-bold text-slate-700">Memo:</span> {form.notes}</p>}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex justify-between items-end text-[7px] text-slate-400">
+                    <span>Invoice ini diterbitkan secara digital.</span>
+                    <div className="text-right">
+                      <span className="font-bold text-slate-600 block">Hormat Kami,</span>
+                      <span className="font-black text-slate-800 uppercase block mt-3">{form.sellerName || "Simple and Yours"}</span>
                     </div>
                   </div>
 
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* DISCOUNTS, TAXES, NOTES & BANK REK */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
-            {/* Taxes and Discounts */}
-            <div className="space-y-4">
-              <h5 className="text-[10px] font-black uppercase text-[#0047AB] tracking-widest">
-                Penyesuaian Pajak & Diskon
-              </h5>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider">
-                    Diskon Langsung (Rp)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Contoh: 10000"
-                    className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-black text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                    value={form.discount}
-                    onChange={e => setForm({ ...form, discount: e.target.value === "" ? 0 : Number(e.target.value) })}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider flex items-center gap-1">
-                    <span>Pajak PPN</span> <Palette size={10} className="text-slate-400" />
-                  </label>
-                  <select
-                    className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-black text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB]"
-                    value={form.tax}
-                    onChange={e => setForm({ ...form, tax: Number(e.target.value) })}
-                  >
-                    <option value={0}>Tanpa Pajak (0%)</option>
-                    <option value={10}>PPN 10%</option>
-                    <option value={11}>PPN 11%</option>
-                    <option value={12}>PPN 12%</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Bank Details */}
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider">
-                  Informasi Rekening Bank Ruko
-                </label>
-                <textarea
-                  rows={2}
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-semibold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB] resize-none"
-                  placeholder="Isi nama bank, no rekening, dan nama pemilik..."
-                  value={form.bankInfo}
-                  onChange={e => setForm({ ...form, bankInfo: e.target.value })}
-                />
-              </div>
-            </div>
-
-            {/* Custom Notes */}
-            <div className="space-y-4">
-              <h5 className="text-[10px] font-black uppercase text-[#0047AB] tracking-widest">
-                Catatan Tambahan
-              </h5>
-
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-wider">
-                  Memo Pembayaran / Catatan Invoice
-                </label>
-                <textarea
-                  rows={5}
-                  className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3 font-semibold text-xs text-slate-700 outline-none focus:ring-2 focus:ring-[#0047AB] resize-none"
-                  placeholder="Ketik catatan khusus untuk pelanggan jika ada..."
-                  value={form.notes}
-                  onChange={e => setForm({ ...form, notes: e.target.value })}
-                />
               </div>
             </div>
           </div>
 
-          {/* CALCULATED TOTALS & FOOTER */}
-          <div className="pt-4 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0 bg-white mt-auto">
-            <div className="text-left bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">
-                Kalkulasi Ringkasan Nilai Tagihan
-              </span>
-              <div className="flex gap-4 items-center mt-1">
-                <div>
-                  <span className="text-[8px] font-bold text-slate-400 uppercase">Subtotal:</span>
-                  <span className="text-xs font-bold text-[#0F172A] ml-1">
-                    Rp{Math.round(calculatedValues.subtotal).toLocaleString('id-ID')}
-                  </span>
-                </div>
-                {form.discount > 0 && (
-                  <div>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase">Diskon:</span>
-                    <span className="text-xs font-bold text-red-500 ml-1">
-                      -Rp{Math.round(form.discount).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-                )}
-                {form.tax > 0 && (
-                  <div>
-                    <span className="text-[8px] font-bold text-slate-400 uppercase">Pajak:</span>
-                    <span className="text-xs font-bold text-blue-500 ml-1">
-                      +{form.tax}%
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="mt-1">
-                <span className="text-[10px] font-black text-slate-500 uppercase">GRAND TOTAL:</span>
-                <span className="text-lg font-black text-[#0047AB] ml-2" style={{ color: form.themeColor }}>
-                  Rp {Math.round(calculatedValues.total).toLocaleString('id-ID')}
+        </div>
+
+        {/* CALCULATED TOTALS & FOOTER ACTIONS */}
+        <div className="pt-4 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0 bg-white mt-4">
+          <div className="text-left bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">
+              Ringkasan Nilai Tagihan
+            </span>
+            <div className="flex gap-4 items-center mt-1">
+              <div>
+                <span className="text-[8px] font-bold text-slate-400 uppercase">Subtotal:</span>
+                <span className="text-xs font-bold text-[#0F172A] ml-1">
+                  Rp{Math.round(calculatedValues.subtotal).toLocaleString('id-ID')}
                 </span>
               </div>
+              {form.discount > 0 && (
+                <div>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase">Diskon:</span>
+                  <span className="text-xs font-bold text-red-500 ml-1">
+                    -Rp{Math.round(form.discount).toLocaleString('id-ID')}
+                  </span>
+                </div>
+              )}
+              {form.tax > 0 && (
+                <div>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase">Pajak:</span>
+                  <span className="text-xs font-bold text-blue-500 ml-1">
+                    +{form.tax}%
+                  </span>
+                </div>
+              )}
             </div>
-            
-            <div className="flex gap-2 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={onClose}
-                className="cursor-pointer flex-1 sm:flex-none px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-[#1E293B] rounded-xl font-black text-[10px] uppercase tracking-wider transition-all"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="cursor-pointer flex-[2] sm:flex-none px-8 py-3.5 bg-[#0047AB] hover:bg-blue-800 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md shadow-blue-100 transition-all flex items-center justify-center gap-1.5"
-                style={{ backgroundColor: form.themeColor }}
-              >
-                <Save size={14} /> <span>{mode === "ADD" ? "Simpan Invoice" : "Perbarui Invoice"}</span>
-              </button>
+            <div className="mt-1">
+              <span className="text-[10px] font-black text-slate-500 uppercase">GRAND TOTAL:</span>
+              <span className="text-lg font-black ml-2" style={{ color: form.themeColor }}>
+                Rp {Math.round(calculatedValues.total).toLocaleString('id-ID')}
+              </span>
             </div>
           </div>
-
-        </form>
+          
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              className="cursor-pointer flex-1 sm:flex-none px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-[#1E293B] rounded-xl font-black text-[10px] uppercase tracking-wider transition-all"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              className="cursor-pointer flex-[2] sm:flex-none px-8 py-3.5 text-white rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md shadow-blue-100 transition-all flex items-center justify-center gap-1.5"
+              style={{ backgroundColor: form.themeColor }}
+            >
+              <Save size={14} /> <span>{mode === "ADD" ? "Simpan Invoice" : "Perbarui Invoice"}</span>
+            </button>
+          </div>
+        </div>
 
       </div>
     </div>
