@@ -115,7 +115,12 @@ export class ReturService {
               snapshot.forEach((docSnap) => {
                 const saleData = docSnap.data();
                 if (saleData.status !== "Retur") {
-                  batch.update(docSnap.ref, { status: "Retur", penanganan: "Proses" });
+                  batch.update(docSnap.ref, { 
+                    status: "Retur", 
+                    penanganan: "Proses",
+                    returInputtedAt: serverTimestamp(),
+                    returFinal: false
+                  });
                   updated++;
                 }
               });
@@ -143,6 +148,7 @@ export class ReturService {
                 unrecorded: true,
                 date: todayString,
                 createdAt: serverTimestamp(),
+                returInputtedAt: serverTimestamp(),
                 catatan: matchedProd ? "" : "Otomatis tertahan di karantina karena kode SKU di file Excel tidak terdaftar di sistem ruko."
               });
             }

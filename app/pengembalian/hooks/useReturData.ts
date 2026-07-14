@@ -25,7 +25,8 @@ export const useReturData = (currentUser: any) => {
       const now = new Date();
       const orders = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
-        const createdDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.date ? new Date(data.date) : new Date());
+        const inputField = data.returInputtedAt || data.createdAt;
+        const createdDate = inputField?.toDate ? inputField.toDate() : (data.date ? new Date(data.date) : new Date());
         const diffTime = now.getTime() - createdDate.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         return { id: docSnap.id, ...data, diffDays };
@@ -50,7 +51,8 @@ export const useReturData = (currentUser: any) => {
       returOrders.forEach((order: any) => {
         if (order.returFinal) return;
 
-        const createdDate = order.createdAt?.toDate ? order.createdAt.toDate() : (order.date ? new Date(order.date) : new Date());
+        const inputField = order.returInputtedAt || order.createdAt;
+        const createdDate = inputField?.toDate ? inputField.toDate() : (order.date ? new Date(order.date) : new Date());
         const diffTime = now.getTime() - createdDate.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 

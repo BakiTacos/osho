@@ -146,10 +146,20 @@ export default function PengembalianPage() {
 
   const filteredStats = useMemo(() => {
     const totalLoss = filteredData.reduce((acc, curr) => {
-      if (["Rusak", "Tidak Kembali", "Afkir"].includes(curr.penanganan)) {
-        return acc + Math.abs(curr.profit || 0);
+      const isFinal = curr.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(curr.penanganan);
+      if (!isFinal) return acc;
+      
+      let lossVal = 0;
+      if (curr.penanganan === "Selesai") {
+        lossVal = curr.originalProfit !== undefined && curr.originalProfit > 0 
+          ? Number(curr.originalProfit) 
+          : (curr.profit < 0 ? Math.abs(Number(curr.profit)) : 0);
+      } else {
+        lossVal = curr.originalTotal !== undefined && curr.originalTotal > 0 
+          ? Number(curr.originalTotal) 
+          : (curr.total > 0 ? Number(curr.total) : (curr.profit < 0 ? Math.abs(Number(curr.profit)) : Number(curr.hpp || 0)));
       }
-      return acc;
+      return acc + lossVal;
     }, 0);
 
     return {

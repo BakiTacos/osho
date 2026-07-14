@@ -18,6 +18,7 @@ export interface ReturOrder {
   catatan?: string;
   createdAt: any;
   statusUpdatedAt?: any;
+  returInputtedAt?: any;
   originalTotal?: number;
   originalProfit?: number;
   originalHpp?: number;
