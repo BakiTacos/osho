@@ -49,7 +49,7 @@ export class ReportService {
       
       const isRetur = String(item.status || "").toLowerCase() === 'retur' || item.isRetur === true;
       const isFinal = item.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(item.penanganan);
-      const updateDate = isRetur && isFinal ? this.parseDate(item.statusUpdatedAt) : null;
+      const updateDate = isRetur && isFinal ? this.parseDate(item.statusUpdatedAt || item.createdAt || item.date) : null;
 
       const createdMonth = createdDate ? createdDate.getMonth() : -1;
       const createdYear = createdDate ? createdDate.getFullYear() : -1;
