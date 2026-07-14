@@ -140,6 +140,7 @@ export class ReturService {
                 penanganan: penangananStatus,
                 returFinal: false,
                 profit: 0,
+                unrecorded: true,
                 date: todayString,
                 createdAt: serverTimestamp(),
                 catatan: matchedProd ? "" : "Otomatis tertahan di karantina karena kode SKU di file Excel tidak terdaftar di sistem ruko."
@@ -166,8 +167,34 @@ export class ReturService {
     const qProd = query(collection(db, `users/${this.uid}/products`), where("sku", "==", cleanSku));
     const prodSnap = await getDocs(qProd);
 
+    const returFinal = ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(newStatus);
+    let profitVal = Number(order.profit || 0);
+    const isUnrecorded = order.unrecorded === true || Number(order.total || 0) === 0;
+
+    let costPrice = 0;
+    let sellingPrice = 0;
+    if (!prodSnap.empty) {
+      const prodData = prodSnap.docs[0].data();
+      costPrice = Number(prodData.costPrice || 0);
+      sellingPrice = Number(prodData.price || prodData.sellingPrice || 0);
+    }
+
+    if (isUnrecorded) {
+      const qty = Number(order.qty || 1);
+      if (newStatus === "Selesai") {
+        profitVal = -((sellingPrice - costPrice) * qty);
+      } else if (["Rusak", "Tidak Kembali", "Afkir"].includes(newStatus)) {
+        profitVal = -(sellingPrice * qty);
+      }
+    }
+
     // Kunci perubahan status utama di dokumen riwayat penjualan
-    batch.update(salesDocRef, { penanganan: newStatus, returFinal: newStatus === "Selesai" || newStatus === "Rusak" });
+    batch.update(salesDocRef, { 
+      penanganan: newStatus, 
+      returFinal: returFinal,
+      profit: profitVal,
+      hpp: costPrice * Number(order.qty || 1)
+    });
 
     if (newStatus === "Selesai") {
       // Jika paket dinyatakan mendarat selamat dan kembali masuk rak produk utama ruko
@@ -294,6 +321,12 @@ export class ReturService {
     }
 
     const salesRef = doc(collection(db, `users/${this.uid}/sales`));
+    
+    let initialProfit = 0;
+    if (finalStatusPenanganan === "Selesai") {
+      initialProfit = -totalLostProfit;
+    }
+
     batch.set(salesRef, {
       orderId: form.orderIdOrResi.toUpperCase().trim(),
       resi: form.orderIdOrResi.toUpperCase().trim(), // Duplikat penampung kunci resi sebagai pengenal andalan scanner
@@ -305,8 +338,9 @@ export class ReturService {
       marketplace: `${form.marketplace} (Misterius)`,
       status: "Retur",
       penanganan: finalStatusPenanganan, 
-      returFinal: finalStatusPenanganan === "Selesai", 
-      profit: 0,
+      returFinal: finalStatusPenanganan === "Selesai" || finalStatusPenanganan === "Rusak" || finalStatusPenanganan === "Tidak Kembali" || finalStatusPenanganan === "Afkir", 
+      profit: initialProfit,
+      unrecorded: true,
       date: todayLokal,
       createdAt: serverTimestamp(),
       catatan: finalStatusPenanganan === "Selesai"

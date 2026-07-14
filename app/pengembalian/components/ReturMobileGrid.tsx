@@ -20,9 +20,23 @@ export const ReturMobileGrid = ({ items, onStatusChange }: ReturMobileGridProps)
           }`}>{order.marketplace}</span>
         </div>
 
-        <div className="flex justify-between items-center border-t border-b border-slate-50 py-2 text-[10px]">
-          <span className="text-slate-400 uppercase">SKU / Qty:</span>
-          <span className="text-[#0F172A] uppercase">{order.sku} (x{order.qty})</span>
+        <div className="flex flex-col border-t border-b border-slate-50 py-2 text-[10px] space-y-1">
+          <div className="flex justify-between items-center">
+            <span className="text-slate-400 uppercase">SKU / Qty:</span>
+            <span className="text-[#0F172A] uppercase">{order.sku} (x{order.qty})</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-400 uppercase">Status Batas:</span>
+            {!order.returFinal ? (
+              <span className="text-amber-500 uppercase font-black text-[9px]">
+                Sisa {30 - (order.diffDays || 0) > 0 ? `${30 - (order.diffDays || 0)} Hari` : "0 Hari"}
+              </span>
+            ) : (
+              <span className="text-slate-500 uppercase font-black text-[9px]">
+                {order.penanganan === "Tidak Kembali" ? "Kadaluwarsa (Kadaluwarsa)" : "Final"}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-between items-center pt-1">

@@ -17,6 +17,8 @@ export interface ReturOrder {
   date: string;
   catatan?: string;
   createdAt: any;
+  diffDays?: number;
+  unrecorded?: boolean;
 }
 
 // 1. Form Khusus Menyusut Gudang (Internal Ruko)

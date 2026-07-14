@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import { auth, db } from "../lib/firebase";
 import { signOut } from "firebase/auth";
-import { collection, onSnapshot, doc } from "firebase/firestore";
+import { collection, onSnapshot, doc, query, where } from "firebase/firestore";
 import { 
   LayoutDashboard, 
   Calculator, 
@@ -38,12 +38,23 @@ export default function Sidebar() {
   } = useAuth() as any;
   const pathname = usePathname();
   
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [stockAlerts, setStockAlerts] = useState<any[]>([]);
+  const [returAlerts, setReturAlerts] = useState<any[]>([]);
   const [isOpenDrawer, setIsOpenDrawer] = useState(false);
   const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
   const [newAccountEmail, setNewAccountEmail] = useState("");
   const [newAccountPassword, setNewAccountPassword] = useState("");
   const [switchingLoading, setSwitchingLoading] = useState(false);
+
+  const notifications = React.useMemo(() => {
+    const list = [...stockAlerts, ...returAlerts];
+    list.sort((a, b) => {
+      if (a.type === "danger" && b.type !== "danger") return -1;
+      if (a.type !== "danger" && b.type === "danger") return 1;
+      return 0;
+    });
+    return list;
+  }, [stockAlerts, returAlerts]);
 
   const [activeModules, setActiveModules] = useState<any>({
     home: {
@@ -91,9 +102,9 @@ export default function Sidebar() {
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const unsub = onSnapshot(collection(db, `users/${currentUser.uid}/products`), (snap) => {
+    const unsub = onSnapshot(collection(db, `users/${currentUser.uid}/products`), (snap: any) => {
       const alerts: any[] = [];
-      snap.docs.forEach((doc) => {
+      snap.docs.forEach((doc: any) => {
         const data = doc.data();
         const stock = Number(data.stock) || 0;
         const name = data.name || "Produk Tanpa Nama";
@@ -127,9 +138,65 @@ export default function Sidebar() {
         return a.name.localeCompare(b.name);
       });
 
-      setNotifications(alerts);
-    }, (err) => {
+      setStockAlerts(alerts);
+    }, (err: any) => {
       console.error("Gagal mendengarkan data produk untuk notifikasi:", err);
+    });
+
+    return () => unsub();
+  }, [currentUser?.uid]);
+
+  // listen to retur alerts in real-time
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+
+    const q = query(
+      collection(db, `users/${currentUser.uid}/sales`),
+      where("status", "==", "Retur")
+    );
+
+    const unsub = onSnapshot(q, (snap: any) => {
+      const now = new Date();
+      const alerts: any[] = [];
+      
+      snap.docs.forEach((doc: any) => {
+        const data = doc.data();
+        if (data.returFinal && data.penanganan !== "Tidak Kembali") return;
+
+        const createdDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.date ? new Date(data.date) : new Date());
+        const diffTime = now.getTime() - createdDate.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const orderId = data.orderId || "TANPA ID";
+
+        if (!data.returFinal) {
+          if (diffDays >= 25) {
+            const remaining = 30 - diffDays;
+            alerts.push({
+              id: doc.id,
+              type: "warning",
+              sku: data.sku || "N/A",
+              name: `Retur #${orderId}`,
+              msg: `Batas waktu tinggal ${remaining > 0 ? remaining : 0} hari sebelum otomatis hangus & memotong profit ruko Kakak.`,
+              isRetur: true,
+              href: "/pengembalian"
+            });
+          }
+        } else if (data.penanganan === "Tidak Kembali") {
+          alerts.push({
+            id: doc.id,
+            type: "danger",
+            sku: data.sku || "N/A",
+            name: `Retur Kadaluwarsa #${orderId}`,
+            msg: `Paket tidak kembali setelah 30 hari. Otomatis mengurangi profitabilitas Kakak.`,
+            isRetur: true,
+            href: "/pengembalian"
+          });
+        }
+      });
+
+      setReturAlerts(alerts);
+    }, (err: any) => {
+      console.error("Gagal mendengarkan data retur untuk notifikasi:", err);
     });
 
     return () => unsub();
@@ -377,9 +444,9 @@ export default function Sidebar() {
           <div className="relative w-full max-w-sm bg-white h-full shadow-2xl flex flex-col justify-between p-6 animate-in slide-in-from-right duration-300">
             <div className="flex justify-between items-center border-b pb-4 mb-4">
               <div>
-                <h3 className="text-lg font-black text-[#0F172A] tracking-tighter">NOTIFIKASI STOK</h3>
+                <h3 className="text-lg font-black text-[#0F172A] tracking-tighter">NOTIFIKASI SISTEM</h3>
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                  Peringatan stok gudang real-time
+                  Peringatan stok & batas retur ruko
                 </p>
               </div>
               <button 
@@ -427,7 +494,7 @@ export default function Sidebar() {
                       
                       <div className="mt-3 flex gap-2">
                         <Link 
-                          href="/inventaris" 
+                          href={alert.href || "/inventaris"} 
                           onClick={() => setIsOpenDrawer(false)}
                           className={`text-[8px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg transition-all ${
                             alert.type === "danger" 
@@ -435,7 +502,7 @@ export default function Sidebar() {
                               : "bg-amber-200/50 hover:bg-amber-200 text-amber-700"
                           }`}
                         >
-                          Cek Gudang
+                          {alert.isRetur ? "Cek Retur" : "Cek Gudang"}
                         </Link>
                       </div>
                     </div>

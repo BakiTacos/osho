@@ -26,6 +26,17 @@ export const ReturDesktopTable = ({ items, onStatusChange }: ReturDesktopTablePr
                   <span className="text-xs font-black text-[#0047AB]">#{order.orderId}</span>
                   <span className="text-xs sm:text-sm font-black text-[#0F172A] uppercase tracking-tight mt-0.5 truncate max-w-[260px]">{order.product}</span>
                   <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 mt-1 uppercase">SKU: {order.sku} • Qty: {order.qty}</span>
+                  {!order.returFinal ? (
+                    <span className="text-[9px] font-black text-amber-500 mt-1 uppercase">
+                      Batas Waktu: Sisa {30 - (order.diffDays || 0) > 0 ? `${30 - (order.diffDays || 0)} Hari` : "0 Hari"}
+                    </span>
+                  ) : (
+                    order.penanganan === "Tidak Kembali" && (
+                      <span className="text-[9px] font-black text-rose-500 mt-1 uppercase">
+                        Kadaluwarsa (30 Hari), Potong Profit
+                      </span>
+                    )
+                  )}
                   {order.catatan && <span className="mt-1 px-2 py-0.5 bg-red-50 text-red-500 rounded text-[8px] font-black uppercase border border-red-100 w-fit">{order.catatan}</span>}
                 </div>
               </td>
