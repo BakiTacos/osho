@@ -45,44 +45,44 @@ export class ReportService {
    */
   private filterByTime(data: any[]) {
     return data.filter(item => {
-      // Periksa tanggal update status jika dokumen adalah retur yang sudah final
+      const createdDate = this.parseDate(item.createdAt || item.date || item.invoiceDate || item.tanggalNota);
+      
       const isRetur = String(item.status || "").toLowerCase() === 'retur' || item.isRetur === true;
-      let dateField = item.createdAt || item.date || item.invoiceDate || item.tanggalNota;
-      
-      if (isRetur) {
-        const isFinal = item.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(item.penanganan);
-        if (isFinal && item.statusUpdatedAt) {
-          dateField = item.statusUpdatedAt;
-        }
-      }
+      const isFinal = item.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(item.penanganan);
+      const updateDate = isRetur && isFinal ? this.parseDate(item.statusUpdatedAt) : null;
 
-      const itemDate = this.parseDate(dateField);
-      if (!itemDate) return false;
+      const createdMonth = createdDate ? createdDate.getMonth() : -1;
+      const createdYear = createdDate ? createdDate.getFullYear() : -1;
+      const updateMonth = updateDate ? updateDate.getMonth() : -1;
+      const updateYear = updateDate ? updateDate.getFullYear() : -1;
 
-      const itemMonth = itemDate.getMonth();
-      const itemYear = itemDate.getFullYear();
-
-      // Jika memilih rentang Bulan + Tahun aktif
       if (this.timeRange === "Bulan + Tahun") {
-        return itemMonth === this.selectedMonth && itemYear === this.selectedYear;
+        const matchCreated = createdMonth === this.selectedMonth && createdYear === this.selectedYear;
+        const matchUpdated = updateMonth === this.selectedMonth && updateYear === this.selectedYear;
+        return matchCreated || matchUpdated;
       }
       
-      // Jika memilih rentang 3 Bulan Terakhir
       if (this.timeRange === "3 Bulan Terakhir") {
         const now = new Date();
         const threeMonthsAgo = new Date();
         threeMonthsAgo.setMonth(now.getMonth() - 3);
-        return itemDate >= threeMonthsAgo && itemDate <= now;
+        
+        const createdMatch = createdDate && createdDate >= threeMonthsAgo && createdDate <= now;
+        const updatedMatch = updateDate && updateDate >= threeMonthsAgo && updateDate <= now;
+        return createdMatch || updatedMatch;
       }
       
-      // Jika memilih rentang Tahun Ini
       if (this.timeRange === "Tahun Ini") {
         const now = new Date();
-        return itemYear === now.getFullYear();
+        const createdMatch = createdYear === now.getFullYear();
+        const updatedMatch = updateYear === now.getFullYear();
+        return createdMatch || updatedMatch;
       }
 
-      // 🚀 DEFAULT FALLBACK: Jika tidak ada yang cocok, kunci wajib hanya bulan berjalan
-      return itemMonth === this.selectedMonth && itemYear === this.selectedYear;
+      // Default fallback
+      const matchCreated = createdMonth === this.selectedMonth && createdYear === this.selectedYear;
+      const matchUpdated = updateMonth === this.selectedMonth && updateYear === this.selectedYear;
+      return matchCreated || matchUpdated;
     });
   }
 
@@ -90,34 +90,54 @@ export class ReportService {
     const filteredSales = this.filterByTime(this.sales);
     const filteredExpenses = this.filterByTime(this.expenses);
 
-    const totalOmset = filteredSales.reduce((acc, curr) => {
-      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
-      if (isRetur) return acc;
-      return acc + (Number(curr.total) || 0);
-    }, 0);
+    let totalOmset = 0;
+    let totalHpp = 0;
+    let grossProfit = 0;
+    let totalReturnLoss = 0;
 
-    const totalHpp = filteredSales.reduce((acc, curr) => {
-      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
-      if (isRetur) return acc;
-      return acc + (Number(curr.hpp) || 0);
-    }, 0);
+    filteredSales.forEach(curr => {
+      // 1. Cek apakah transaksi merupakan Penjualan Normal di bulan terpilih (berdasarkan createdAt)
+      const createdDate = this.parseDate(curr.createdAt || curr.date);
+      const isSaleInMonth = createdDate && 
+                            createdDate.getMonth() === this.selectedMonth && 
+                            createdDate.getFullYear() === this.selectedYear;
 
-    const grossProfit = filteredSales.reduce((acc, curr) => {
-      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
-      if (isRetur) return acc;
-      return acc + (Number(curr.profit) || 0);
-    }, 0);
+      if (isSaleInMonth) {
+        // Kontribusi penjualan normal (gunakan nilai original jika ada)
+        const t = curr.originalTotal !== undefined ? Number(curr.originalTotal) : Number(curr.total || 0);
+        const h = curr.originalHpp !== undefined ? Number(curr.originalHpp) : Number(curr.hpp || 0);
+        const p = curr.originalProfit !== undefined ? Number(curr.originalProfit) : Number(curr.profit || 0);
+        
+        totalOmset += t;
+        totalHpp += h;
+        grossProfit += p;
+      }
 
-    const totalReturnLoss = filteredSales.reduce((acc, curr) => {
+      // 2. Cek apakah transaksi merupakan Retur Selesai/Final di bulan terpilih (berdasarkan statusUpdatedAt)
       const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
-      if (isRetur) {
-        const val = Number(curr.profit || 0);
-        if (val < 0) {
-          return acc + Math.abs(val);
+      const isFinal = curr.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(curr.penanganan);
+      
+      if (isRetur && isFinal) {
+        const updateDate = this.parseDate(curr.statusUpdatedAt);
+        const isReturnInMonth = updateDate && 
+                                updateDate.getMonth() === this.selectedMonth && 
+                                updateDate.getFullYear() === this.selectedYear;
+
+        if (isReturnInMonth) {
+          let lossVal = 0;
+          if (curr.penanganan === "Selesai") {
+            lossVal = curr.originalProfit !== undefined && curr.originalProfit > 0 
+              ? Number(curr.originalProfit) 
+              : Math.abs(Number(curr.profit || 0));
+          } else {
+            lossVal = curr.originalTotal !== undefined && curr.originalTotal > 0 
+              ? Number(curr.originalTotal) 
+              : Math.abs(Number(curr.profit || 0));
+          }
+          totalReturnLoss += lossVal;
         }
       }
-      return acc;
-    }, 0);
+    });
 
     const totalOpex = filteredExpenses.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
     const netProfit = grossProfit - totalOpex - totalReturnLoss;
@@ -227,16 +247,32 @@ export class ReportService {
     }, 0);
     
     // 2. Akumulasi nilai kerugian riil retur barang yang valid (Menampilkan angka 130rb yang sesungguhnya)
-    const totalReturnLoss = filteredSales.reduce((acc, curr) => {
+    let totalReturnLoss = 0;
+    filteredSales.forEach(curr => {
       const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
-      if (isRetur) {
-        const val = Number(curr.profit || 0);
-        if (val < 0) {
-          return acc + Math.abs(val);
+      const isFinal = curr.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(curr.penanganan);
+      
+      if (isRetur && isFinal) {
+        const updateDate = this.parseDate(curr.statusUpdatedAt);
+        const isReturnInMonth = updateDate && 
+                                updateDate.getMonth() === this.selectedMonth && 
+                                updateDate.getFullYear() === this.selectedYear;
+
+        if (isReturnInMonth) {
+          let lossVal = 0;
+          if (curr.penanganan === "Selesai") {
+            lossVal = curr.originalProfit !== undefined && curr.originalProfit > 0 
+              ? Number(curr.originalProfit) 
+              : Math.abs(Number(curr.profit || 0));
+          } else {
+            lossVal = curr.originalTotal !== undefined && curr.originalTotal > 0 
+              ? Number(curr.originalTotal) 
+              : Math.abs(Number(curr.profit || 0));
+          }
+          totalReturnLoss += lossVal;
         }
       }
-      return acc;
-    }, 0);
+    });
 
     // 3. Breakdown Kategori Operasional (OPEX)
     const opexBreakdown: Record<string, number> = {};

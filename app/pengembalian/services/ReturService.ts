@@ -203,6 +203,10 @@ export class ReturService {
       }
     }
 
+    const origTotal = order.originalTotal !== undefined ? Number(order.originalTotal) : (isUnrecorded ? 0 : Number(order.total || 0));
+    const origProfit = order.originalProfit !== undefined ? Number(order.originalProfit) : (isUnrecorded ? 0 : Number(order.profit || 0));
+    const origHpp = order.originalHpp !== undefined ? Number(order.originalHpp) : (isUnrecorded ? 0 : Number(order.hpp || 0));
+
     // Kunci perubahan status utama di dokumen riwayat penjualan
     batch.update(salesDocRef, { 
       penanganan: newStatus, 
@@ -210,7 +214,10 @@ export class ReturService {
       total: totalVal,
       profit: profitVal,
       hpp: costPrice * Number(order.qty || 1),
-      statusUpdatedAt: serverTimestamp()
+      statusUpdatedAt: serverTimestamp(),
+      originalTotal: origTotal,
+      originalProfit: origProfit,
+      originalHpp: origHpp
     });
 
     if (newStatus === "Selesai") {
@@ -267,6 +274,9 @@ export class ReturService {
         date: todayLokal,
         createdAt: serverTimestamp(),
         statusUpdatedAt: serverTimestamp(),
+        originalTotal: 0,
+        originalProfit: 0,
+        originalHpp: 0,
         catatan: `[Paket Manual Terdata] ${form.reason}`
       });
     } else {
@@ -287,6 +297,9 @@ export class ReturService {
         date: todayLokal,
         createdAt: serverTimestamp(),
         statusUpdatedAt: serverTimestamp(),
+        originalTotal: 0,
+        originalProfit: 0,
+        originalHpp: 0,
         catatan: form.reason
       });
     }
@@ -343,6 +356,9 @@ export class ReturService {
       date: todayLokal,
       createdAt: serverTimestamp(),
       statusUpdatedAt: serverTimestamp(),
+      originalTotal: 0,
+      originalProfit: 0,
+      originalHpp: 0,
       catatan: finalStatusPenanganan === "Selesai"
         ? `[Paket Misterius Selesai] Fisik masuk rak ruko. Booking advanced dilepas. Koreksi profit Rp ${totalLostProfit.toLocaleString('id-ID')} dicatat ke profitabilitas retur. Ket: ${form.reason}`
         : `[Paket Misterius Tertahan - Status: ${finalStatusPenanganan}] Fisik barang belum masuk rak. Alasan: ${form.reason}`

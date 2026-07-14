@@ -63,11 +63,18 @@ export const useReturData = (currentUser: any) => {
           const lossProfit = -(sellingPrice * qty);
 
           const docRef = doc(db, `users/${currentUser.uid}/sales`, order.id);
+          const origTotal = order.originalTotal !== undefined ? Number(order.originalTotal) : (order.unrecorded ? 0 : Number(order.total || 0));
+          const origProfit = order.originalProfit !== undefined ? Number(order.originalProfit) : (order.unrecorded ? 0 : Number(order.profit || 0));
+          const origHpp = order.originalHpp !== undefined ? Number(order.originalHpp) : (order.unrecorded ? 0 : Number(order.hpp || 0));
+
           batch.update(docRef, {
             penanganan: "Tidak Kembali",
             returFinal: true,
             profit: lossProfit,
             statusUpdatedAt: serverTimestamp(),
+            originalTotal: origTotal,
+            originalProfit: origProfit,
+            originalHpp: origHpp,
             catatan: `[AUTO-EXPIRED 30 HARI] Paket retur tidak kembali. Otomatis mengurangi profitabilitas sebesar Rp ${Math.abs(lossProfit).toLocaleString('id-ID')}`
           });
         }
