@@ -45,23 +45,46 @@ export class SettingsService {
   /**
    * Mengambil data modul aktif dari Firestore.
    */
-  public async getActiveModules(): Promise<Record<string, boolean>> {
+  public async getActiveModules(): Promise<Record<string, any>> {
     if (!this.uid) throw new Error("UID pengguna tidak valid.");
     
     const docRef = doc(db, `users/${this.uid}/settings`, "modules");
     const docSnap = await getDoc(docRef);
     
     const defaultModules = {
-      inventaris: true,
-      penjualan: true,
-      invoicing: true,
-      pembayaran: true,
-      retur: true,
-      laporan: true
+      home: {
+        inventaris: true,
+        penjualan: true,
+        invoicing: true,
+        pembayaran: true,
+        retur: true,
+        laporan: true
+      },
+      mobileNavbar: {
+        inventaris: true,
+        penjualan: true,
+        invoicing: false,
+        pembayaran: false,
+        retur: true,
+        laporan: false
+      },
+      sidebar: {
+        inventaris: true,
+        penjualan: true,
+        invoicing: true,
+        pembayaran: true,
+        retur: true,
+        laporan: true
+      }
     };
     
     if (docSnap.exists()) {
-      return { ...defaultModules, ...docSnap.data() };
+      const data = docSnap.data();
+      return {
+        home: { ...defaultModules.home, ...data.home },
+        mobileNavbar: { ...defaultModules.mobileNavbar, ...data.mobileNavbar },
+        sidebar: { ...defaultModules.sidebar, ...data.sidebar }
+      };
     } else {
       await setDoc(docRef, defaultModules);
       return defaultModules;
@@ -71,12 +94,14 @@ export class SettingsService {
   /**
    * Menyimpan data modul aktif ke Firestore.
    */
-  public async saveActiveModules(modules: Record<string, boolean>): Promise<void> {
+  public async saveActiveModules(modules: Record<string, any>): Promise<void> {
     if (!this.uid) throw new Error("UID pengguna tidak valid.");
     
     const docRef = doc(db, `users/${this.uid}/settings`, "modules");
     await setDoc(docRef, {
-      ...modules,
+      home: modules.home || {},
+      mobileNavbar: modules.mobileNavbar || {},
+      sidebar: modules.sidebar || {},
       updatedAt: serverTimestamp()
     });
   }

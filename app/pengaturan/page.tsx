@@ -73,9 +73,6 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* ========================================== */}
-        {/* 🛠️ TAB 1: MODUL CONFIGURATION               */}
-        {/* ========================================== */}
         {activeSettingsTab === "modul" && modules && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {[
@@ -86,34 +83,65 @@ export default function SettingsPage() {
               { key: "retur", title: "Retur Barang", desc: "Kelola pengembalian barang cacat/rusak dari pelanggan." },
               { key: "laporan", title: "Laporan Laba Rugi", desc: "Tampilkan grafik performa penjualan, omset, HPP, dan profit bulanan." }
             ].map((m) => {
-              const isEnabled = modules[m.key] !== false;
+              const showSidebar = modules.sidebar?.[m.key] !== false;
+              const showHome = modules.home?.[m.key] !== false;
+              const showMobileNavbar = modules.mobileNavbar?.[m.key] !== false;
+              
               return (
-                <button
-                  type="button"
+                <div
                   key={m.key}
-                  onClick={() => toggleModule(m.key)}
-                  className={`w-full flex flex-col justify-between p-6 rounded-[22px] sm:rounded-[32px] border-2 text-left transition-all cursor-pointer ${
-                    isEnabled
-                      ? "border-[#0047AB] bg-blue-50/15"
-                      : "border-slate-100 bg-white hover:border-slate-200"
-                  }`}
+                  className="w-full flex flex-col justify-between p-6 rounded-[22px] sm:rounded-[32px] border border-slate-100 bg-white shadow-2xs hover:border-slate-200 transition-all"
                 >
-                  <div className="flex items-center justify-between w-full mb-3">
-                    <h3 className={`text-sm sm:text-base font-black uppercase ${isEnabled ? "text-[#0047AB]" : "text-slate-600"}`}>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black uppercase text-[#0F172A] tracking-tight mb-2">
                       {m.title}
                     </h3>
-                    <div>
-                      {isEnabled ? (
-                        <CheckSquare size={20} className="text-[#0047AB]" />
-                      ) : (
-                        <Square size={20} className="text-slate-300" />
-                      )}
-                    </div>
+                    <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide leading-relaxed mb-6">
+                      {m.desc}
+                    </p>
                   </div>
-                  <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide leading-relaxed">
-                    {m.desc}
-                  </p>
-                </button>
+                  
+                  <div className="space-y-3 pt-4 border-t border-slate-50">
+                    <button
+                      type="button"
+                      onClick={() => toggleModule("sidebar", m.key)}
+                      className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                    >
+                      <span className="text-[10px] font-black uppercase text-slate-500 group-hover:text-[#0047AB]">Sidebar (Desktop)</span>
+                      {showSidebar ? (
+                        <CheckSquare size={16} className="text-[#0047AB]" />
+                      ) : (
+                        <Square size={16} className="text-slate-300" />
+                      )}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => toggleModule("home", m.key)}
+                      className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                    >
+                      <span className="text-[10px] font-black uppercase text-slate-500 group-hover:text-[#0047AB]">Beranda (Home)</span>
+                      {showHome ? (
+                        <CheckSquare size={16} className="text-[#0047AB]" />
+                      ) : (
+                        <Square size={16} className="text-slate-300" />
+                      )}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => toggleModule("mobileNavbar", m.key)}
+                      className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                    >
+                      <span className="text-[10px] font-black uppercase text-slate-500 group-hover:text-[#0047AB]">Navbar Mobile</span>
+                      {showMobileNavbar ? (
+                        <CheckSquare size={16} className="text-[#0047AB]" />
+                      ) : (
+                        <Square size={16} className="text-slate-300" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>

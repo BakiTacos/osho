@@ -23,22 +23,50 @@ import {
   Bell,
   AlertTriangle,
   X,
-  ShieldCheck
+  ShieldCheck,
+  UserCheck
 } from "lucide-react";
 
 export default function Sidebar() {
-  const { currentUser } = useAuth();
+  const { 
+    currentUser, 
+    primaryUser, 
+    switchUser, 
+    addAndSwitchAccount, 
+    getRememberedAccounts, 
+    removeRememberedAccount 
+  } = useAuth() as any;
   const pathname = usePathname();
   
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpenDrawer, setIsOpenDrawer] = useState(false);
-  const [activeModules, setActiveModules] = useState<Record<string, boolean>>({
-    inventaris: true,
-    penjualan: true,
-    invoicing: true,
-    pembayaran: true,
-    retur: true,
-    laporan: true
+  const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
+  const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [activeModules, setActiveModules] = useState<any>({
+    home: {
+      inventaris: true,
+      penjualan: true,
+      invoicing: true,
+      pembayaran: true,
+      retur: true,
+      laporan: true
+    },
+    mobileNavbar: {
+      inventaris: true,
+      penjualan: true,
+      invoicing: false,
+      pembayaran: false,
+      retur: true,
+      laporan: false
+    },
+    sidebar: {
+      inventaris: true,
+      penjualan: true,
+      invoicing: true,
+      pembayaran: true,
+      retur: true,
+      laporan: true
+    }
   });
 
   // listen to active modules settings in real-time
@@ -47,7 +75,7 @@ export default function Sidebar() {
 
     const unsub = onSnapshot(doc(db, `users/${currentUser.uid}/settings`, "modules"), (docSnap) => {
       if (docSnap.exists()) {
-        setActiveModules(docSnap.data() as Record<string, boolean>);
+        setActiveModules(docSnap.data());
       }
     }, (err) => {
       console.error("Gagal memuat pengaturan modul aktif:", err);
@@ -128,30 +156,29 @@ export default function Sidebar() {
 
   const filteredDesktopItems = desktopItems.filter(item => {
     if (item.name === "Beranda" || item.name === "Pengaturan") return true;
-    if (item.name === "Inventaris") return activeModules.inventaris !== false;
-    if (item.name === "Penjualan") return activeModules.penjualan !== false;
-    if (item.name === "Invoicing") return activeModules.invoicing !== false;
-    if (item.name === "Pembayaran") return activeModules.pembayaran !== false;
-    if (item.name === "Retur") return activeModules.retur !== false;
-    if (item.name === "Laporan") return activeModules.laporan !== false;
+    if (item.name === "Inventaris") return activeModules.sidebar?.inventaris !== false;
+    if (item.name === "Penjualan") return activeModules.sidebar?.penjualan !== false;
+    if (item.name === "Invoicing") return activeModules.sidebar?.invoicing !== false;
+    if (item.name === "Pembayaran") return activeModules.sidebar?.pembayaran !== false;
+    if (item.name === "Retur") return activeModules.sidebar?.retur !== false;
+    if (item.name === "Laporan") return activeModules.sidebar?.laporan !== false;
     return true;
   });
 
-  // 2. DATA SELEKSI UNTUK MOBILE (4 MENU UTAMA OPERASIONAL GUDANG)
-  const mobileNavItems = [
-    { icon: Home, href: "/", name: "Beranda" },
-    { icon: Calculator, href: "/inventaris", name: "Stok" },
-    { icon: LinkIcon, href: "/penjualan", name: "Penjualan" },
-    { icon: BoxIcon, href: "/pengembalian", name: "Retur" },
+  // 2. DATA SELEKSI UNTUK MOBILE (Dinamis sesuai setting modul aktif)
+  const allMobileItemsMap = [
+    { key: "inventaris", icon: Calculator, href: "/inventaris", name: "Stok" },
+    { key: "penjualan", icon: LinkIcon, href: "/penjualan", name: "Penjualan" },
+    { key: "invoicing", icon: FileText, href: "/invoicing", name: "Invoicing" },
+    { key: "pembayaran", icon: ListTodo, href: "/pembayaran", name: "Pembayaran" },
+    { key: "retur", icon: BoxIcon, href: "/pengembalian", name: "Retur" },
+    { key: "laporan", icon: MapIcon, href: "/laporan", name: "Laporan" }
   ];
 
-  const filteredMobileItems = mobileNavItems.filter(item => {
-    if (item.name === "Beranda") return true;
-    if (item.name === "Stok") return activeModules.inventaris !== false;
-    if (item.name === "Penjualan") return activeModules.penjualan !== false;
-    if (item.name === "Retur") return activeModules.retur !== false;
-    return true;
-  });
+  const filteredMobileItems = [
+    { icon: Home, href: "/", name: "Beranda" },
+    ...allMobileItemsMap.filter(item => activeModules.mobileNavbar?.[item.key] === true)
+  ];
 
   return (
     <>
@@ -205,18 +232,30 @@ export default function Sidebar() {
         {/* Auth Section Desktop */}
         <div className="p-4 border-t border-[#F1F5F9]">
           {currentUser ? (
-            <div className="flex items-center space-x-3 p-3 bg-[#F8F9FB] rounded-2xl border border-[#F1F5F9]">
-              <div className="w-11 h-11 rounded-xl bg-[#CBD5E1] flex items-center justify-center overflow-hidden shrink-0">
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.email}`} alt="avatar" />
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center space-x-3 p-3 bg-[#F8F9FB] rounded-2xl border border-[#F1F5F9]">
+                <div className="w-11 h-11 rounded-xl bg-[#CBD5E1] flex items-center justify-center overflow-hidden shrink-0">
+                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.email}`} alt="avatar" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-[#0F172A] uppercase truncate">
+                    {currentUser.email?.split('@')[0]}
+                  </p>
+                  <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider">
+                    {currentUser.isSwitched ? "Akun Beralih" : "Admin"}
+                  </p>
+                </div>
+                <button onClick={handleLogout} className="p-2 text-[#94A3B8] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0 cursor-pointer">
+                  <LogOut size={18} />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-[#0F172A] uppercase truncate">
-                  {currentUser.email?.split('@')[0]}
-                </p>
-                <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider">Admin</p>
-              </div>
-              <button onClick={handleLogout} className="p-2 text-[#94A3B8] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0 cursor-pointer">
-                <LogOut size={18} />
+              
+              <button
+                type="button"
+                onClick={() => setShowAccountSwitcher(true)}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-600 rounded-xl font-black text-[9px] uppercase tracking-wider transition-colors cursor-pointer text-center"
+              >
+                Ganti Profil Akun
               </button>
             </div>
           ) : (
@@ -273,6 +312,18 @@ export default function Sidebar() {
               {notifications.length}
             </span>
           )}
+        </button>
+      </div>
+
+      {/* Mobile Switch Account Button */}
+      <div className="lg:hidden fixed top-4 right-16 z-[95]">
+        <button
+          type="button"
+          onClick={() => setShowAccountSwitcher(true)}
+          className="relative p-2.5 bg-white border border-[#E2E8F0] text-slate-600 rounded-full shadow-md flex items-center justify-center cursor-pointer active:scale-90 transition-all"
+          title="Ganti Akun"
+        >
+          <User size={18} />
         </button>
       </div>
 
@@ -364,6 +415,121 @@ export default function Sidebar() {
               >
                 Tutup Panel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Account Switcher Modal Overlay */}
+      {showAccountSwitcher && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center animate-in fade-in duration-200">
+          <div 
+            onClick={() => setShowAccountSwitcher(false)}
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs cursor-pointer"
+          />
+          
+          <div className="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-left border border-slate-100">
+            <div className="flex justify-between items-center border-b pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-black text-[#0F172A] uppercase tracking-tight">Ganti Profil Akun</h3>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                  Beralih ruko tanpa logout
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowAccountSwitcher(false)}
+                className="p-1.5 text-slate-400 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1 no-scrollbar">
+              {getRememberedAccounts().map((acc: any) => {
+                const isActive = currentUser?.email === acc.email;
+                return (
+                  <div 
+                    key={acc.email}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      isActive 
+                        ? "border-[#0047AB] bg-blue-50/20" 
+                        : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (acc.isSwitched) {
+                          switchUser(acc);
+                        } else {
+                          switchUser(null);
+                        }
+                        setShowAccountSwitcher(false);
+                      }}
+                      className="flex items-center gap-3 flex-1 text-left cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center font-black text-[10px] text-slate-600">
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${acc.email}`} alt="avatar" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate">{acc.email}</p>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">
+                          {acc.isSwitched ? "Akun Beralih" : "Akun Utama"}
+                        </p>
+                      </div>
+                    </button>
+
+                    {acc.isSwitched && (
+                      <button
+                        type="button"
+                        onClick={() => removeRememberedAccount(acc.email)}
+                        className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors cursor-pointer ml-2 shrink-0"
+                        title="Hapus dari memori"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 pt-4 border-t border-slate-100 space-y-2">
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block ml-1">
+                Tambah Akun Ruko Lain
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-semibold text-slate-700 outline-none focus:bg-white focus:border-[#0047AB]"
+                  placeholder="email.ruko@gmail.com"
+                  value={newAccountEmail}
+                  onChange={e => setNewAccountEmail(e.target.value)}
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter') {
+                      const success = await addAndSwitchAccount(newAccountEmail);
+                      if (success) {
+                        setNewAccountEmail("");
+                        setShowAccountSwitcher(false);
+                      }
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await addAndSwitchAccount(newAccountEmail);
+                    if (success) {
+                      setNewAccountEmail("");
+                      setShowAccountSwitcher(false);
+                    }
+                  }}
+                  className="bg-[#0047AB] hover:bg-blue-800 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all active:scale-95 cursor-pointer"
+                >
+                  Tambah
+                </button>
+              </div>
             </div>
           </div>
         </div>

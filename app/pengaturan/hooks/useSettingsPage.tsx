@@ -7,7 +7,7 @@ import { AdminFeesSettings } from "../types/settings";
 
 export function useSettingsPage(currentUser: any) {
   const [feeSettings, setFeeSettings] = useState<AdminFeesSettings | null>(null);
-  const [modules, setModules] = useState<Record<string, boolean> | null>(null);
+  const [modules, setModules] = useState<any | null>(null);
   const [fetching, setFetching] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -48,10 +48,13 @@ export function useSettingsPage(currentUser: any) {
   }, []);
 
   // Handler toggle modul
-  const toggleModule = useCallback((key: string) => {
-    setModules((prev) => {
+  const toggleModule = useCallback((target: "home" | "mobileNavbar" | "sidebar", key: string) => {
+    setModules((prev: any) => {
       if (!prev) return null;
-      return { ...prev, [key]: !prev[key] };
+      const copy = { ...prev };
+      if (!copy[target]) copy[target] = {};
+      copy[target][key] = !copy[target][key];
+      return copy;
     });
   }, []);
 

@@ -67,6 +67,14 @@ export const DEFAULT_MARKETPLACE_SETTINGS = {
     ],
     enabled: true
   },
+  pph: {
+    baseFee: 0,
+    fixedFee: 0,
+    programs: [
+      { cap: 0, enabled: true, name: "none", percent: 0.5 }
+    ],
+    enabled: true
+  },
   updatedAt: null
 };
 
