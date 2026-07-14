@@ -118,7 +118,7 @@ export class ReportService {
       const isFinal = curr.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(curr.penanganan);
       
       if (isRetur && isFinal) {
-        const updateDate = this.parseDate(curr.statusUpdatedAt);
+        const updateDate = this.parseDate(curr.statusUpdatedAt || curr.createdAt || curr.date);
         const isReturnInMonth = updateDate && 
                                 updateDate.getMonth() === this.selectedMonth && 
                                 updateDate.getFullYear() === this.selectedYear;
@@ -128,11 +128,11 @@ export class ReportService {
           if (curr.penanganan === "Selesai") {
             lossVal = curr.originalProfit !== undefined && curr.originalProfit > 0 
               ? Number(curr.originalProfit) 
-              : Math.abs(Number(curr.profit || 0));
+              : (curr.profit < 0 ? Math.abs(Number(curr.profit)) : 0);
           } else {
             lossVal = curr.originalTotal !== undefined && curr.originalTotal > 0 
               ? Number(curr.originalTotal) 
-              : Math.abs(Number(curr.profit || 0));
+              : (curr.total > 0 ? Number(curr.total) : (curr.profit < 0 ? Math.abs(Number(curr.profit)) : Number(curr.hpp || 0)));
           }
           totalReturnLoss += lossVal;
         }
@@ -253,7 +253,7 @@ export class ReportService {
       const isFinal = curr.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(curr.penanganan);
       
       if (isRetur && isFinal) {
-        const updateDate = this.parseDate(curr.statusUpdatedAt);
+        const updateDate = this.parseDate(curr.statusUpdatedAt || curr.createdAt || curr.date);
         const isReturnInMonth = updateDate && 
                                 updateDate.getMonth() === this.selectedMonth && 
                                 updateDate.getFullYear() === this.selectedYear;
@@ -263,11 +263,11 @@ export class ReportService {
           if (curr.penanganan === "Selesai") {
             lossVal = curr.originalProfit !== undefined && curr.originalProfit > 0 
               ? Number(curr.originalProfit) 
-              : Math.abs(Number(curr.profit || 0));
+              : (curr.profit < 0 ? Math.abs(Number(curr.profit)) : 0);
           } else {
             lossVal = curr.originalTotal !== undefined && curr.originalTotal > 0 
               ? Number(curr.originalTotal) 
-              : Math.abs(Number(curr.profit || 0));
+              : (curr.total > 0 ? Number(curr.total) : (curr.profit < 0 ? Math.abs(Number(curr.profit)) : Number(curr.hpp || 0)));
           }
           totalReturnLoss += lossVal;
         }
