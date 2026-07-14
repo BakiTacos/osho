@@ -130,8 +130,8 @@ export default function PengembalianPage() {
       let dateField = item.statusUpdatedAt || item.createdAt || item.date;
       const isFinal = item.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(item.penanganan);
       if (!isFinal) {
-        // If not final, fall back to creation date
-        dateField = item.createdAt || item.date;
+        // If not final, fall back to when it was inputted as a return, or creation date
+        dateField = item.returInputtedAt || item.createdAt || item.date;
       }
 
       const createdDate = dateField?.toDate ? dateField.toDate() : (dateField ? new Date(dateField) : null);
