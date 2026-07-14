@@ -30,9 +30,7 @@ export function useReportData(currentUser: any, selectedMonth: number, selectedY
 
         const salesQueryRetur = query(
           collection(db, `users/${currentUser.uid}/sales`),
-          where("status", "==", "Retur"),
-          where("statusUpdatedAt", ">=", startDate),
-          where("statusUpdatedAt", "<=", endDate)
+          where("status", "==", "Retur")
         );
         
         const expensesQuery = query(
