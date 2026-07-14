@@ -209,7 +209,8 @@ export class ReturService {
       returFinal: returFinal,
       total: totalVal,
       profit: profitVal,
-      hpp: costPrice * Number(order.qty || 1)
+      hpp: costPrice * Number(order.qty || 1),
+      statusUpdatedAt: serverTimestamp()
     });
 
     if (newStatus === "Selesai") {
@@ -265,6 +266,7 @@ export class ReturService {
         profit: 0,
         date: todayLokal,
         createdAt: serverTimestamp(),
+        statusUpdatedAt: serverTimestamp(),
         catatan: `[Paket Manual Terdata] ${form.reason}`
       });
     } else {
@@ -284,6 +286,7 @@ export class ReturService {
         profit: -lossAmount,
         date: todayLokal,
         createdAt: serverTimestamp(),
+        statusUpdatedAt: serverTimestamp(),
         catatan: form.reason
       });
     }
@@ -339,6 +342,7 @@ export class ReturService {
       unrecorded: true,
       date: todayLokal,
       createdAt: serverTimestamp(),
+      statusUpdatedAt: serverTimestamp(),
       catatan: finalStatusPenanganan === "Selesai"
         ? `[Paket Misterius Selesai] Fisik masuk rak ruko. Booking advanced dilepas. Koreksi profit Rp ${totalLostProfit.toLocaleString('id-ID')} dicatat ke profitabilitas retur. Ket: ${form.reason}`
         : `[Paket Misterius Tertahan - Status: ${finalStatusPenanganan}] Fisik barang belum masuk rak. Alasan: ${form.reason}`

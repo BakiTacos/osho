@@ -17,6 +17,7 @@ export interface ReturOrder {
   date: string;
   catatan?: string;
   createdAt: any;
+  statusUpdatedAt?: any;
   diffDays?: number;
   unrecorded?: boolean;
 }

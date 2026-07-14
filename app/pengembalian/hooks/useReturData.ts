@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { collection, onSnapshot, query, where, orderBy, writeBatch, doc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, orderBy, writeBatch, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { ReturOrder } from "../types/retur";
 
@@ -67,6 +67,7 @@ export const useReturData = (currentUser: any) => {
             penanganan: "Tidak Kembali",
             returFinal: true,
             profit: lossProfit,
+            statusUpdatedAt: serverTimestamp(),
             catatan: `[AUTO-EXPIRED 30 HARI] Paket retur tidak kembali. Otomatis mengurangi profitabilitas sebesar Rp ${Math.abs(lossProfit).toLocaleString('id-ID')}`
           });
         }

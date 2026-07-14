@@ -45,8 +45,18 @@ export class ReportService {
    */
   private filterByTime(data: any[]) {
     return data.filter(item => {
-      // Periksa semua kemungkinan field nama tanggal di database ruko Kakak
-      const itemDate = this.parseDate(item.createdAt || item.date || item.invoiceDate || item.tanggalNota);
+      // Periksa tanggal update status jika dokumen adalah retur yang sudah final
+      const isRetur = String(item.status || "").toLowerCase() === 'retur' || item.isRetur === true;
+      let dateField = item.createdAt || item.date || item.invoiceDate || item.tanggalNota;
+      
+      if (isRetur) {
+        const isFinal = item.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(item.penanganan);
+        if (isFinal && item.statusUpdatedAt) {
+          dateField = item.statusUpdatedAt;
+        }
+      }
+
+      const itemDate = this.parseDate(dateField);
       if (!itemDate) return false;
 
       const itemMonth = itemDate.getMonth();
@@ -71,7 +81,7 @@ export class ReportService {
         return itemYear === now.getFullYear();
       }
 
-      // 🚀 DEFAULT FALLBACK: Jika tidak ada yang cocok, kunci wajib hanya bulan berjalan (Mencegah meluber ke 31 juta)
+      // 🚀 DEFAULT FALLBACK: Jika tidak ada yang cocok, kunci wajib hanya bulan berjalan
       return itemMonth === this.selectedMonth && itemYear === this.selectedYear;
     });
   }

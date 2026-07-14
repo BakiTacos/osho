@@ -127,7 +127,14 @@ export default function PengembalianPage() {
       const currentStatus = item.penanganan || "Proses";
       const matchStatus = statusFilter === "Semua" ? true : currentStatus === statusFilter;
 
-      const createdDate = item.createdAt?.toDate ? item.createdAt.toDate() : (item.date ? new Date(item.date) : null);
+      let dateField = item.statusUpdatedAt || item.createdAt || item.date;
+      const isFinal = item.returFinal === true || ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(item.penanganan);
+      if (!isFinal) {
+        // If not final, fall back to creation date
+        dateField = item.createdAt || item.date;
+      }
+
+      const createdDate = dateField?.toDate ? dateField.toDate() : (dateField ? new Date(dateField) : null);
       let matchTime = true;
       if (createdDate) {
         matchTime = createdDate.getMonth() === selectedMonth && createdDate.getFullYear() === selectedYear;
@@ -136,6 +143,22 @@ export default function PengembalianPage() {
       return matchSearch && matchStatus && matchTime;
     });
   }, [returOrders, searchTerm, statusFilter, selectedMonth, selectedYear]);
+
+  const filteredStats = useMemo(() => {
+    const totalLoss = filteredData.reduce((acc, curr) => {
+      if (["Rusak", "Tidak Kembali", "Afkir"].includes(curr.penanganan)) {
+        return acc + Math.abs(curr.profit || 0);
+      }
+      return acc;
+    }, 0);
+
+    return {
+      totalLoss,
+      totalCases: filteredData.length,
+      processingCount: filteredData.filter(o => !o.returFinal).length,
+      finalCount: filteredData.filter(o => o.returFinal).length
+    };
+  }, [filteredData]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = useMemo(() => {
@@ -188,7 +211,7 @@ export default function PengembalianPage() {
         />
       )}
 
-      <div className="px-4 sm:px-10"><ReturStats stats={stats} /></div>
+      <div className="px-4 sm:px-10"><ReturStats stats={filteredStats} /></div>
       
       <div className="px-4 sm:px-10">
         <ReturFilters 
