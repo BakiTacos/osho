@@ -2,46 +2,36 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "../lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../lib/firebase";
+import Cookies from "js-cookie";
 
 // Buat context
 const AuthContext = createContext();
 
 // Buat provider (pembungkus)
 export function AuthProvider({ children }) {
-  const [primaryUser, setPrimaryUser] = useState(null);
-  const [switchedUser, setSwitchedUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Load switched user dari localStorage jika ada
-  useEffect(() => {
-    const saved = localStorage.getItem("sny_active_switched_user");
-    if (saved) {
-      try {
-        setSwitchedUser(JSON.parse(saved));
-      } catch (e) {
-        console.error("Gagal parsing active switched user:", e);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     // onAuthStateChanged adalah listener real-time dari Firebase Auth
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Simpan mapping email ke UID di database publik agar akun lain bisa lookup UID aslinya
+        // Segarkan kuki sesi dengan token baru
         try {
-          await setDoc(doc(db, "user_mappings", user.email), {
-            uid: user.uid,
-            email: user.email
-          }, { merge: true });
+          const token = await user.getIdToken();
+          const secureCookie = typeof window !== 'undefined' && window.location.protocol === 'https:';
+          Cookies.set('session_token', token, { 
+            expires: 30, 
+            secure: secureCookie, 
+            sameSite: 'strict'
+          });
         } catch (e) {
-          console.error("Gagal mencatat mapping user:", e);
+          console.error("Gagal memperbarui kuki sesi:", e);
         }
       }
-      setPrimaryUser(user);
+      setCurrentUser(user);
       setLoading(false);
     });
 
@@ -49,126 +39,105 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // Hitung currentUser: gunakan switchedUser jika diset, jika tidak kembali ke primaryUser
-  const currentUser = switchedUser || primaryUser;
-
-  // Fungsi untuk ganti akun/profil aktif
-  const switchUser = (userObj) => {
-    if (!userObj) {
-      setSwitchedUser(null);
-      localStorage.removeItem("sny_active_switched_user");
-    } else {
-      setSwitchedUser(userObj);
-      localStorage.setItem("sny_active_switched_user", JSON.stringify(userObj));
+  // Menambah akun baru dengan mengautentikasi kata sandinya
+  const addAndSwitchAccount = async (email, password) => {
+    if (!email || !password) {
+      throw new Error("Email dan kata sandi wajib diisi.");
     }
-  };
-
-  // Fungsi hash deterministik untuk generate UID konsisten jika user belum pernah login di perangkat ini
-  const getDeterministicUid = (email) => {
-    let hash = 0;
-    for (let i = 0; i < email.length; i++) {
-      const char = email.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash |= 0;
-    }
-    const cleanEmail = email.replace(/[^a-zA-Z0-9]/g, "");
-    return `sw_${Math.abs(hash)}_${cleanEmail}`.substring(0, 28);
-  };
-
-  // Menambah akun baru dan langsung berpindah
-  const addAndSwitchAccount = async (targetEmail) => {
-    if (!targetEmail || !targetEmail.includes("@")) {
-      alert("Email tidak valid.");
-      return false;
-    }
-
-    const emailClean = targetEmail.trim().toLowerCase();
-
-    // Coba cari real UID dari database mappings
-    let targetUid = "";
+    
+    const emailClean = email.trim().toLowerCase();
+    
+    // Coba sign-in ke Firebase Auth dengan credentials tersebut
+    const userCredential = await signInWithEmailAndPassword(auth, emailClean, password);
+    const user = userCredential.user;
+    
+    // Simpan credentials terenkripsi base64 di localStorage
+    const saved = localStorage.getItem("sny_remembered_credentials");
+    let credentialsList = [];
     try {
-      const docSnap = await getDoc(doc(db, "user_mappings", emailClean));
-      if (docSnap.exists()) {
-        targetUid = docSnap.data().uid;
-      }
+      credentialsList = saved ? JSON.parse(saved) : [];
     } catch (e) {
-      console.error("Gagal lookup mapping:", e);
+      console.error(e);
     }
-
-    // Jika belum ada mapping, gunakan hash deterministik
-    if (!targetUid) {
-      targetUid = getDeterministicUid(emailClean);
-    }
-
-    const newUser = {
-      uid: targetUid,
+    
+    // Hapus duplikat email jika sudah ada
+    credentialsList = credentialsList.filter(c => c.email !== emailClean);
+    credentialsList.push({
       email: emailClean,
-      isSwitched: true
-    };
-
-    // Simpan ke daftar akun tersimpan di localStorage
-    const savedAccounts = localStorage.getItem("sny_remembered_accounts");
-    const accounts = savedAccounts ? JSON.parse(savedAccounts) : [];
-    if (!accounts.some(a => a.email === newUser.email)) {
-      accounts.push(newUser);
-      localStorage.setItem("sny_remembered_accounts", JSON.stringify(accounts));
-    }
-
-    switchUser(newUser);
-    return true;
+      password: btoa(password)
+    });
+    
+    localStorage.setItem("sny_remembered_credentials", JSON.stringify(credentialsList));
+    return user;
   };
 
-  // Mengambil seluruh daftar akun yang diingat
-  const getRememberedAccounts = () => {
-    const saved = localStorage.getItem("sny_remembered_accounts");
-    let accounts = [];
+  // Berpindah akun secara cepat dengan login ulang di background
+  const switchAccount = async (email) => {
+    const saved = localStorage.getItem("sny_remembered_credentials");
+    let credentialsList = [];
     try {
-      accounts = saved ? JSON.parse(saved) : [];
+      credentialsList = saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error(e);
     }
+    
+    const target = credentialsList.find(c => c.email === email.trim().toLowerCase());
+    if (!target) {
+      throw new Error("Kredensial untuk akun ini tidak ditemukan di memori.");
+    }
+    
+    const password = atob(target.password);
+    const userCredential = await signInWithEmailAndPassword(auth, target.email, password);
+    return userCredential.user;
+  };
 
-    // Selalu masukkan user utama (Firebase Auth) ke dalam list paling atas
-    if (primaryUser) {
-      const primaryObj = {
-        uid: primaryUser.uid,
-        email: primaryUser.email,
-        isSwitched: false
-      };
-      if (!accounts.some(a => a.email === primaryUser.email)) {
-        return [primaryObj, ...accounts];
+  // Mengambil seluruh daftar email akun yang tersimpan
+  const getRememberedAccounts = () => {
+    const saved = localStorage.getItem("sny_remembered_credentials");
+    let credentialsList = [];
+    try {
+      credentialsList = saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error(e);
+    }
+    
+    const list = credentialsList.map(c => c.email);
+    
+    // Selalu masukkan user aktif ke dalam list
+    if (currentUser?.email) {
+      const activeEmail = currentUser.email.toLowerCase();
+      if (!list.includes(activeEmail)) {
+        list.unshift(activeEmail);
       } else {
-        const filtered = accounts.filter(a => a.email !== primaryUser.email);
-        return [primaryObj, ...filtered];
+        // pindahkan user aktif ke depan
+        const filtered = list.filter(e => e !== activeEmail);
+        filtered.unshift(activeEmail);
+        return filtered;
       }
     }
-    return accounts;
+    return list;
   };
 
-  // Menghapus akun dari list memori browser
+  // Menghapus akun dari memori browser
   const removeRememberedAccount = (email) => {
-    const saved = localStorage.getItem("sny_remembered_accounts");
-    let accounts = [];
+    const emailClean = email.trim().toLowerCase();
+    const saved = localStorage.getItem("sny_remembered_credentials");
+    let credentialsList = [];
     try {
-      accounts = saved ? JSON.parse(saved) : [];
+      credentialsList = saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error(e);
     }
-    accounts = accounts.filter(a => a.email !== email);
-    localStorage.setItem("sny_remembered_accounts", JSON.stringify(accounts));
-
-    if (switchedUser && switchedUser.email === email) {
-      switchUser(null);
-    }
+    
+    credentialsList = credentialsList.filter(c => c.email !== emailClean);
+    localStorage.setItem("sny_remembered_credentials", JSON.stringify(credentialsList));
   };
 
   const value = {
     currentUser,
-    primaryUser,
-    switchedUser,
     loading,
-    switchUser,
     addAndSwitchAccount,
+    switchAccount,
     getRememberedAccounts,
     removeRememberedAccount
   };

@@ -24,15 +24,15 @@ import {
   AlertTriangle,
   X,
   ShieldCheck,
-  UserCheck
+  Loader2
 } from "lucide-react";
 
 export default function Sidebar() {
   const { 
     currentUser, 
     primaryUser, 
-    switchUser, 
     addAndSwitchAccount, 
+    switchAccount,
     getRememberedAccounts, 
     removeRememberedAccount 
   } = useAuth() as any;
@@ -42,6 +42,9 @@ export default function Sidebar() {
   const [isOpenDrawer, setIsOpenDrawer] = useState(false);
   const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
   const [newAccountEmail, setNewAccountEmail] = useState("");
+  const [newAccountPassword, setNewAccountPassword] = useState("");
+  const [switchingLoading, setSwitchingLoading] = useState(false);
+
   const [activeModules, setActiveModules] = useState<any>({
     home: {
       inventaris: true,
@@ -180,6 +183,40 @@ export default function Sidebar() {
     ...allMobileItemsMap.filter(item => activeModules.mobileNavbar?.[item.key] === true)
   ];
 
+  const handleAddAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAccountEmail || !newAccountPassword) {
+      alert("Harap isi email dan kata sandi.");
+      return;
+    }
+    setSwitchingLoading(true);
+    try {
+      await addAndSwitchAccount(newAccountEmail, newAccountPassword);
+      setNewAccountEmail("");
+      setNewAccountPassword("");
+      setShowAccountSwitcher(false);
+      alert("Akun berhasil ditambahkan dan dialihkan!");
+    } catch (e: any) {
+      alert(`Gagal login akun baru: ${e.message}`);
+    } finally {
+      setSwitchingLoading(false);
+    }
+  };
+
+  const handleSwitchAccount = async (targetEmail: string) => {
+    if (targetEmail.toLowerCase() === currentUser?.email?.toLowerCase()) return;
+    setSwitchingLoading(true);
+    try {
+      await switchAccount(targetEmail);
+      setShowAccountSwitcher(false);
+      alert("Berhasil beralih ruko!");
+    } catch (e: any) {
+      alert(`Gagal beralih ruko: ${e.message}`);
+    } finally {
+      setSwitchingLoading(false);
+    }
+  };
+
   return (
     <>
       {/* ========================================= */}
@@ -242,7 +279,7 @@ export default function Sidebar() {
                     {currentUser.email?.split('@')[0]}
                   </p>
                   <p className="text-[10px] text-[#64748B] font-bold uppercase tracking-wider">
-                    {currentUser.isSwitched ? "Akun Beralih" : "Admin"}
+                    {currentUser.email?.toLowerCase() !== primaryUser?.email?.toLowerCase() ? "Akun Beralih" : "Admin"}
                   </p>
                 </div>
                 <button onClick={handleLogout} className="p-2 text-[#94A3B8] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0 cursor-pointer">
@@ -255,7 +292,7 @@ export default function Sidebar() {
                 onClick={() => setShowAccountSwitcher(true)}
                 className="w-full py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-600 rounded-xl font-black text-[9px] uppercase tracking-wider transition-colors cursor-pointer text-center"
               >
-                Ganti Profil Akun
+                Ganti Profil Ruko
               </button>
             </div>
           ) : (
@@ -424,113 +461,112 @@ export default function Sidebar() {
       {showAccountSwitcher && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center animate-in fade-in duration-200">
           <div 
-            onClick={() => setShowAccountSwitcher(false)}
+            onClick={() => { if (!switchingLoading) setShowAccountSwitcher(false); }}
             className="absolute inset-0 bg-black/50 backdrop-blur-xs cursor-pointer"
           />
           
           <div className="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-left border border-slate-100">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <div>
-                <h3 className="text-base font-black text-[#0F172A] uppercase tracking-tight">Ganti Profil Akun</h3>
+                <h3 className="text-base font-black text-[#0F172A] uppercase tracking-tight">Ganti Akun Ruko</h3>
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                  Beralih ruko tanpa logout
+                  Beralih ruko dengan login aman
                 </p>
               </div>
               <button 
                 type="button"
+                disabled={switchingLoading}
                 onClick={() => setShowAccountSwitcher(false)}
-                className="p-1.5 text-slate-400 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                className="p-1.5 text-slate-400 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors cursor-pointer disabled:opacity-50"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1 no-scrollbar">
-              {getRememberedAccounts().map((acc: any) => {
-                const isActive = currentUser?.email === acc.email;
-                return (
-                  <div 
-                    key={acc.email}
-                    className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-                      isActive 
-                        ? "border-[#0047AB] bg-blue-50/20" 
-                        : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (acc.isSwitched) {
-                          switchUser(acc);
-                        } else {
-                          switchUser(null);
-                        }
-                        setShowAccountSwitcher(false);
-                      }}
-                      className="flex items-center gap-3 flex-1 text-left cursor-pointer"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center font-black text-[10px] text-slate-600">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${acc.email}`} alt="avatar" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-slate-800 truncate">{acc.email}</p>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">
-                          {acc.isSwitched ? "Akun Beralih" : "Akun Utama"}
-                        </p>
-                      </div>
-                    </button>
-
-                    {acc.isSwitched && (
-                      <button
-                        type="button"
-                        onClick={() => removeRememberedAccount(acc.email)}
-                        className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors cursor-pointer ml-2 shrink-0"
-                        title="Hapus dari memori"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-slate-100 space-y-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block ml-1">
-                Tambah Akun Ruko Lain
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-semibold text-slate-700 outline-none focus:bg-white focus:border-[#0047AB]"
-                  placeholder="email.ruko@gmail.com"
-                  value={newAccountEmail}
-                  onChange={e => setNewAccountEmail(e.target.value)}
-                  onKeyDown={async e => {
-                    if (e.key === 'Enter') {
-                      const success = await addAndSwitchAccount(newAccountEmail);
-                      if (success) {
-                        setNewAccountEmail("");
-                        setShowAccountSwitcher(false);
-                      }
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const success = await addAndSwitchAccount(newAccountEmail);
-                    if (success) {
-                      setNewAccountEmail("");
-                      setShowAccountSwitcher(false);
-                    }
-                  }}
-                  className="bg-[#0047AB] hover:bg-blue-800 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all active:scale-95 cursor-pointer"
-                >
-                  Tambah
-                </button>
+            {switchingLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+                <Loader2 className="animate-spin text-[#0047AB]" size={28} />
+                <p className="text-[9px] font-black uppercase tracking-widest">Memproses Login...</p>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* List of accounts */}
+                <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1 no-scrollbar">
+                  {getRememberedAccounts().map((email: string) => {
+                    const isActive = currentUser?.email?.toLowerCase() === email.toLowerCase();
+                    const isPrimary = email.toLowerCase() === primaryUser?.email?.toLowerCase();
+                    return (
+                      <div 
+                        key={email}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                          isActive 
+                            ? "border-[#0047AB] bg-blue-50/20" 
+                            : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchAccount(email)}
+                          className="flex items-center gap-3 flex-1 text-left cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center font-black text-[10px] text-slate-600">
+                            <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`} alt="avatar" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{email}</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">
+                              {isPrimary ? "Akun Utama" : "Akun Terhubung"}
+                            </p>
+                          </div>
+                        </button>
+
+                        {!isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => removeRememberedAccount(email)}
+                            className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors cursor-pointer ml-2 shrink-0"
+                            title="Hapus dari memori"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add new account input form */}
+                <form onSubmit={handleAddAccountSubmit} className="mt-5 pt-4 border-t border-slate-100 space-y-3">
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block ml-1">
+                    Hubungkan Akun Baru
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="email"
+                      required
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-semibold text-slate-700 outline-none focus:bg-white focus:border-[#0047AB]"
+                      placeholder="email.toko@gmail.com"
+                      value={newAccountEmail}
+                      onChange={e => setNewAccountEmail(e.target.value)}
+                    />
+                    <input
+                      type="password"
+                      required
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-semibold text-slate-700 outline-none focus:bg-white focus:border-[#0047AB]"
+                      placeholder="Kata Sandi Ruko"
+                      value={newAccountPassword}
+                      onChange={e => setNewAccountPassword(e.target.value)}
+                    />
+                    <button
+                      type="submit"
+                      className="w-full bg-[#0047AB] hover:bg-blue-800 text-white text-[10px] font-black uppercase tracking-wider py-2.5 rounded-xl transition-all active:scale-95 cursor-pointer text-center"
+                    >
+                      Hubungkan & Beralih
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         </div>
       )}
