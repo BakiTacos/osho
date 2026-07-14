@@ -47,13 +47,13 @@ export const FinanceView = ({ summary, chartData, deepDetail }: FinanceViewProps
     <div className="mt-6 space-y-6 animate-in fade-in duration-300 w-full">
       
       {/* ======================================================= */}
-      {/* 📱 BARIS 1: 3 KARTU FINANSIAL UTAMA SEJAJAR DI MOBILE      */}
+      {/* 📱 BARIS 1: 4 KARTU FINANSIAL UTAMA SEJAJAR               */}
       {/* ======================================================= */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 w-full">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 w-full">
         {/* KARTU 1: OMSET */}
         <div className="bg-white p-3 sm:p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider">Omset</p>
-          <h3 className="text-[10px] sm:text-xs md:text-lg lg:text-xl font-black text-emerald-600 truncate mt-1">
+          <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl font-black text-emerald-600 truncate mt-1">
             Rp {Math.round(summary.totalOmset).toLocaleString('id-ID')}
           </h3>
         </div>
@@ -61,16 +61,24 @@ export const FinanceView = ({ summary, chartData, deepDetail }: FinanceViewProps
         {/* KARTU 2: LABA KOTOR */}
         <div className="bg-white p-3 sm:p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider">Laba Kotor</p>
-          <h3 className="text-[10px] sm:text-xs md:text-lg lg:text-xl font-black text-[#0047AB] truncate mt-1">
+          <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl font-black text-[#0047AB] truncate mt-1">
             Rp {Math.round(summary.grossProfit).toLocaleString('id-ID')}
           </h3>
         </div>
 
-        {/* KARTU 3: OPEX */}
+        {/* KARTU 3: OPERASIONAL */}
         <div className="bg-white p-3 sm:p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
           <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider">Operasional</p>
-          <h3 className="text-[10px] sm:text-xs md:text-lg lg:text-xl font-black text-red-600 truncate mt-1">
+          <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl font-black text-red-600 truncate mt-1">
             Rp {Math.round(summary.totalOpex).toLocaleString('id-ID')}
+          </h3>
+        </div>
+
+        {/* KARTU 4: KERUGIAN RETUR */}
+        <div className="bg-white p-3 sm:p-5 rounded-2xl border border-slate-100 shadow-xs flex flex-col justify-between">
+          <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider">Kerugian Retur</p>
+          <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl font-black text-rose-500 truncate mt-1">
+            Rp {Math.round(summary.totalReturnLoss || 0).toLocaleString('id-ID')}
           </h3>
         </div>
       </div>

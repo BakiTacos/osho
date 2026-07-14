@@ -7,6 +7,10 @@ interface ReturFiltersProps {
   setSearchTerm: (v: string) => void;
   statusFilter: string;
   setStatusFilter: (v: string) => void;
+  selectedMonth: number;
+  setSelectedMonth: (v: number) => void;
+  selectedYear: number;
+  setSelectedYear: (v: number) => void;
   isImporting: boolean;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>, mp: "shopee" | "tiktok") => void;
   onOpenManualModal: () => void; // Untuk Afkir Internal
@@ -14,40 +18,67 @@ interface ReturFiltersProps {
 }
 
 export const ReturFilters = ({
-  searchTerm, setSearchTerm, statusFilter, setStatusFilter, isImporting, onFileUpload, onOpenManualModal, onOpenMysteriousModal
-}: ReturFiltersProps) => (
-  <div className="space-y-4 w-full">
-    {/* BARIS UTAMA ATAS */}
-    <div className="flex flex-col sm:flex-row gap-3">
-      <div className="relative flex-1">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-        <input 
-          type="text" 
-          placeholder="Cari No. Pesanan atau Nama Produk..." 
-          className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs font-bold outline-none focus:ring-2 focus:ring-[#0047AB] transition-all shadow-sm"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+  searchTerm, setSearchTerm, statusFilter, setStatusFilter,
+  selectedMonth, setSelectedMonth, selectedYear, setSelectedYear,
+  isImporting, onFileUpload, onOpenManualModal, onOpenMysteriousModal
+}: ReturFiltersProps) => {
+  const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const years = [2024, 2025, 2026];
+
+  return (
+    <div className="space-y-4 w-full">
+      {/* BARIS UTAMA ATAS */}
+      <div className="flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+          <input 
+            type="text" 
+            placeholder="Cari No. Pesanan atau Nama Produk..." 
+            className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs font-bold outline-none focus:ring-2 focus:ring-[#0047AB] transition-all shadow-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
+          {/* Filter Periode Waktu */}
+          <div className="flex bg-white border border-slate-200 rounded-xl p-1 shrink-0 shadow-sm h-[38px] items-center">
+            <select 
+              value={selectedMonth} 
+              onChange={(e) => setSelectedMonth(Number(e.target.value))} 
+              className="bg-transparent border-none text-[10px] sm:text-xs font-black uppercase px-2 outline-none cursor-pointer text-[#0047AB]"
+            >
+              {months.map((m, i) => <option key={m} value={i}>{m}</option>)}
+            </select>
+            <div className="w-[1px] h-4 bg-slate-200 self-center"></div>
+            <select 
+              value={selectedYear} 
+              onChange={(e) => setSelectedYear(Number(e.target.value))} 
+              className="bg-transparent border-none text-[10px] sm:text-xs font-black uppercase px-2 outline-none cursor-pointer text-[#0047AB]"
+            >
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+
+          <div className="relative shrink-0">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl py-2 pl-10 pr-8 text-[10px] sm:text-xs font-black text-slate-600 uppercase outline-none focus:ring-2 focus:ring-[#0047AB] transition-all cursor-pointer shadow-sm appearance-none h-[38px]"
+            >
+              <option value="Semua">Semua Status</option>
+              <option value="Proses">🔄 Sedang Diproses</option>
+              <option value="Pending SKU">⚠️ Karantina SKU Misterius</option>
+              <option value="Menunggu Barang">🚚 Menunggu Barang</option>
+              <option value="Selesai">✅ Selesai (Barang OK)</option>
+              <option value="Rusak">❌ Barang Rusak</option>
+              <option value="Tidak Kembali">⚠️ Tidak Kembali</option>
+              <option value="Afkir">🗑️ Penyusutan Gudang</option>
+            </select>
+          </div>
+        </div>
       </div>
-      
-      <div className="relative w-full sm:w-auto shrink-0">
-        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl py-2.5 pl-10 pr-8 text-[10px] sm:text-xs font-black text-slate-600 uppercase outline-none focus:ring-2 focus:ring-[#0047AB] transition-all cursor-pointer shadow-sm appearance-none"
-        >
-          <option value="Semua">Semua Status</option>
-          <option value="Proses">🔄 Sedang Diproses</option>
-          <option value="Pending SKU">⚠️ Karantina SKU Misterius</option>
-          <option value="Menunggu Barang">🚚 Menunggu Barang</option>
-          <option value="Selesai">✅ Selesai (Barang OK)</option>
-          <option value="Rusak">❌ Barang Rusak</option>
-          <option value="Tidak Kembali">⚠️ Tidak Kembali</option>
-          <option value="Afkir">🗑️ Penyusutan Gudang</option>
-        </select>
-      </div>
-    </div>
 
     {/* 👑 RENDER DESKTOP VIEW: TOMBOL AKSI SEJAJAR SEMPURNA */}
     <div className="hidden md:flex items-center justify-between bg-white p-3 rounded-2xl border border-slate-100 shadow-xs">
@@ -111,4 +142,5 @@ export const ReturFilters = ({
       </button>
     </div>
   </div>
-);
+  );
+};

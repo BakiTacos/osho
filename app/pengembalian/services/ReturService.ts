@@ -169,6 +169,7 @@ export class ReturService {
 
     const returFinal = ["Selesai", "Rusak", "Tidak Kembali", "Afkir"].includes(newStatus);
     let profitVal = Number(order.profit || 0);
+    let totalVal = Number(order.total || 0);
     const isUnrecorded = order.unrecorded === true || Number(order.total || 0) === 0;
 
     let costPrice = 0;
@@ -179,12 +180,26 @@ export class ReturService {
       sellingPrice = Number(prodData.price || prodData.sellingPrice || 0);
     }
 
-    if (isUnrecorded) {
+    if (returFinal) {
+      totalVal = 0; // Omset diset ke 0 karena dana dikembalikan ke pembeli
       const qty = Number(order.qty || 1);
-      if (newStatus === "Selesai") {
-        profitVal = -((sellingPrice - costPrice) * qty);
-      } else if (["Rusak", "Tidak Kembali", "Afkir"].includes(newStatus)) {
-        profitVal = -(sellingPrice * qty);
+      
+      if (isUnrecorded) {
+        if (newStatus === "Selesai") {
+          // Barang kembali bagus: rugi sebesar margin profit yang hilang
+          profitVal = -((sellingPrice - costPrice) * qty);
+        } else {
+          // Barang rusak/hilang: rugi sebesar seluruh harga jual produk
+          profitVal = -(sellingPrice * qty);
+        }
+      } else {
+        if (newStatus === "Selesai") {
+          // Barang kembali bagus: net profit impact adalah 0 karena barang kembali ke rak
+          profitVal = 0;
+        } else {
+          // Barang rusak/hilang: net profit impact rugi sebesar modal HPP barang
+          profitVal = -(costPrice * qty);
+        }
       }
     }
 
@@ -192,6 +207,7 @@ export class ReturService {
     batch.update(salesDocRef, { 
       penanganan: newStatus, 
       returFinal: returFinal,
+      total: totalVal,
       profit: profitVal,
       hpp: costPrice * Number(order.qty || 1)
     });
@@ -254,16 +270,6 @@ export class ReturService {
     } else {
       batch.update(prodRef, { stock: increment(-form.qty) });
       
-      const expRef = doc(collection(db, `users/${this.uid}/expenses`));
-      batch.set(expRef, {
-        category: "Penyusutan Gudang",
-        description: `Barang Rusak [${prod.sku}] x${form.qty} - ${form.reason} (${form.marketplace})`,
-        amount: lossAmount,
-        paidBy: "SISTEM",
-        date: todayLokal,
-        createdAt: serverTimestamp()
-      });
-
       batch.set(salesRef, {
         orderId: `AFKIR-${Math.floor(Date.now() / 1000)}`,
         product: prod.name,
@@ -304,18 +310,6 @@ export class ReturService {
       // Pulihkan jumlah kuantitas fisik masuk kembali ke rak ruko utama
       batch.update(prodRef, { stock: increment(form.qty) });
 
-      if (totalLostProfit > 0) {
-        const expRef = doc(collection(db, `users/${this.uid}/expenses`));
-        batch.set(expRef, {
-          category: "Koreksi Profit Retur",
-          description: `Pembatalan Profit Paket Misterius [${prod.sku}] x${form.qty} - Resi/Order: ${form.orderIdOrResi}`,
-          amount: totalLostProfit,
-          paidBy: "SISTEM",
-          date: todayLokal,
-          createdAt: serverTimestamp()
-        });
-      }
-
       // 🚀 EKSEKUSI SINKRONISASI JALUR ADVANCED: Deteksi dan bebaskan gembok isUsed resi Shopee Warehouse
       await this.reverseAdvancedShipmentIfExist(batch, form.orderIdOrResi, form.orderIdOrResi, prod.sku);
     }
@@ -325,6 +319,8 @@ export class ReturService {
     let initialProfit = 0;
     if (finalStatusPenanganan === "Selesai") {
       initialProfit = -totalLostProfit;
+    } else if (["Rusak", "Tidak Kembali", "Afkir"].includes(finalStatusPenanganan)) {
+      initialProfit = -(estimatedSalePrice * form.qty);
     }
 
     batch.set(salesRef, {
@@ -344,7 +340,7 @@ export class ReturService {
       date: todayLokal,
       createdAt: serverTimestamp(),
       catatan: finalStatusPenanganan === "Selesai"
-        ? `[Paket Misterius Selesai] Fisik masuk rak ruko. Booking advanced dilepas. Koreksi profit Rp ${totalLostProfit.toLocaleString('id-ID')} dicatat ke pengeluaran. Ket: ${form.reason}`
+        ? `[Paket Misterius Selesai] Fisik masuk rak ruko. Booking advanced dilepas. Koreksi profit Rp ${totalLostProfit.toLocaleString('id-ID')} dicatat ke profitabilitas retur. Ket: ${form.reason}`
         : `[Paket Misterius Tertahan - Status: ${finalStatusPenanganan}] Fisik barang belum masuk rak. Alasan: ${form.reason}`
     });
 

@@ -80,13 +80,39 @@ export class ReportService {
     const filteredSales = this.filterByTime(this.sales);
     const filteredExpenses = this.filterByTime(this.expenses);
 
-    const totalOmset = filteredSales.reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
-    const totalHpp = filteredSales.reduce((acc, curr) => acc + (Number(curr.hpp) || 0), 0);
-    const grossProfit = filteredSales.reduce((acc, curr) => acc + (Number(curr.profit) || 0), 0);
-    const totalOpex = filteredExpenses.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
-    const netProfit = grossProfit - totalOpex;
+    const totalOmset = filteredSales.reduce((acc, curr) => {
+      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
+      if (isRetur) return acc;
+      return acc + (Number(curr.total) || 0);
+    }, 0);
 
-    return { totalOmset, totalHpp, grossProfit, totalOpex, netProfit };
+    const totalHpp = filteredSales.reduce((acc, curr) => {
+      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
+      if (isRetur) return acc;
+      return acc + (Number(curr.hpp) || 0);
+    }, 0);
+
+    const grossProfit = filteredSales.reduce((acc, curr) => {
+      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
+      if (isRetur) return acc;
+      return acc + (Number(curr.profit) || 0);
+    }, 0);
+
+    const totalReturnLoss = filteredSales.reduce((acc, curr) => {
+      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
+      if (isRetur) {
+        const val = Number(curr.profit || 0);
+        if (val < 0) {
+          return acc + Math.abs(val);
+        }
+      }
+      return acc;
+    }, 0);
+
+    const totalOpex = filteredExpenses.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+    const netProfit = grossProfit - totalOpex - totalReturnLoss;
+
+    return { totalOmset, totalHpp, grossProfit, totalOpex, totalReturnLoss, netProfit };
   }
 
   public getStockFinancials() {
@@ -192,13 +218,12 @@ export class ReportService {
     
     // 2. Akumulasi nilai kerugian riil retur barang yang valid (Menampilkan angka 130rb yang sesungguhnya)
     const totalReturnLoss = filteredSales.reduce((acc, curr) => {
-      const statusStr = String(curr.status || "").toLowerCase();
-      
-      // Jika invoice penjualan terdeteksi berstatus retur atau pembatalan sejenis
-      if (statusStr === 'retur' || curr.isRetur === true || statusStr === 'refund') {
-        // Menggunakan nilai nominal transaksi penuh atau nilai total kerugian modal barang yang hangus
-        const lossValue = Number(curr.total || curr.hpp || curr.amount || 0);
-        return acc + lossValue;
+      const isRetur = String(curr.status || "").toLowerCase() === 'retur' || curr.isRetur === true;
+      if (isRetur) {
+        const val = Number(curr.profit || 0);
+        if (val < 0) {
+          return acc + Math.abs(val);
+        }
       }
       return acc;
     }, 0);

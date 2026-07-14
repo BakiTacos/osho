@@ -24,6 +24,8 @@ export default function PengembalianPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("Proses");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isImporting, setIsImporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -124,9 +126,16 @@ export default function PengembalianPage() {
                           String(item.product || "").toLowerCase().includes(searchTerm.toLowerCase());
       const currentStatus = item.penanganan || "Proses";
       const matchStatus = statusFilter === "Semua" ? true : currentStatus === statusFilter;
-      return matchSearch && matchStatus;
+
+      const createdDate = item.createdAt?.toDate ? item.createdAt.toDate() : (item.date ? new Date(item.date) : null);
+      let matchTime = true;
+      if (createdDate) {
+        matchTime = createdDate.getMonth() === selectedMonth && createdDate.getFullYear() === selectedYear;
+      }
+
+      return matchSearch && matchStatus && matchTime;
     });
-  }, [returOrders, searchTerm, statusFilter]);
+  }, [returOrders, searchTerm, statusFilter, selectedMonth, selectedYear]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = useMemo(() => {
@@ -187,6 +196,10 @@ export default function PengembalianPage() {
           setSearchTerm={setSearchTerm}
           statusFilter={statusFilter} 
           setStatusFilter={setStatusFilter}
+          selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
+          selectedYear={selectedYear}
+          setSelectedYear={setSelectedYear}
           isImporting={isImporting} 
           onFileUpload={handleFileUpload}
           onOpenManualModal={() => setIsAfkirModalOpen(true)} 
