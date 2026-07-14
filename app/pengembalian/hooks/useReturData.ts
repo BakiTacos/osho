@@ -26,8 +26,12 @@ export const useReturData = (currentUser: any) => {
       const orders = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
         const hasReturInputted = 'returInputtedAt' in data && data.returInputtedAt !== undefined;
-        const inputField = hasReturInputted ? (data.returInputtedAt || new Date()) : data.createdAt;
-        const createdDate = inputField?.toDate ? inputField.toDate() : (data.date ? new Date(data.date) : new Date());
+        let createdDate: Date;
+        if (hasReturInputted) {
+          createdDate = data.returInputtedAt ? (data.returInputtedAt.toDate ? data.returInputtedAt.toDate() : new Date(data.returInputtedAt)) : new Date();
+        } else {
+          createdDate = data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : (data.date ? new Date(data.date) : new Date());
+        }
         const diffTime = now.getTime() - createdDate.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         return { id: docSnap.id, ...data, diffDays };
@@ -53,8 +57,12 @@ export const useReturData = (currentUser: any) => {
         if (order.returFinal) return;
 
         const hasReturInputted = 'returInputtedAt' in order && order.returInputtedAt !== undefined;
-        const inputField = hasReturInputted ? (order.returInputtedAt || new Date()) : order.createdAt;
-        const createdDate = inputField?.toDate ? inputField.toDate() : (order.date ? new Date(order.date) : new Date());
+        let createdDate: Date;
+        if (hasReturInputted) {
+          createdDate = order.returInputtedAt ? (order.returInputtedAt.toDate ? order.returInputtedAt.toDate() : new Date(order.returInputtedAt)) : new Date();
+        } else {
+          createdDate = order.createdAt ? (order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt)) : (order.date ? new Date(order.date) : new Date());
+        }
         const diffTime = now.getTime() - createdDate.getTime();
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 

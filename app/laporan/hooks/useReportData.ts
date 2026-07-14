@@ -21,11 +21,18 @@ export function useReportData(currentUser: any, selectedMonth: number, selectedY
         const startDate = new Date(selectedYear, selectedMonth, 1);
         const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
 
-        const salesQuery = query(
+        const salesQueryNormal = query(
           collection(db, `users/${currentUser.uid}/sales`),
           where("createdAt", ">=", startDate),
           where("createdAt", "<=", endDate),
           orderBy("createdAt", "desc")
+        );
+
+        const salesQueryRetur = query(
+          collection(db, `users/${currentUser.uid}/sales`),
+          where("status", "==", "Retur"),
+          where("statusUpdatedAt", ">=", startDate),
+          where("statusUpdatedAt", "<=", endDate)
         );
         
         const expensesQuery = query(
@@ -53,15 +60,19 @@ export function useReportData(currentUser: any, selectedMonth: number, selectedY
           orderBy("name", "asc")
         );
 
-        const [salesSnap, expensesSnap, invoicesSnap, customerInvoicesSnap, productsSnap] = await Promise.all([
-          getDocs(salesQuery),
+        const [salesSnapNormal, salesSnapRetur, expensesSnap, invoicesSnap, customerInvoicesSnap, productsSnap] = await Promise.all([
+          getDocs(salesQueryNormal),
+          getDocs(salesQueryRetur),
           getDocs(expensesQuery),
           getDocs(invoicesQuery),
           getDocs(customerInvoicesQuery),
           getDocs(productsQuery)
         ]);
 
-        setSales(salesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const salesMap = new Map();
+        salesSnapNormal.docs.forEach(docSnap => salesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() }));
+        salesSnapRetur.docs.forEach(docSnap => salesMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() }));
+        setSales(Array.from(salesMap.values()));
         setExpenses(expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setInvoices(invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setCustomerInvoices(customerInvoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
