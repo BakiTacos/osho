@@ -1,20 +1,30 @@
 // app/pengaturan/page.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from "../../context/AuthContext";
 import { useSettingsPage } from "./hooks/useSettingsPage";
-import { Save, Loader2, CheckSquare, Square, Settings2, Percent } from "lucide-react";
+import { Save, Loader2, CheckSquare, Square, Settings2, Percent, QrCode } from "lucide-react";
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function SettingsPage() {
   const { currentUser } = useAuth();
   
-  const [activeSettingsTab, setActiveSettingsTab] = useState("modul"); // "modul" | "biaya"
+  const [activeSettingsTab, setActiveSettingsTab] = useState("modul"); // "modul" | "biaya" | "qrcode"
+  const [qrOriginUrl, setQrOriginUrl] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && currentUser?.uid) {
+      setQrOriginUrl(`${window.location.origin}/qr/${currentUser.uid}`);
+    }
+  }, [currentUser]);
 
   // Ambil data kontrol dari Custom Hook
   const {
     feeSettings,
     modules,
+    qrSettings,
+    setQrSettings,
     fetching,
     isSaving,
     toggleProgram,
@@ -68,6 +78,18 @@ export default function SettingsPage() {
           >
             Biaya Marketplace
             {activeSettingsTab === "biaya" && (
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#0047AB]" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSettingsTab("qrcode")}
+            className={`pb-3 text-xs sm:text-sm font-bold uppercase transition-all relative cursor-pointer flex items-center gap-1.5 ${
+              activeSettingsTab === "qrcode" ? "text-[#0047AB]" : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            <QrCode size={16} /> QR Dinamis
+            {activeSettingsTab === "qrcode" && (
               <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#0047AB]" />
             )}
           </button>
@@ -219,6 +241,74 @@ export default function SettingsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ========================================== */}
+        {/* 📱 TAB 3: QR CODE DINAMIS                  */}
+        {/* ========================================== */}
+        {activeSettingsTab === "qrcode" && qrSettings && (
+          <div className="bg-white p-6 sm:p-8 rounded-[22px] sm:rounded-[32px] border border-slate-100 shadow-2xs">
+            <div className="flex flex-col md:flex-row gap-8 items-start">
+              
+              {/* Kiri: Form & Info */}
+              <div className="flex-1 w-full space-y-6">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-black uppercase text-[#0F172A] tracking-tight">QR Code Pintar</h2>
+                  <p className="text-xs text-slate-400 mt-1">Satu QR Code untuk semua kebutuhan. Ubah tujuan URL kapan saja tanpa harus mencetak ulang fisik QR Code Anda.</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">URL Tujuan Saat Ini</label>
+                  <input
+                    type="url"
+                    value={qrSettings.destinationUrl || ""}
+                    onChange={(e) => setQrSettings({ ...qrSettings, destinationUrl: e.target.value })}
+                    placeholder="Contoh: https://shopee.co.id/tokosaya"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 font-bold text-sm text-slate-700 focus:outline-none focus:border-[#0047AB] focus:bg-white transition-all"
+                  />
+                  <p className="text-[9px] text-slate-400 font-semibold">* Pengunjung yang men-scan QR akan otomatis diarahkan ke link di atas.</p>
+                </div>
+
+                <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex gap-4 mt-6">
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-[#0047AB] uppercase tracking-wider mb-1">Total Pindaian (Scan)</p>
+                    <p className="text-3xl font-black text-[#0F172A]">{qrSettings.scanCount || 0}</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-[#0047AB] uppercase tracking-wider mb-1">Scan Terakhir</p>
+                    <p className="text-sm font-bold text-slate-700 mt-2">
+                      {qrSettings.lastScannedAt 
+                        ? new Date(qrSettings.lastScannedAt?.toDate ? qrSettings.lastScannedAt.toDate() : qrSettings.lastScannedAt).toLocaleString('id-ID')
+                        : "Belum ada"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kanan: Preview QR Code */}
+              <div className="w-full md:w-auto shrink-0 flex flex-col items-center p-6 bg-slate-50 rounded-3xl border border-slate-200">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-4">Preview QR Code Anda</p>
+                <div className="bg-white p-4 rounded-2xl shadow-sm">
+                  {qrOriginUrl ? (
+                    <QRCodeSVG 
+                      value={qrOriginUrl} 
+                      size={180}
+                      level={"H"}
+                      includeMargin={false}
+                    />
+                  ) : (
+                    <div className="w-[180px] h-[180px] bg-slate-100 flex items-center justify-center rounded-xl text-slate-300">
+                      <Loader2 className="animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-[9px] text-center font-bold text-slate-400 mt-4 max-w-[200px] break-all">
+                  {qrOriginUrl}
+                </p>
+              </div>
+
+            </div>
           </div>
         )}
 

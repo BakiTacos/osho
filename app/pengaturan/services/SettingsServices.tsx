@@ -105,4 +105,40 @@ export class SettingsService {
       updatedAt: serverTimestamp()
     });
   }
+
+  /**
+   * Mengambil data QR Code dinamis dari Firestore.
+   */
+  public async getQrCodeSettings(): Promise<any> {
+    if (!this.uid) throw new Error("UID pengguna tidak valid.");
+    
+    const docRef = doc(db, `users/${this.uid}/qrcode`, "main");
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data();
+    } else {
+      const initialData = {
+        destinationUrl: "",
+        scanCount: 0,
+        lastScannedAt: null,
+        updatedAt: serverTimestamp()
+      };
+      await setDoc(docRef, initialData);
+      return initialData;
+    }
+  }
+
+  /**
+   * Menyimpan konfigurasi QR Code dinamis ke Firestore.
+   */
+  public async saveQrCodeSettings(settings: any): Promise<void> {
+    if (!this.uid) throw new Error("UID pengguna tidak valid.");
+    
+    const docRef = doc(db, `users/${this.uid}/qrcode`, "main");
+    await setDoc(docRef, {
+      ...settings,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  }
 }

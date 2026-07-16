@@ -8,6 +8,7 @@ import { AdminFeesSettings } from "../types/settings";
 export function useSettingsPage(currentUser: any) {
   const [feeSettings, setFeeSettings] = useState<AdminFeesSettings | null>(null);
   const [modules, setModules] = useState<any | null>(null);
+  const [qrSettings, setQrSettings] = useState<any | null>(null);
   const [fetching, setFetching] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
@@ -19,12 +20,14 @@ export function useSettingsPage(currentUser: any) {
 
     const loadSettings = async () => {
       try {
-        const [feesData, modulesData] = await Promise.all([
+        const [feesData, modulesData, qrData] = await Promise.all([
           settingsService.getAdminFees(),
-          settingsService.getActiveModules()
+          settingsService.getActiveModules(),
+          settingsService.getQrCodeSettings()
         ]);
         setFeeSettings(feesData);
         setModules(modulesData);
+        setQrSettings(qrData);
       } catch (error) {
         console.error("Gagal memuat domain settings:", error);
       } finally {
@@ -92,6 +95,9 @@ export function useSettingsPage(currentUser: any) {
       if (modules) {
         promises.push(settingsService.saveActiveModules(modules));
       }
+      if (qrSettings) {
+        promises.push(settingsService.saveQrCodeSettings(qrSettings));
+      }
       await Promise.all(promises);
       alert("✅ Pengaturan Berhasil Disimpan!");
     } catch (error) {
@@ -105,6 +111,8 @@ export function useSettingsPage(currentUser: any) {
   return {
     feeSettings,
     modules,
+    qrSettings,
+    setQrSettings,
     fetching,
     isSaving,
     toggleProgram,
